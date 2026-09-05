@@ -186,6 +186,41 @@
             <KnowledgeGraph :course-id="courseId" :students="[]" :can-manage="false" :student-mode="true" :my-student-id="myStudent?.id || ''" />
           </div>
 
+          <!-- ===== 课程标准 ===== -->
+          <div v-if="activeTab === 'course_standard'" class="space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-base font-semibold text-gray-800">课程标准</h3>
+                <p class="text-xs text-gray-400">教师上传的课程标准文件，可在线查看或下载</p>
+              </div>
+            </div>
+
+            <div v-if="standardsLoading" class="text-center py-14 text-sm text-gray-400">加载中…</div>
+            <div v-else-if="courseStandards.length === 0" class="bg-brand-50 border border-brand-200 rounded-xl p-10 text-center">
+              <FileText class="w-12 h-12 mx-auto mb-3 text-brand-400" />
+              <h3 class="text-lg font-semibold text-brand-800 mb-1">暂无课程标准文件</h3>
+              <p class="text-sm text-brand-700">教师上传课程标准后，将自动同步到此处</p>
+            </div>
+            <div v-else class="space-y-2">
+              <div v-for="f in courseStandards" :key="f.id"
+                class="flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-brand-400/20 hover:border-brand-400/50 transition-colors">
+                <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                  <FileText class="w-5 h-5 text-indigo-500" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-gray-900 truncate">{{ f.name }}</p>
+                  <p class="text-xs text-gray-400 mt-0.5">
+                    {{ formatFileSize(f.size) }}<template v-if="formatDateTime(f.createdAt)"> · 上传于 {{ formatDateTime(f.createdAt) }}</template>
+                  </p>
+                </div>
+                <a :href="f.dataUrl" :download="f.name"
+                  class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0">
+                  <Download class="w-3.5 h-3.5" /> 查看/下载
+                </a>
+              </div>
+            </div>
+          </div>
+
           <!-- ===== 知识图谱 (泡泡图) ===== -->
           <div v-if="activeTab === 'knowledge_graph'" class="space-y-5">
             <div class="flex items-center justify-between">
@@ -375,30 +410,8 @@
               :tier="tierFinalized ? myTier : undefined"
             />
           </div>
-          <!-- ===== 评价填写 ===== -->
+          <!-- ===== 素质评价板块 ===== -->
           <div v-if="activeTab === 'evaluations'" class="space-y-6">
-            <!-- ===== 课程评价板块 ===== -->
-            <div class="bg-white rounded-2xl border border-blue-100 shadow-sm p-5 space-y-4">
-            <!-- 课程评价标题卡片 -->
-            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-100">
-              <div class="flex items-center gap-2 mb-2">
-                <ClipboardCheck class="w-5 h-5 text-blue-600" />
-                <h3 class="text-base font-semibold text-blue-800">课程评价</h3>
-              </div>
-              <p class="text-sm text-blue-700">
-                按照教师配置的评价方案，完成自评、组内互评、组间互评等评价任务，评价结果将计入课程成绩。
-              </p>
-            </div>
-            <div v-if="isReadOnly" class="bg-brand-400/5 border border-brand-400/30 rounded-xl p-6 text-center text-sm text-gray-400">
-              <Eye class="w-8 h-8 mx-auto mb-2 text-gray-400/60" />
-              <p>课程已结束，评价填写功能已关闭</p>
-              <p class="text-xs mt-1">如需查看评价记录，请在"综合评价"中查看</p>
-            </div>
-            <StudentEvaluation v-else :course-id="courseId" :student-id="myStudent?.id || ''"
-              :student-name="myStudent?.name || store.currentUser || ''" />
-            </div>
-
-            <!-- ===== 素质评价板块 ===== -->
             <div class="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-4">
               <div class="bg-gradient-to-br from-emerald-50 to-cyan-50 rounded-2xl p-5 border border-emerald-100">
                 <div class="flex items-center gap-2 mb-2">
@@ -607,7 +620,7 @@
               </p>
               <p>总成绩 = 平时成绩({{ currentCfg.regularWeight }}%) + 期中成绩({{ currentCfg.midtermWeight }}%) + 期末成绩({{ currentCfg.finalWeight }}%)</p>
               <p class="text-xs text-brand-700 mt-1.5 leading-relaxed">
-                平时成绩构成：自评({{ currentCfg.selfEvalWeight }}%) + 互评({{ currentCfg.peerReviewWeight }}%) + 组间评({{ currentCfg.interGroupEvalWeight }}%) + 教师({{ currentCfg.teacherScoreWeight }}%) + 导师({{ currentCfg.mentorScoreWeight }}%)
+                平时成绩构成：个人自评({{ currentCfg.selfEvalWeight }}%) + 小组内互评({{ currentCfg.peerReviewWeight }}%) + 小组间互评({{ currentCfg.interGroupEvalWeight }}%) + 教师评价({{ currentCfg.teacherScoreWeight }}%) + 企业导师评价({{ currentCfg.mentorScoreWeight }}%)
               </p>
             </div>
             </div>
@@ -808,10 +821,10 @@ import { useAppStore } from '@/stores/app'
 import {
   ArrowLeft, BookOpen, FileText, ClipboardCheck, Edit3,
   CheckCircle, Circle, Layers, Award, Sparkles, UserCheck, Users, MessageSquare, ArrowRight, Eye, HelpCircle, Lock, XCircle,
-  Download, Upload, TrendingUp, X, Calendar, BarChart3, PieChart, Network
+  Download, Upload, TrendingUp, X, Calendar, BarChart3, PieChart, Network, BookMarked
 } from 'lucide-vue-next'
-import StudentEvaluation from '@/components/StudentEvaluation.vue'
 import StudentHomework from '@/components/Homework/StudentHomework.vue'
+import { javaListCourseStandards } from '@/api/knowledgeGraph'
 import KnowledgeGraph from '@/components/knowledge/KnowledgeGraph.vue'
 import type { AITierQuestion, LearningTier, CloudFile, QualityEvalFile, Schedule } from '@/types'
 import Modal from '@/components/Modal.vue'
@@ -848,13 +861,29 @@ const currentClassName = computed(() =>
 )
 
 // 支持 ?tab=xxx 直达对应模块（用于红点溯源跳转）
-const VALID_TABS = ['ai_tier', 'course-mgmt', 'tasks', 'resources', 'homework', 'evaluations', 'eval_overview']
+const VALID_TABS = ['ai_tier', 'course-mgmt', 'course_standard', 'tasks', 'resources', 'homework', 'evaluations', 'eval_overview']
 const activeTab = ref<string>(
   VALID_TABS.includes(route.query.tab as string) ? (route.query.tab as string) : 'tasks'
 )
 const selectedFiles = ref<Record<string, File>>({})
 
+// ===== 课程标准（教师上传，自动同步展示） =====
+const courseStandards = ref<any[]>([])
+const standardsLoading = ref(false)
+async function loadCourseStandards() {
+  standardsLoading.value = true
+  try {
+    const list: any = await javaListCourseStandards(courseId)
+    courseStandards.value = Array.isArray(list) ? list : []
+  } catch {
+    courseStandards.value = []
+  } finally {
+    standardsLoading.value = false
+  }
+}
+
 onMounted(async () => {
+  loadCourseStandards()
   try {
     const response = await fetchSchedules(
       currentClassName.value
@@ -915,6 +944,7 @@ watch(() => route.query.tab, (val) => {
 const tabs = [
   { id: 'ai_tier', label: 'AI分层', icon: Layers },
   { id: 'course-mgmt', label: '课程图谱', icon: Network },
+  { id: 'course_standard', label: '课程标准', icon: BookMarked },
   { id: 'tasks', label: '任务', icon: Edit3 },
   { id: 'resources', label: '资源', icon: FileText },
   { id: 'homework', label: '作业', icon: BookOpen },
@@ -1577,11 +1607,11 @@ const gradeIconMap: Record<string, any> = {
 }
 
 const gradeLabelMap: Record<string, string> = {
-  self: '自评',
-  intra_group: '组内互评',
-  inter_group: '组间互评',
+  self: '个人自评',
+  intra_group: '小组内互评',
+  inter_group: '小组间互评',
   teacher: '教师评价',
-  mentor: '企业导师',
+  mentor: '企业导师评价',
 }
 
 const gradeWeightKeyMap: Record<string, keyof import('@/types').GradeWeightConfig> = {
@@ -1683,6 +1713,14 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function formatDateTime(value: any): string {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function getFileTypeName(type: string): string {

@@ -155,7 +155,7 @@
         <div v-if="anomalies.length > 0" class="bg-brand-600/10 border border-brand-400 rounded-xl p-4">
           <div class="flex items-center gap-2 text-brand-600 font-medium mb-2">
             <AlertTriangle class="w-5 h-5" />
-            异常预警（自评与他评差异过大）
+            异常预警（个人自评与其他评价差异过大）
           </div>
           <div class="space-y-1">
             <p v-for="{ session, anomaly } in anomalies" :key="anomaly.id" class="text-sm text-brand-600">{{ anomaly.warning }}</p>

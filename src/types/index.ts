@@ -308,9 +308,9 @@ export interface HomeworkSubmission {
 export type EvalType = 'self' | 'intra_group' | 'inter_group' | 'teacher' | 'mentor';
 
 export const EvalTypeLabels: Record<EvalType, string> = {
-  self: '自评',
-  intra_group: '组内互评',
-  inter_group: '组间互评',
+  self: '个人自评',
+  intra_group: '小组内互评',
+  inter_group: '小组间互评',
   teacher: '教师评价',
   mentor: '企业导师评价',
 };
@@ -334,10 +334,10 @@ export const EvalTemplateLabels: Record<EvalTemplate, string> = {
 };
 
 export const EvalTemplateDescs: Record<EvalTemplate, string> = {
-  all: '5种评价全部启用：自评+组内互评+组间互评+教师评价+企业导师评价',
-  standard: '自评+教师评价+组间互评',
-  simple: '仅教师评价+自评',
-  project: '增加企业导师+组间互评',
+  all: '5种评价全部启用：个人自评+小组内互评+小组间互评+教师评价+企业导师评价',
+  standard: '个人自评+教师评价+小组间互评',
+  simple: '教师评价+个人自评',
+  project: '个人自评+小组内互评+小组间互评+教师评价+企业导师评价',
 };
 
 /** 模板→评价类型映射 */
@@ -389,6 +389,13 @@ export interface EvaluationConfig {
 }
 
 /** 评价记录 */
+export interface EvalScoreItem {
+  label: string;
+  score: number;
+  /** 单项满分，旧数据可能没有 */
+  max?: number;
+}
+
 export interface Evaluation {
   id: string;
   courseId: string;
@@ -396,6 +403,7 @@ export interface Evaluation {
   sessionNumber: number;   // 第N次评价
   type: EvalType;
   score: number;
+  items?: EvalScoreItem[];
   evaluatorId: string;
   evaluatorName: string;
   comment?: string;

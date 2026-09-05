@@ -56,6 +56,19 @@ export default function ensureProjectSchema() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
       await connection.query(`
+        CREATE TABLE IF NOT EXISTS course_standards (
+          id VARCHAR(64) NOT NULL,
+          course_id VARCHAR(64) NOT NULL DEFAULT '',
+          name VARCHAR(255) NOT NULL DEFAULT '',
+          size BIGINT NOT NULL DEFAULT 0,
+          data_url LONGTEXT NULL,
+          uploader VARCHAR(64) NOT NULL DEFAULT '',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          KEY idx_course_standards_course (course_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      await connection.query(`
         CREATE TABLE IF NOT EXISTS course_eval_questionnaires (
           id VARCHAR(64) NOT NULL,
           course_id VARCHAR(64) NOT NULL DEFAULT '',

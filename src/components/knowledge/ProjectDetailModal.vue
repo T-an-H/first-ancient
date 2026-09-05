@@ -202,9 +202,6 @@
               </button>
             </div>
           </div>
-          <div class="border-b border-gray-100 pb-4 mb-4">
-            <TeacherHomework :course-id="courseId" :chapter-title="project.name" :can-manage="canManage" />
-          </div>
           <div v-if="files.test.length === 0" class="text-center py-8 text-gray-400 text-sm">暂无测试题目</div>
           <ul v-else class="space-y-1.5 mb-4">
             <li v-for="f in files.test" :key="f.id" class="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
@@ -228,17 +225,17 @@
                     <p class="text-xs text-gray-400">{{ s.studentId }}<template v-if="s.className"> · {{ s.className }}</template></p>
                   </div>
                   <template v-if="canManage">
-                    <input v-model.number="testScores[s.id]" type="number" min="0" max="100" placeholder="评分"
-                      class="w-20 px-2 py-1.5 text-sm border border-gray-200 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
-                    <button @click="saveTestScore(s.id)" :disabled="testScores[s.id] === undefined || testScores[s.id] === null || testScores[s.id] === ''"
-                      class="text-xs px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed">
-                      评分
+                    <button
+                      @click="openTestEval(s)"
+                      class="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-100"
+                    >
+                      {{ getActiveEvalScore(s.id) !== null ? '重新评价' : '分项评价' }}
                     </button>
                   </template>
-                  <span v-if="getTestScore(s.id) !== null" class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex-shrink-0">
-                    {{ getTestScore(s.id) }} 分
+                  <span v-if="getActiveEvalScore(s.id) !== null" class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex-shrink-0">
+                    {{ getActiveEvalScore(s.id) }} 分
                   </span>
-                  <span v-else class="text-xs text-gray-300 flex-shrink-0">未完成</span>
+                  <span v-else class="text-xs text-gray-300 flex-shrink-0">未评分</span>
                 </div>
                 <template v-if="getTestSubmission(s.id)">
                   <p v-if="getTestSubmission(s.id).comment" class="mt-2 ml-11 text-xs text-gray-600 whitespace-pre-wrap bg-gray-50 rounded-lg px-2.5 py-1.5">{{ getTestSubmission(s.id).comment }}</p>
@@ -343,22 +340,77 @@
         </div>
       </div>
     </div>
+
+    <!-- 测试题目：教师/企业导师分项评价 -->
+    <div v-if="showTestEvalModal" class="fixed inset-0 z-[65] flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/50" @click="closeTestEval" />
+      <div class="relative w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl">
+        <div class="mb-4 flex items-center justify-between">
+          <div>
+            <h4 class="text-lg font-semibold text-gray-900">{{ activeEvalType === 'mentor' ? '企业导师评价' : '教师评价' }}</h4>
+            <p class="mt-0.5 text-sm text-gray-400">{{ testEvalStudent?.name || '' }} · {{ project.name }}</p>
+          </div>
+          <button @click="closeTestEval" class="text-gray-400 hover:text-gray-600"><X class="h-5 w-5" /></button>
+        </div>
+        <div class="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+          <div
+            v-for="(item, index) in getEvalItemDefinitions(activeEvalType)"
+            :key="index"
+            class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2"
+          >
+            <span class="text-sm text-gray-700">{{ item.label }} ：</span>
+            <div class="flex items-center gap-1">
+              <input
+                type="number"
+                min="0"
+                :max="item.max"
+                :value="testEvalDraft[index] ?? ''"
+                @input="setTestEvalScore(index, $event)"
+                placeholder="填写分数"
+                class="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-center text-sm outline-none focus:border-indigo-500"
+              />
+              <span class="text-xs text-gray-400">/ {{ item.max }}</span>
+            </div>
+          </div>
+          <p class="text-right text-sm font-medium text-gray-800">合计：{{ testEvalTotal }} 分</p>
+          <p v-if="testEvalError" class="text-right text-xs text-red-500">{{ testEvalError }}</p>
+        </div>
+        <div class="mt-5 flex justify-end gap-3 border-t border-gray-100 pt-4">
+          <button @click="closeTestEval" class="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200">取消</button>
+          <button @click="saveTestEval" class="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700">保存评价</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { X, FileText, Upload, CheckCircle, Clock, Plus, Pencil, GitBranch, BookOpen, ClipboardCheck, ListChecks, FileQuestion, Star, Wrench } from 'lucide-vue-next'
-import TeacherHomework from '@/components/Homework/TeacherHomework.vue'
 import { javaListProjectFiles, javaAddProjectFile, javaDeleteProjectFile, javaListProjectProgress, javaUpsertProjectProgress, javaGradeProjectProgress, javaGetQuestionnaire, javaSaveQuestionnaire, javaListEvalResponses, javaSubmitEvalResponse } from '@/api/knowledgeGraph'
+import { useAppStore } from '@/stores/app'
+import { getNow } from '@/lib/date'
+import type { EvalType, Evaluation } from '@/types'
+import {
+  createEmptyEvalDraft,
+  evalItemsFromDraft,
+  getEvalItemDefinitions,
+  scoreFromEvalDraft,
+  type EvalScoreDraftValue,
+} from '@/lib/evalStandards'
 
 const props = defineProps<{
   project: any
   courseId: string
   students: { id: string; name: string; studentId?: string; className?: string }[]
   canManage?: boolean
+  evalType?: 'teacher' | 'mentor'
 }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
+const store = useAppStore()
+
+const activeEvalType = computed<EvalType>(() => (props.evalType === 'mentor' ? 'mentor' : 'teacher'))
+const projectEvalSession = computed(() => Number(props.project?.orderNo ?? 0) + 1)
 
 const sections = [
   { key: 'preview', label: '预习资料', icon: BookOpen },
@@ -482,6 +534,98 @@ async function saveTestScore(studentId: string) {
     await javaGradeProjectProgress(rec.id, { score: Number(testScores.value[studentId]) })
     await loadProgress()
   } catch (err: any) { alert('评分失败：' + (err.message || err)) }
+}
+
+// ===== 测试题目分项评价（教师/企业导师） =====
+const showTestEvalModal = ref(false)
+const testEvalStudent = ref<{ id: string; name: string } | null>(null)
+const testEvalDraft = ref<EvalScoreDraftValue[]>([])
+const testEvalError = ref('')
+
+const testEvalTotal = computed(() =>
+  scoreFromEvalDraft(getEvalItemDefinitions(activeEvalType.value), testEvalDraft.value)
+)
+
+function getActiveEvalScore(studentId: string) {
+  const ev = store.evaluations.find(
+    (e) => e.courseId === props.courseId && e.studentId === studentId &&
+      e.sessionNumber === projectEvalSession.value && e.type === activeEvalType.value
+  )
+  return ev ? Number(ev.score) : null
+}
+
+function openTestEval(student: { id: string; name: string }) {
+  if (!getTestSubmission(student.id)) {
+    alert('该学生尚未完成测试，暂不能评价')
+    return
+  }
+  testEvalStudent.value = student
+  testEvalError.value = ''
+  const defs = getEvalItemDefinitions(activeEvalType.value)
+  const existing = store.evaluations.find(
+    (e) => e.courseId === props.courseId && e.studentId === student.id &&
+      e.sessionNumber === projectEvalSession.value && e.type === activeEvalType.value
+  )
+  testEvalDraft.value = defs.map((item, index) => {
+    const saved = existing?.items?.[index]
+    return saved && saved.score !== undefined ? saved.score : ''
+  })
+  showTestEvalModal.value = true
+}
+
+function closeTestEval() {
+  showTestEvalModal.value = false
+  testEvalStudent.value = null
+  testEvalDraft.value = []
+  testEvalError.value = ''
+}
+
+function setTestEvalScore(index: number, e: Event) {
+  const raw = (e.target as HTMLInputElement).value
+  const parsed = Number(raw)
+  const next: EvalScoreDraftValue = raw === '' || Number.isNaN(parsed) ? '' : parsed
+  testEvalDraft.value = testEvalDraft.value.map((value, i) => (i === index ? next : value))
+}
+
+function saveTestEval() {
+  const student = testEvalStudent.value
+  if (!student) return
+  const type = activeEvalType.value
+  const defs = getEvalItemDefinitions(type)
+  const invalid = defs.some((item, index) => {
+    const value = testEvalDraft.value[index]
+    return value === '' || typeof value !== 'number' || Number.isNaN(value) || value < 0 || value > item.max
+  })
+  if (invalid) {
+    testEvalError.value = '请完整填写各项分数'
+    return
+  }
+
+  const items = evalItemsFromDraft(defs, testEvalDraft.value)
+  const score = scoreFromEvalDraft(defs, testEvalDraft.value)
+  const existing = store.evaluations.find(
+    (e) => e.courseId === props.courseId && e.studentId === student.id &&
+      e.sessionNumber === projectEvalSession.value && e.type === type
+  )
+  const ev: Evaluation = {
+    id: existing ? existing.id : `ev-project-${Date.now()}-${student.id}-${type}`,
+    courseId: props.courseId,
+    studentId: student.id,
+    sessionNumber: projectEvalSession.value,
+    type,
+    score,
+    items,
+    evaluatorId: store.currentUser || '',
+    evaluatorName: store.currentUser || (type === 'mentor' ? '企业导师' : '教师'),
+    createdAt: getNow().toISOString().split('T')[0],
+  }
+  if (existing) {
+    store.updateEvaluation(ev.id, { score, items, createdAt: ev.createdAt })
+  } else {
+    store.addEvaluation(ev)
+  }
+  closeTestEval()
+  store.syncEvalToDetailedGrade(props.courseId)
 }
 
 // ===== 评教问卷 =====

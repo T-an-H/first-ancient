@@ -20,9 +20,9 @@
         </Section>
 
         <Section title="平时成绩构成" :hint="`合计：${regularTotal}%${regularTotal !== 100 ? '（须等于 100%）' : ''}`" :valid="regularTotal === 100">
-          <Slider label="自评" :val="cfg.selfEvalWeight" @change="(v: number) => update('selfEvalWeight', v)" />
-          <Slider label="组内互评" :val="cfg.peerReviewWeight" @change="(v: number) => update('peerReviewWeight', v)" />
-          <Slider label="组间互评" :val="cfg.interGroupEvalWeight" @change="(v: number) => update('interGroupEvalWeight', v)" />
+          <Slider label="个人自评" :val="cfg.selfEvalWeight" @change="(v: number) => update('selfEvalWeight', v)" />
+          <Slider label="小组内互评" :val="cfg.peerReviewWeight" @change="(v: number) => update('peerReviewWeight', v)" />
+          <Slider label="小组间互评" :val="cfg.interGroupEvalWeight" @change="(v: number) => update('interGroupEvalWeight', v)" />
           <Slider label="教师评价" :val="cfg.teacherScoreWeight" @change="(v: number) => update('teacherScoreWeight', v)" />
           <Slider label="企业导师评价" :val="cfg.mentorScoreWeight" @change="(v: number) => update('mentorScoreWeight', v)" />
         </Section>

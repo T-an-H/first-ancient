@@ -88,6 +88,21 @@ export async function javaDeleteProjectFile(id: string) {
   return javaRequest(`/projects/files/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
+/** GET /course-standards?courseId= 课程标准文件列表（教师上传，学生端同步） */
+export async function javaListCourseStandards(courseId: string) {
+  return javaRequest(`/course-standards?courseId=${encodeURIComponent(courseId)}`)
+}
+
+/** POST /course-standards 上传课程标准文件（dataUrl 为文件 base64） */
+export async function javaAddCourseStandard(file: { courseId: string; name: string; size: number; dataUrl: string; uploader?: string }) {
+  return javaRequest('/course-standards', { method: 'POST', body: JSON.stringify(file) })
+}
+
+/** DELETE /course-standards/{id} 删除课程标准文件 */
+export async function javaDeleteCourseStandard(id: string) {
+  return javaRequest(`/course-standards/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
 /** GET /projects/{projectId}/progress 项目全部学生进度 */
 export async function javaListProjectProgress(projectId: string) {
   return javaRequest(`/projects/${encodeURIComponent(projectId)}/progress`)

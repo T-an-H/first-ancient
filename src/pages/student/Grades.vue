@@ -450,9 +450,9 @@ function regularItems(entry: GradeEntry) {
   if (!detail) return []
 
   return [
-    { label: '自评', score: detail.selfEvalScore, weight: cfg.selfEvalWeight },
-    { label: '组内互评', score: detail.peerReviewScore, weight: cfg.peerReviewWeight },
-    { label: '组间互评', score: detail.interGroupScore, weight: cfg.interGroupEvalWeight },
+    { label: '个人自评', score: detail.selfEvalScore, weight: cfg.selfEvalWeight },
+    { label: '小组内互评', score: detail.peerReviewScore, weight: cfg.peerReviewWeight },
+    { label: '小组间互评', score: detail.interGroupScore, weight: cfg.interGroupEvalWeight },
     { label: '教师评价', score: detail.teacherScore, weight: cfg.teacherScoreWeight },
     { label: '导师评价', score: detail.mentorScore, weight: cfg.mentorScoreWeight },
   ].filter((item) => item.score != null) as { label: string; score: number; weight: number }[]

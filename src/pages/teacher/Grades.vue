@@ -136,7 +136,7 @@
     <!-- 权重摘要 -->
     <div v-if="currentCfg" class="bg-brand-400/10 rounded-xl p-4 border border-brand-400/50 text-sm text-gray-800 flex flex-wrap gap-x-6 gap-y-1">
       <span>总成绩 = 平时 {{ currentCfg.regularWeight }}% + 期中 {{ currentCfg.midtermWeight }}% + 期末 {{ currentCfg.finalWeight }}%{{ getQualitySummary(currentCfg) }}</span>
-      <span>平时 = 自评 {{ currentCfg.selfEvalWeight }}% + 组内互评 {{ currentCfg.peerReviewWeight }}% + 组间互评 {{ currentCfg.interGroupEvalWeight }}% + 教师 {{ currentCfg.teacherScoreWeight }}% + 企业导师 {{ currentCfg.mentorScoreWeight }}%</span>
+      <span>平时 = 个人自评 {{ currentCfg.selfEvalWeight }}% + 小组内互评 {{ currentCfg.peerReviewWeight }}% + 小组间互评 {{ currentCfg.interGroupEvalWeight }}% + 教师评价 {{ currentCfg.teacherScoreWeight }}% + 企业导师评价 {{ currentCfg.mentorScoreWeight }}%</span>
     </div>
 
     <!-- 成绩查询 - 卡片列表 -->

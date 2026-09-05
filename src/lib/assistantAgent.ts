@@ -135,10 +135,10 @@ function buildStudentActions(studentCourses: Course[]): AssistantPageAction[] {
     ),
     createAction(
       'student.extra',
-      '打开额外功能',
-      '进入学生端额外功能页',
+      '打开待办',
+      '进入学生端待办页',
       { path: '/student/extra' },
-      ['额外功能', '待办', '云盘', '文件', '文档', '笔记'],
+      ['待办', '额外功能'],
     ),
   ]
 
@@ -241,10 +241,10 @@ function buildTeacherActions(teacherCourses: Course[]): AssistantPageAction[] {
     ),
     createAction(
       'teacher.extra',
-      '打开教师额外功能',
-      '进入教师端额外功能页',
+      '打开教师待办',
+      '进入教师端待办页',
       { path: '/teacher/extra' },
-      ['额外功能', '待办', '云盘', '文件', '文档', '笔记'],
+      ['待办', '额外功能'],
     ),
   ]
 
@@ -386,10 +386,10 @@ function buildMentorActions(): AssistantPageAction[] {
     ),
     createAction(
       'mentor.extra',
-      '打开导师额外功能',
-      '进入企业导师端额外功能页',
+      '打开企业导师待办',
+      '进入企业导师端待办页',
       { path: '/mentor/extra' },
-      ['额外功能', '待办', '云盘', '文件'],
+      ['待办', '额外功能'],
     ),
   ]
 }

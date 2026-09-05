@@ -174,7 +174,7 @@
           </div>
           <button v-if="!isViewOnly" @click="handleProcessOverdue" class="text-xs flex items-center gap-1 px-3 py-1.5 bg-purple-50 text-purple-600 border border-purple-200 rounded-lg hover:bg-purple-100">
             <RefreshCw class="w-3 h-3" />
-            处理逾期自评
+            处理逾期个人自评
           </button>
         </div>
 
@@ -280,11 +280,11 @@
                             class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
                         </th>
                         <th class="text-left py-2 px-3 text-gray-500 font-medium text-xs">学生</th>
-                        <th class="text-center py-2 px-2 text-gray-500 font-medium text-xs w-16">自评</th>
-                        <th class="text-center py-2 px-2 text-gray-500 font-medium text-xs w-16">组内</th>
-                        <th class="text-center py-2 px-2 text-gray-500 font-medium text-xs w-16">组间</th>
-                        <th class="text-center py-2 px-2 text-gray-500 font-medium text-xs w-16">教师</th>
-                        <th class="text-center py-2 px-2 text-gray-500 font-medium text-xs w-16">导师</th>
+                        <th class="text-center py-2 px-2 text-gray-500 font-medium text-xs w-20">个人自评</th>
+                        <th class="text-center py-2 px-2 text-gray-500 font-medium text-xs w-20">小组内互评</th>
+                        <th class="text-center py-2 px-2 text-gray-500 font-medium text-xs w-20">小组间互评</th>
+                        <th class="text-center py-2 px-2 text-gray-500 font-medium text-xs w-20">教师评价</th>
+                        <th class="text-center py-2 px-2 text-gray-500 font-medium text-xs w-20">企业导师评价</th>
                         <th class="text-left py-2 px-3 text-gray-500 font-medium text-xs w-20">状态</th>
                         <th class="text-left py-2 px-3 text-gray-500 font-medium text-xs w-24">新评分</th>
                       </tr>
@@ -326,14 +326,16 @@
                           <span v-else class="text-xs text-gray-300">-</span>
                         </td>
                         <td class="py-2 px-3">
-                          <div v-if="!s.submitted && canManageEval" class="flex items-center gap-1">
-                            <input type="number" min="0" max="100"
-                              :value="evalScoreInputs[s.student.id] ?? ''"
-                              @input="(e) => { const v = parseFloat((e.target as HTMLInputElement).value); if (!isNaN(v)) evalScoreInputs[s.student.id] = Math.min(100, Math.max(0, v)); else delete evalScoreInputs[s.student.id] }"
-                              placeholder="分数"
-                              class="w-full max-w-[80px] px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-center focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none" />
-                            <span class="text-xs text-gray-400">分</span>
-                          </div>
+                          <template v-if="!s.submitted && canManageEval">
+                            <button
+                              @click="openEvalCriteria(s.student)"
+                              class="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
+                            >
+                              <Pencil class="h-3 w-3" />
+                              分项评分
+                            </button>
+                            <span v-if="s.hasDraft" class="mt-1 block text-[11px] text-blue-500">已保存，待提交</span>
+                          </template>
                           <span v-else-if="s.submitted" class="text-xs font-medium text-emerald-600">{{ s.finalScore }}分</span>
                           <span v-else class="text-xs text-gray-300">-</span>
                         </td>
@@ -362,12 +364,6 @@
                 </div>
               </div>
               <div class="flex items-center gap-2">
-                <button @click="handleSaveEvalScores"
-                  :class="`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${hasEvalInputs && canManageEval ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`"
-                  :disabled="!hasEvalInputs || !canManageEval">
-                  <Save class="w-4 h-4" />
-                  保存评分
-                </button>
                 <button @click="handleSubmitAll"
                   :class="`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${hasSubmittable && canManageEval ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`"
                   :disabled="!hasSubmittable || !canManageEval">
@@ -380,12 +376,62 @@
             </div>
           </div>
         </div>
+
+        <!-- 教师/企业导师：分项评分弹窗 -->
+        <div v-if="showEvalCriteriaPopup" class="fixed inset-0 z-[60] flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" @click="closeEvalCriteriaPopup" />
+          <div class="relative w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl">
+            <div class="mb-4 flex items-center justify-between">
+              <div>
+                <h4 class="text-lg font-semibold text-gray-900">{{ EvalTypeLabels[evalCriteriaType] }}</h4>
+                <p class="mt-0.5 text-sm text-gray-400">{{ evalCriteriaStudentName }}</p>
+              </div>
+              <button @click="closeEvalCriteriaPopup" class="text-gray-400 hover:text-gray-600">
+                <X class="h-5 w-5" />
+              </button>
+            </div>
+            <div class="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+              <div
+                v-for="(item, index) in getEvalItemDefinitions(evalCriteriaType)"
+                :key="index"
+                class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2"
+              >
+                <span class="text-sm text-gray-700">{{ item.label }} ：</span>
+                <div class="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="0"
+                    :max="item.max"
+                    :value="evalCriteriaDraft[index] ?? ''"
+                    @input="setEvalCriteriaScore(index, $event)"
+                    placeholder="填写分数"
+                    class="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-center text-sm outline-none focus:border-blue-500"
+                  />
+                  <span class="text-xs text-gray-400">/ {{ item.max }}</span>
+                </div>
+              </div>
+              <p class="text-right text-sm font-medium text-gray-800">合计：{{ evalCriteriaTotal }} 分</p>
+              <p v-if="evalCriteriaError" class="text-right text-xs text-red-500">{{ evalCriteriaError }}</p>
+            </div>
+            <div class="mt-5 flex justify-end gap-3 border-t border-gray-100 pt-4">
+              <button @click="closeEvalCriteriaPopup" class="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200">取消</button>
+              <button
+                @click="saveEvalCriteria"
+                :disabled="!evalCriteriaStudentId"
+                class="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                <Save class="mr-1 inline h-4 w-4" />
+                保存评分
+              </button>
+            </div>
+          </div>
+        </div>
       </Teleport>
     </div>
 
     <!-- Tab: 课程管理（知识图谱） -->
     <div v-if="activeTab === 'course-mgmt'" class="space-y-6">
-      <KnowledgeGraph :course-id="courseId" :students="kgStudents" :can-manage="canManageProjects" />
+      <KnowledgeGraph :course-id="courseId" :students="kgStudents" :can-manage="canManageProjects" :eval-type="isMentor ? 'mentor' : 'teacher'" />
     </div>
 
     <!-- Tab: 成绩配置（完整权重配置） -->
@@ -421,9 +467,9 @@
           </Section>
 
           <Section title="平时成绩构成" :hint="`合计：${regularTotal}%${regularTotal !== 100 ? '（须等于 100%）' : ''}`" :valid="regularTotal === 100">
-            <Slider label="自评" :val="gradeConfig.selfEvalWeight" @change="(v) => updateGradeConfig('selfEvalWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
-            <Slider label="组内互评" :val="gradeConfig.peerReviewWeight" @change="(v) => updateGradeConfig('peerReviewWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
-            <Slider label="组间互评" :val="gradeConfig.interGroupEvalWeight" @change="(v) => updateGradeConfig('interGroupEvalWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
+            <Slider label="个人自评" :val="gradeConfig.selfEvalWeight" @change="(v) => updateGradeConfig('selfEvalWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
+            <Slider label="小组内互评" :val="gradeConfig.peerReviewWeight" @change="(v) => updateGradeConfig('peerReviewWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
+            <Slider label="小组间互评" :val="gradeConfig.interGroupEvalWeight" @change="(v) => updateGradeConfig('interGroupEvalWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
             <Slider label="教师评价" :val="gradeConfig.teacherScoreWeight" @change="(v) => updateGradeConfig('teacherScoreWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
             <Slider label="企业导师评价" :val="gradeConfig.mentorScoreWeight" @change="(v) => updateGradeConfig('mentorScoreWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
           </Section>
@@ -1899,6 +1945,14 @@ import type { EvalTemplate, EvalType, Evaluation, EvalFrequency, Schedule, Grade
 import { AlertTriangle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, LogOut, Network } from 'lucide-vue-next'
 import { getNow } from '@/lib/date'
 import {
+  createEmptyEvalDraft,
+  evalItemsFromDraft,
+  getEvalItemDefinitions,
+  makeEvalItemsForTotal,
+  scoreFromEvalDraft,
+  type EvalScoreDraftValue,
+} from '@/lib/evalStandards'
+import {
   bulkImportEnrollments,
   bulkImportGroups,
   bulkImportSchedules,
@@ -2450,8 +2504,19 @@ const gradeEntrySearch = ref('')
 const examInputs = ref<Record<string, number>>({})
 const selectedStudentIds = ref<string[]>([])
 const evalScoreInputs = ref<Record<string, number>>({})
+const evalCriteriaDrafts = ref<Record<string, EvalScoreDraftValue[]>>({})
+const evalCriteriaDraft = ref<EvalScoreDraftValue[]>([])
+const evalCriteriaError = ref('')
+const showEvalCriteriaPopup = ref(false)
+const evalCriteriaStudentId = ref('')
+const evalCriteriaStudentName = ref('')
 const evalStudentSearch = ref('')
 const selectedBatchSession = ref(1)
+
+const evalCriteriaType = computed<EvalType>(() => (isMentor.value ? 'mentor' : 'teacher'))
+const evalCriteriaTotal = computed(() =>
+  scoreFromEvalDraft(getEvalItemDefinitions(evalCriteriaType.value), evalCriteriaDraft.value)
+)
 
 // 评价管理过滤
 const evalFilterClass = ref('')
@@ -3800,6 +3865,87 @@ const handleSetConfig = (updates: Partial<import('@/types').EvaluationConfig>) =
   store.markConfigCompleted(courseId.value, 'evalConfig')
 }
 
+function openEvalCriteria(student: { id: string; name: string }) {
+  const type = evalCriteriaType.value
+  const defs = getEvalItemDefinitions(type)
+  const existing = courseId.value
+    ? store.evaluations.find(
+        (e) => e.courseId === courseId.value && e.studentId === student.id &&
+          e.sessionNumber === selectedBatchSession.value && e.type === type
+      )
+    : undefined
+
+  evalCriteriaStudentId.value = student.id
+  evalCriteriaStudentName.value = student.name
+  evalCriteriaError.value = ''
+  evalCriteriaDraft.value = defs.map((item, index) => {
+    const saved = existing?.items?.[index]
+    return saved && saved.score !== undefined ? saved.score : ''
+  })
+  evalScoreInputs.value = {}
+  showEvalCriteriaPopup.value = true
+}
+
+function closeEvalCriteriaPopup() {
+  showEvalCriteriaPopup.value = false
+  evalCriteriaStudentId.value = ''
+  evalCriteriaStudentName.value = ''
+  evalCriteriaDraft.value = []
+  evalCriteriaError.value = ''
+}
+
+function setEvalCriteriaScore(index: number, e: Event) {
+  const raw = (e.target as HTMLInputElement).value
+  const parsed = Number(raw)
+  const next: EvalScoreDraftValue = raw === '' || Number.isNaN(parsed) ? '' : parsed
+  evalCriteriaDraft.value = evalCriteriaDraft.value.map((value, i) => (i === index ? next : value))
+}
+
+function saveEvalCriteria() {
+  const studentId = evalCriteriaStudentId.value
+  const type = evalCriteriaType.value
+  const defs = getEvalItemDefinitions(type)
+  const invalid = defs.some((item, index) => {
+    const value = evalCriteriaDraft.value[index]
+    return value === '' || typeof value !== 'number' || Number.isNaN(value) || value < 0 || value > item.max
+  })
+  if (invalid) {
+    evalCriteriaError.value = '请完整填写各项分数'
+    return
+  }
+
+  const items = evalItemsFromDraft(defs, evalCriteriaDraft.value)
+  const score = scoreFromEvalDraft(defs, evalCriteriaDraft.value)
+  const existing = courseId.value
+    ? store.evaluations.find(
+        (e) => e.courseId === courseId.value && e.studentId === studentId &&
+          e.sessionNumber === selectedBatchSession.value && e.type === type
+      )
+    : undefined
+  const ev: Evaluation = {
+    id: existing ? existing.id : `ev-manual-${Date.now()}-${studentId}-${type}`,
+    courseId: courseId.value || '',
+    studentId,
+    sessionNumber: selectedBatchSession.value,
+    type,
+    score,
+    items,
+    evaluatorId: store.currentUser || '',
+    evaluatorName: store.currentUser || (isMentor.value ? '企业导师' : '教师'),
+    createdAt: getNow().toISOString().split('T')[0],
+  }
+  if (existing) {
+    store.updateEvaluation(ev.id, { score, items, createdAt: ev.createdAt })
+  } else {
+    store.addEvaluation(ev)
+  }
+  evalCriteriaDrafts.value[studentId] = [...evalCriteriaDraft.value]
+  closeEvalCriteriaPopup()
+  if (courseId.value) {
+    store.syncEvalToDetailedGrade(courseId.value)
+  }
+}
+
 const handleBatchEval = (level: string) => {
   if (!courseId.value) return
   const range = LEVEL_OPTIONS.find((o) => o.label === level)?.range
@@ -3807,6 +3953,7 @@ const handleBatchEval = (level: string) => {
   const score = Math.round((range[0] + range[1]) / 2)
   const session = selectedBatchSession.value
   const type: EvalType = isMentor.value ? 'mentor' : 'teacher'
+  const items = makeEvalItemsForTotal(type, score)
 
   selectedStudentIds.value.forEach((studentId) => {
     if (store.isSessionLocked(courseId.value || '', session) ||
@@ -3821,13 +3968,14 @@ const handleBatchEval = (level: string) => {
       sessionNumber: session,
       type,
       score,
+      items: items.map((item) => ({ ...item })),
       evaluatorId: store.currentUser || '',
       evaluatorName: store.currentUser || (isMentor.value ? '企业导师' : '教师'),
       comment: level,
       createdAt: getNow().toISOString().split('T')[0],
     }
     if (existing) {
-      store.updateEvaluation(ev.id, { score, comment: level, createdAt: ev.createdAt })
+      store.updateEvaluation(ev.id, { score, items: items.map((item) => ({ ...item })), comment: level, createdAt: ev.createdAt })
     } else {
       store.addEvaluation(ev)
     }

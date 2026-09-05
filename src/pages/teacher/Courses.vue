@@ -391,7 +391,7 @@
         <div v-if="anomalies.length > 0" class="bg-red-50 border border-red-200 rounded-xl p-4">
           <div class="flex items-center gap-2 text-red-600 font-medium mb-2">
             <AlertTriangle class="w-5 h-5" />
-            异常预警（自评与他评差异过大）
+            异常预警（个人自评与其他评价差异过大）
           </div>
           <div class="space-y-1">
             <p v-for="{ session, anomaly } in anomalies" :key="anomaly.id" class="text-sm text-red-500">{{ anomaly.warning }}</p>
@@ -409,7 +409,7 @@
             <button @click="handleProcessOverdue"
               class="text-xs flex items-center gap-1 px-3 py-1.5 bg-purple-50 text-purple-600 border border-purple-200 rounded-lg hover:bg-purple-100">
               <RefreshCw class="w-3 h-3" />
-              处理逾期自评
+               处理逾期个人自评
             </button>
           </div>
 

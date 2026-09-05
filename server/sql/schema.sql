@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
   session_number INT          DEFAULT 1 COMMENT '第N次评价',
   type           VARCHAR(16)  DEFAULT '' COMMENT '评价类型',
   score          DECIMAL(5,1) DEFAULT 0 COMMENT '得分',
+  items          LONGTEXT NULL COMMENT '分项评分JSON',
   evaluator_id   VARCHAR(64)  DEFAULT '' COMMENT '评价人ID',
   evaluator_name VARCHAR(64)  DEFAULT '' COMMENT '评价人姓名',
   comment        TEXT NULL COMMENT '评语',

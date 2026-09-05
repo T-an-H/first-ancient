@@ -13,6 +13,14 @@ function formatDateValue(value) {
 }
 
 function mapEvaluationRow(row) {
+  let items = [];
+  if (row.items) {
+    try {
+      items = typeof row.items === 'string' ? JSON.parse(row.items) : row.items;
+    } catch {
+      items = [];
+    }
+  }
   return {
     id: row.id,
     courseId: row.course_id,
@@ -20,6 +28,7 @@ function mapEvaluationRow(row) {
     sessionNumber: Number(row.session_number || 0),
     type: row.type,
     score: Number(row.score || 0),
+    items: Array.isArray(items) ? items : [],
     evaluatorId: row.evaluator_id || '',
     evaluatorName: row.evaluator_name || '',
     comment: row.comment || '',
@@ -88,10 +97,10 @@ router.post('/config', async (req, res) => {
 /** POST /api/eval/save - 保存一条评价 */
 router.post('/save', async (req, res) => {
   try {
-    const { id, courseId, studentId, sessionNumber, type, score, evaluatorId, evaluatorName, comment, createdAt } = req.body;
+    const { id, courseId, studentId, sessionNumber, type, score, items, evaluatorId, evaluatorName, comment, createdAt } = req.body;
     await pool.execute(
-      'REPLACE INTO evaluations (id, course_id, student_id, session_number, type, score, evaluator_id, evaluator_name, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, courseId, studentId, sessionNumber, type, score, evaluatorId || '', evaluatorName || '', comment || '', createdAt || '']
+      'REPLACE INTO evaluations (id, course_id, student_id, session_number, type, score, items, evaluator_id, evaluator_name, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, courseId, studentId, sessionNumber, type, score, items ? JSON.stringify(items) : null, evaluatorId || '', evaluatorName || '', comment || '', createdAt || '']
     );
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
@@ -104,8 +113,8 @@ router.post('/batch', async (req, res) => {
     if (!evaluations?.length) return res.json({ success: true, count: 0 });
     for (const e of evaluations) {
       await pool.execute(
-        'REPLACE INTO evaluations (id, course_id, student_id, session_number, type, score, evaluator_id, evaluator_name, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [e.id, e.courseId, e.studentId, e.sessionNumber, e.type, e.score, e.evaluatorId || '', e.evaluatorName || '', e.comment || '', e.createdAt || '']
+        'REPLACE INTO evaluations (id, course_id, student_id, session_number, type, score, items, evaluator_id, evaluator_name, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [e.id, e.courseId, e.studentId, e.sessionNumber, e.type, e.score, e.items ? JSON.stringify(e.items) : null, e.evaluatorId || '', e.evaluatorName || '', e.comment || '', e.createdAt || '']
       );
     }
     res.json({ success: true, count: evaluations.length });

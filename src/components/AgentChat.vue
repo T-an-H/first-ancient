@@ -907,7 +907,7 @@ function getRoleDescription(role: PageContext): string {
   const descriptions: Record<PageContext, string> = {
     admin: '你可以切换学院、管理课程分类和班级，并查看学生详情。',
     teacher: '你可以查看我的课程、课程表、评价管理、成绩配置、成绩管理、作业管理和学生管理。',
-    student: '你可以查看课程、课表、成绩、学习进度、个人画像和额外功能。',
+    student: '你可以查看课程、课表、成绩、学习进度、个人画像和待办。',
     mentor: '你可以查看负责课程、参与学生评价，并查看相关协作内容。',
     leader: '你可以查看学院课程概况和学生统计信息。',
     login: '登录后我就能按你的角色带你去对应页面。',
@@ -1034,7 +1034,7 @@ function resolveStudentIntent(rawText: string): AssistantIntent | null {
   const isScheduleIntent = /(课表|课程表|上课时间|排课)/.test(rawText)
   const isProgressIntent = /(进度|学习情况|掌握情况|完成到哪|学得怎么样)/.test(rawText)
   const isProfileIntent = /(画像|个人信息|个人资料|我的信息|能力分析)/.test(rawText)
-  const isExtraIntent = /(额外功能|待办|云盘|文件|文档|笔记)/.test(rawText)
+  const isExtraIntent = /(额外功能|待办)/.test(rawText)
   const isHomeworkIntent = /(作业|提交作业)/.test(rawText)
   const isAITierIntent = /(ai分层|分层测试|分层测评|分层)/i.test(rawText)
   const isKnowledgeIntent = /(知识图谱|知识点图|知识图)/.test(rawText)
@@ -1120,7 +1120,7 @@ function resolveStudentIntent(rawText: string): AssistantIntent | null {
   if (isExtraIntent) {
     return {
       type: 'navigate',
-      message: '我带你去额外功能页。',
+      message: '我带你去待办页。',
       to: '/student/extra',
     }
   }
@@ -1160,7 +1160,7 @@ function resolveTeacherIntent(rawText: string): AssistantIntent | null {
   const isGradeEntryIntent = /(成绩管理|成绩录入|录入成绩|登记成绩|提交成绩)/.test(rawText)
   const isHomeworkIntent = /(作业管理|作业区|布置作业|作业)/.test(rawText)
   const isStudentManagementIntent = /(学生管理|学员管理|班级学生|学生名单)/.test(rawText)
-  const isExtraIntent = /(额外功能|待办|云盘|文件|文档|笔记)/.test(rawText)
+  const isExtraIntent = /(额外功能|待办)/.test(rawText)
   const hasCourseVerb = /(进入|打开|查看|去)/.test(rawText)
   const isCourseDetailIntent =
     /(进入课程|打开课程|课程详情)/.test(rawText) || (hasCourseVerb && Boolean(courseResolution.match))
@@ -1244,7 +1244,7 @@ function resolveTeacherIntent(rawText: string): AssistantIntent | null {
   if (isExtraIntent) {
     return {
       type: 'navigate',
-      message: '我带你去额外功能页。',
+      message: '我带你去待办页。',
       to: '/teacher/extra',
     }
   }

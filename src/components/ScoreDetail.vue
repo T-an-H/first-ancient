@@ -74,7 +74,7 @@
         <div class="bg-brand-400/10 rounded-xl p-4 text-xs text-gray-400 space-y-1">
           <p><span class="font-medium">权重配置：</span>平时 {{ cfg.regularWeight }}% + 期中 {{ cfg.midtermWeight }}% + 期末 {{ cfg.finalWeight }}%{{ qualityConfigText }}</p>
           <p v-if="cfg.regularWeight > 0">
-            平时构成：自评 {{ cfg.selfEvalWeight }}% · 组内互评 {{ cfg.peerReviewWeight }}% · 组间互评 {{ cfg.interGroupEvalWeight }}% · 教师 {{ cfg.teacherScoreWeight }}% · 企业导师 {{ cfg.mentorScoreWeight }}%
+            平时构成：个人自评 {{ cfg.selfEvalWeight }}% · 小组内互评 {{ cfg.peerReviewWeight }}% · 小组间互评 {{ cfg.interGroupEvalWeight }}% · 教师评价 {{ cfg.teacherScoreWeight }}% · 企业导师评价 {{ cfg.mentorScoreWeight }}%
           </p>
         </div>
       </div>
@@ -125,9 +125,9 @@ const wAvg = (subScores: { score: number | undefined; weight: number }[]): numbe
 }
 
 const regularSubs = computed(() => [
-  { score: props.detail?.selfEvalScore, weight: props.cfg.selfEvalWeight, label: '自评' },
-  { score: props.detail?.peerReviewScore, weight: props.cfg.peerReviewWeight, label: '组内互评' },
-  { score: props.detail?.interGroupScore, weight: props.cfg.interGroupEvalWeight, label: '组间互评' },
+  { score: props.detail?.selfEvalScore, weight: props.cfg.selfEvalWeight, label: '个人自评' },
+  { score: props.detail?.peerReviewScore, weight: props.cfg.peerReviewWeight, label: '小组内互评' },
+  { score: props.detail?.interGroupScore, weight: props.cfg.interGroupEvalWeight, label: '小组间互评' },
   { score: props.detail?.teacherScore, weight: props.cfg.teacherScoreWeight, label: '教师评价' },
   { score: props.detail?.mentorScore, weight: props.cfg.mentorScoreWeight, label: '企业导师评价' },
 ])

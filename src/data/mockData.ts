@@ -452,9 +452,9 @@ export const detailedGrades: import('@/types').DetailedGrade[] = [
 ];
 
 export const evalAnomalies: import('@/types').EvalAnomaly[] = [
-  { id: 'anom-1', courseId: 'course-1', studentId: 'stu-5', studentName: '陈静', sessionNumber: 1, type: 'self', selfScore: 98, avgScore: 72, diff: 26, warning: '自评分数与平均分差异超过25分，请核实' },
-  { id: 'anom-2', courseId: 'course-2', studentId: 'stu-3', studentName: '王芳', sessionNumber: 1, type: 'self', selfScore: 95, avgScore: 70, diff: 25, warning: '自评分数与平均分差异较大，请核实' },
-  { id: 'anom-3', courseId: 'course-14', studentId: 'stu-17', studentName: '欧阳雪', sessionNumber: 1, type: 'self', selfScore: 88, avgScore: 85, diff: 3, warning: '自评与组间评价存在小幅差异' },
+  { id: 'anom-1', courseId: 'course-1', studentId: 'stu-5', studentName: '陈静', sessionNumber: 1, type: 'self', selfScore: 98, avgScore: 72, diff: 26, warning: '个人自评分数与平均分差异超过25分，请核实' },
+  { id: 'anom-2', courseId: 'course-2', studentId: 'stu-3', studentName: '王芳', sessionNumber: 1, type: 'self', selfScore: 95, avgScore: 70, diff: 25, warning: '个人自评分数与平均分差异较大，请核实' },
+  { id: 'anom-3', courseId: 'course-14', studentId: 'stu-17', studentName: '欧阳雪', sessionNumber: 1, type: 'self', selfScore: 88, avgScore: 85, diff: 3, warning: '个人自评与小组间评价存在小幅差异' },
   { id: 'anom-4', courseId: 'course-1', studentId: 'stu-1', studentName: '张明', sessionNumber: 1, type: 'inter_group', selfScore: 85, avgScore: 80, diff: 5, warning: '自评分数略高于组间评价' },
 ];
 

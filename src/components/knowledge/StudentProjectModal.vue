@@ -130,9 +130,6 @@
 
         <!-- ===== 4. 测试题目 ===== -->
         <div v-if="activeSection === 'test'" class="space-y-4">
-          <div class="border-b border-gray-100 pb-4 mb-2">
-            <StudentHomework :course-id="courseId" :student-id="myStudentId" :chapter-title="project.name" />
-          </div>
           <div>
             <h5 class="text-sm font-semibold text-gray-700 mb-2">教师上传的测试题目</h5>
             <div v-if="files.test.length === 0" class="text-center py-6 text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">暂无测试题目</div>
@@ -177,6 +174,35 @@
               </button>
             </div>
             <p class="text-xs text-gray-400 mt-2">完成测试题目后提交作答，教师批改后可见得分与评价。</p>
+          </div>
+
+          <div class="border-t border-gray-100 pt-4">
+            <div class="mb-3">
+              <h5 class="text-sm font-semibold text-gray-700">评价</h5>
+              <p class="text-xs text-gray-400 mt-1">完成个人自评、小组内互评、小组间互评，并在此查看教师评价和企业导师评价。</p>
+            </div>
+            <div class="mb-4 space-y-2">
+              <div v-for="record in projectTeacherEvalRecords" :key="record.id" class="rounded-lg border border-gray-200 bg-white/70 p-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-gray-800">{{ EvalTypeLabels[record.type] }}</span>
+                  <span class="text-sm font-bold text-indigo-600">{{ record.score }} 分</span>
+                </div>
+                <div v-if="record.items?.length" class="mt-2 grid grid-cols-1 gap-1">
+                  <div v-for="(item, ii) in record.items" :key="ii" class="flex items-center justify-between text-xs text-gray-600">
+                    <span>{{ item.label }}</span>
+                    <span>{{ item.score }} / {{ item.max ?? '—' }}</span>
+                  </div>
+                </div>
+              </div>
+              <p v-if="projectTeacherEvalRecords.length === 0" class="text-xs text-gray-400">教师或企业导师评价后，会在此显示分数。</p>
+            </div>
+            <StudentEvaluation
+              v-if="courseId && myStudentId"
+              :course-id="courseId"
+              :student-id="myStudentId"
+              :student-name="currentStudentName"
+              :session-number="projectEvalSession"
+            />
           </div>
         </div>
 
@@ -232,8 +258,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { X, FileText, Upload, CheckCircle, BookOpen, Wrench, ClipboardCheck, FileQuestion, Star, GitBranch } from 'lucide-vue-next'
-import StudentHomework from '@/components/Homework/StudentHomework.vue'
+import StudentEvaluation from '@/components/StudentEvaluation.vue'
 import { javaListProjectFiles, javaUpsertProjectProgress, javaListProjectProgress, javaGetQuestionnaire, javaListEvalResponses, javaSubmitEvalResponse } from '@/api/knowledgeGraph'
+import { useAppStore } from '@/stores/app'
+import { EvalTypeLabels } from '@/types'
 
 const props = defineProps<{
   project: any
@@ -241,6 +269,19 @@ const props = defineProps<{
   myStudentId: string
 }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
+const store = useAppStore()
+
+const currentStudentName = computed(() => {
+  const found = store.students.find((student) => student.id === props.myStudentId)
+  return found?.name || store.currentUser || ''
+})
+const projectEvalSession = computed(() => Number(props.project?.orderNo ?? 0) + 1)
+const projectTeacherEvalRecords = computed(() =>
+  store.evaluations.filter(
+    (e) => e.courseId === props.courseId && e.studentId === props.myStudentId &&
+      e.sessionNumber === projectEvalSession.value && (e.type === 'teacher' || e.type === 'mentor')
+  )
+)
 
 const sections = [
   { key: 'preview', label: '预习资料', icon: BookOpen },

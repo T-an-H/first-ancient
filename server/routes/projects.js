@@ -187,6 +187,48 @@ router.delete('/projects/files/:id', async (req, res) => {
   catch (error) { return fail(res, error); }
 });
 
+// ====== 课程标准（教师上传，学生端同步查看） ======
+
+function mapStandard(row) {
+  return {
+    id: row.id,
+    courseId: row.course_id,
+    name: row.name,
+    size: Number(row.size || 0),
+    dataUrl: row.data_url || '',
+    uploader: row.uploader || '',
+    createdAt: row.created_at,
+  };
+}
+
+router.get('/course-standards', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT * FROM course_standards WHERE course_id = ? ORDER BY created_at DESC, id',
+      [req.query.courseId || '']
+    );
+    return ok(res, rows.map(mapStandard));
+  } catch (error) { return fail(res, error); }
+});
+
+router.post('/course-standards', async (req, res) => {
+  try {
+    const f = req.body || {};
+    const fileId = f.id || id('cstd');
+    await pool.execute(
+      'INSERT INTO course_standards (id, course_id, name, size, data_url, uploader) VALUES (?, ?, ?, ?, ?, ?)',
+      [fileId, f.courseId || '', f.name || '', f.size || 0, f.dataUrl || f.data_url || '', f.uploader || '']
+    );
+    const [rows] = await pool.execute('SELECT * FROM course_standards WHERE id = ?', [fileId]);
+    return ok(res, mapStandard(rows[0]));
+  } catch (error) { return fail(res, error); }
+});
+
+router.delete('/course-standards/:id', async (req, res) => {
+  try { await pool.execute('DELETE FROM course_standards WHERE id = ?', [req.params.id]); return ok(res); }
+  catch (error) { return fail(res, error); }
+});
+
 router.get('/projects/:projectId/progress', async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT * FROM course_project_progress WHERE project_id = ? ORDER BY created_at, id', [req.params.projectId]);

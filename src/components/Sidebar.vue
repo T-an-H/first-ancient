@@ -22,7 +22,7 @@ const adminNavItems = [
 const teacherNavItems = [
   { to: '/teacher/courses', icon: 'bookOpen' as const, label: '我的课程' },
   { to: '/teacher/schedule', icon: 'calendar' as const, label: '课程表' },
-  { to: '/teacher/extra', icon: 'lightbulb' as const, label: '额外功能' },
+  { to: '/teacher/extra', icon: 'lightbulb' as const, label: '待办' },
 ]
 
 const studentNavItems = [
@@ -30,13 +30,13 @@ const studentNavItems = [
   { to: '/student/schedule', icon: 'calendar' as const, label: '我的课表' },
   { to: '/student/courses', icon: 'bookOpen' as const, label: '我的课程' },
   { to: '/student/grades', icon: 'award' as const, label: '成绩查询' },
-  { to: '/student/extra', icon: 'lightbulb' as const, label: '额外功能' },
+  { to: '/student/extra', icon: 'lightbulb' as const, label: '待办' },
 ]
 
 const mentorNavItems = [
   { to: '/mentor/courses', icon: 'bookOpen' as const, label: '我的课程' },
   { to: '/mentor/schedule', icon: 'calendar' as const, label: '课程表' },
-  { to: '/mentor/extra', icon: 'lightbulb' as const, label: '额外功能' },
+  { to: '/mentor/extra', icon: 'lightbulb' as const, label: '待办' },
 ]
 
 const leaderNavItems = [
@@ -60,7 +60,7 @@ const hasLeaderAccess = computed(() => {
 
 function getNavBadgeCount(item: { to: string; label: string }): number {
   if (!store.currentUser) return 0
-  if (item.label === '额外功能') {
+  if (item.label === '待办') {
     return store.todos.filter((t) => t.createdBy === store.currentUser && !t.completed).length
   }
   if (item.label === '我的课程') {

@@ -9,14 +9,14 @@
         <span class="text-xs px-2 py-0.5 rounded-full bg-brand-600/15 text-brand-600 border border-brand-400">{{ EvalTemplateLabels[config.template] }}</span>
         <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-600 border border-cyan-200">
           {{ EvalFrequencyLabels[config.frequency] }}
-          <span class="ml-1 text-[10px] text-cyan-400">（共{{ totalSessions }}次）</span>
+          <span class="ml-1 text-[10px] text-cyan-400">（共{{ sessionCount }}次）</span>
         </span>
-        <span v-if="!courseHasGroups" class="text-[10px] px-1.5 py-0.5 rounded bg-brand-400/10 text-gray-400">组内/组间互评自动隐藏（未分组）</span>
+        <span v-if="!courseHasGroups" class="text-[10px] px-1.5 py-0.5 rounded bg-brand-400/10 text-gray-400">小组内/小组间互评自动隐藏（未分组）</span>
         <span v-if="!config.hasMentor" class="text-[10px] px-1.5 py-0.5 rounded bg-brand-400/10 text-gray-400">企业导师评价自动隐藏（无企业参与）</span>
       </div>
 
       <!-- 评价场次列表 -->
-      <div v-for="session in totalSessions" :key="session" class="border rounded-lg overflow-hidden" :class="sessionReminders[session]?.status === 'overdue' ? 'border-brand-400' : 'border-brand-400/20'">
+      <div v-for="session in displaySessions" :key="session" class="border rounded-lg overflow-hidden" :class="sessionReminders[session]?.status === 'overdue' ? 'border-brand-400' : 'border-brand-400/20'">
         <button @click="sessionState(session).disabled ? null : openEvalModal(session)" :disabled="sessionState(session).disabled" class="w-full flex items-center justify-between px-4 py-3 text-sm transition-colors" :class="sessionState(session).disabled ? 'bg-brand-400/10 cursor-not-allowed text-gray-400' : 'hover:bg-brand-400/10 text-gray-800'">
           <div class="flex items-center gap-3">
             <span :class="sessionState(session).disabled ? 'text-gray-400' : 'font-medium text-gray-800'">第{{ session }}次评价</span>
@@ -55,38 +55,82 @@
             <div class="flex-1 min-w-0">
               <p class="text-xs font-semibold mb-1">{{ EvalTypeLabels[type] }}</p>
 
-              <!-- 自评：评分器 -->
+              <!-- 个人自评：分项评分 -->
               <div v-if="type === 'self'" class="space-y-2">
-                <div class="flex items-center gap-3">
-                  <input type="range" min="0" max="100" v-model.number="modalScores.self" class="flex-1 h-1.5 accent-blue-500" />
-                  <span class="text-sm font-bold w-10 text-right" :class="scoreColorClass(modalScores.self)">{{ modalScores.self }}</span>
-                  <span class="text-xs text-gray-400">分</span>
+                <div
+                  v-for="(item, itemIndex) in getEvalItemDefinitions('self')"
+                  :key="itemIndex"
+                  class="flex items-center justify-between gap-3 rounded bg-white/70 border border-brand-400/20 px-3 py-2"
+                >
+                  <span class="text-xs text-gray-800">{{ item.label }} ：</span>
+                  <div class="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="0"
+                      :max="item.max"
+                      :value="selfItemDraft[itemIndex] ?? ''"
+                      @input="setSelfItemScore(itemIndex, $event)"
+                      placeholder="填写分数"
+                      class="w-24 rounded border border-gray-200 px-2 py-1 text-center text-sm outline-none focus:border-blue-500"
+                    />
+                    <span class="text-xs text-gray-400">/ {{ item.max }} 分</span>
+                  </div>
                 </div>
                 <p v-if="validationErrors.self" class="text-xs text-brand-600">{{ validationErrors.self }}</p>
+                <p class="text-right text-xs font-medium text-gray-700">合计：{{ selfItemTotal }} 分</p>
               </div>
 
-              <!-- 教师/导师评价：只读 -->
-              <div v-else-if="type === 'teacher' || type === 'mentor'">
-                <span class="text-sm" :class="record ? 'font-bold' : 'text-gray-400'">
-                  {{ record ? `${record.score}分` : '待教师评价' }}
+              <!-- 教师/企业导师评价：查看 -->
+              <div v-else-if="type === 'teacher' || type === 'mentor'" class="space-y-1.5">
+                <template v-if="record?.items?.length">
+                  <div v-for="(item, itemIndex) in record.items" :key="itemIndex" class="flex items-center justify-between text-xs">
+                    <span class="text-gray-700">{{ item.label }}：</span>
+                    <span class="font-medium text-gray-900">{{ item.score }} 分</span>
+                  </div>
+                  <div class="flex items-center justify-between border-t border-brand-400/10 pt-1 text-xs font-semibold text-gray-800">
+                    <span>合计</span>
+                    <span>{{ record.score }} 分</span>
+                  </div>
+                </template>
+                <span v-else class="text-sm" :class="record ? 'font-bold' : 'text-gray-400'">
+                  {{ record ? `${record.score}分` : '待评价' }}
                 </span>
-                <span v-if="record" class="text-[10px] text-gray-400 ml-2">{{ record.createdAt }}</span>
               </div>
 
-              <!-- 组内/组间互评：目标列表 -->
-              <div v-else class="space-y-1.5">
+              <!-- 小组内互评 / 小组间互评：按评价对象填写分项 -->
+              <div v-else class="space-y-2">
                 <div v-if="getPeerTargets(type).length === 0" class="text-xs text-gray-400">暂无互评目标</div>
-                <div v-for="target in getPeerTargets(type)" :key="target.key" class="flex items-center gap-2 px-2 py-1.5 bg-white/60 rounded border">
-                  <span class="text-xs font-medium text-gray-800 min-w-[4em]">{{ target.label }}</span>
-                  <template v-if="hasSubmittedPeerFor(target)">
-                    <span class="text-xs text-brand-600 ml-auto">已评 {{ getSubmittedPeerScore(target) }}分</span>
-                  </template>
-                  <template v-else>
-                    <div class="flex items-center gap-1 ml-auto">
-                      <input type="range" min="0" max="100" :value="getPeerScore(target.key)" @input="setPeerScoreInput(target.key, $event)" class="w-20 h-1 accent-blue-500" />
-                      <span class="text-xs font-bold w-8 text-center">{{ getPeerScore(target.key) }}</span>
+                <div v-for="target in getPeerTargets(type)" :key="target.key" class="rounded border border-brand-400/20 bg-white/60 px-3 py-2">
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="text-xs font-medium text-gray-800">{{ target.label }}</span>
+                    <template v-if="hasSubmittedPeerFor(target)">
+                      <span class="text-xs font-medium text-brand-600">已评 {{ getSubmittedPeerScore(target) }} 分</span>
+                    </template>
+                  </div>
+                  <template v-if="!hasSubmittedPeerFor(target)">
+                    <div class="mt-2 space-y-1.5">
+                      <div
+                        v-for="(item, itemIndex) in getEvalItemDefinitions(type)"
+                        :key="itemIndex"
+                        class="flex items-center justify-between gap-3"
+                      >
+                        <span class="text-xs text-gray-700">{{ item.label }} ：</span>
+                        <div class="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            :max="item.max"
+                            :value="getPeerItemScore(type, target.key, itemIndex)"
+                            @input="setPeerItemScore(type, target.key, itemIndex, $event)"
+                            placeholder="填写分数"
+                            class="w-24 rounded border border-gray-200 px-2 py-1 text-center text-xs outline-none focus:border-blue-500"
+                          />
+                          <span class="text-[11px] text-gray-400">/ {{ item.max }}</span>
+                        </div>
+                      </div>
+                      <p class="text-right text-[11px] font-medium text-gray-700">合计：{{ getPeerItemTotal(type, target.key) }} 分</p>
                     </div>
-                    <p v-if="validationErrors[`peer_${target.key}`]" class="text-xs text-brand-600 ml-2">{{ validationErrors[`peer_${target.key}`] }}</p>
+                    <p v-if="validationErrors[`peer_${target.key}`]" class="mt-1 text-xs text-brand-600">{{ validationErrors[`peer_${target.key}`] }}</p>
                   </template>
                 </div>
               </div>
@@ -114,15 +158,24 @@ import {
   AlertTriangle, User, Users, Building2, GraduationCap, Briefcase,
   CheckCircle, ChevronRight, Lock
 } from 'lucide-vue-next'
-import type { EvalType, EvalAnomaly } from '@/types'
+import type { EvalType, EvalAnomaly, Evaluation } from '@/types'
 import { EvalTypeLabels, EvalTypeColors, EvalTemplateLabels, EvalFrequencyLabels, TEMPLATE_EVAL_TYPES } from '@/types'
 import Modal from './Modal.vue'
 import { getNow } from '@/lib/date'
+import {
+  createEmptyEvalDraft,
+  evalItemsFromDraft,
+  getEvalItemDefinitions,
+  scoreFromEvalDraft,
+  type EvalScoreDraftValue,
+} from '@/lib/evalStandards'
 
 const props = defineProps<{
   courseId: string
   studentId: string
   studentName: string
+  /** 指定评价轮次：放入某个项目/测试时只展示并填写该轮次 */
+  sessionNumber?: number
 }>()
 
 const store = useAppStore()
@@ -130,6 +183,12 @@ const store = useAppStore()
 // ===== 基础数据 =====
 const config = computed(() => store.evalConfigs.find((c) => c.courseId === props.courseId))
 const totalSessions = computed(() => store.getEvalSessions(props.courseId))
+const sessionCount = computed(() => (props.sessionNumber ? 1 : totalSessions.value))
+const displaySessions = computed(() =>
+  props.sessionNumber
+    ? [props.sessionNumber]
+    : Array.from({ length: totalSessions.value }, (_, index) => index + 1)
+)
 const courseHasGroups = computed(() => store.hasGroups(props.courseId))
 
 watch(() => props.courseId, () => {
@@ -181,7 +240,8 @@ function openEvalModal(session: number) {
   editingSession.value = session
   // 当第 N 次评价开启时，自动锁定第 1 ~ N-1 次
   store.autoLockPreviousSession(props.courseId, session)
-  modalScores.value = { self: 75 }
+  selfItemDraft.value = createEmptyEvalDraft('self')
+  peerItemDrafts.value = {}
   validationErrors.value = {}
   submitError.value = ''
   evalModalOpen.value = true
@@ -210,20 +270,45 @@ const modalAnomalies = computed(() => {
   return store.detectAnomalies(props.courseId, editingSession.value)
 })
 
-// ===== 自评分数 =====
-const modalScores = ref<{ self: number }>({ self: 75 })
+// ===== 分项评分草稿 =====
+const selfItemDraft = ref<EvalScoreDraftValue[]>([])
+const peerItemDrafts = ref<Record<string, EvalScoreDraftValue[]>>({})
 
-// ===== 互评分数管理 =====
-const peerScoresMap = ref<Record<string, number>>({})
-
-function getPeerScore(key: string): number {
-  return peerScoresMap.value[key] ?? 75
+function getPeerItemDraft(type: EvalType, key: string) {
+  if (!peerItemDrafts.value[key]) {
+    peerItemDrafts.value[key] = createEmptyEvalDraft(type)
+  }
+  return peerItemDrafts.value[key]
 }
 
-function setPeerScoreInput(key: string, e: Event) {
-  const val = Number((e.target as HTMLInputElement).value)
-  peerScoresMap.value = { ...peerScoresMap.value, [key]: val }
+function setSelfItemScore(index: number, e: Event) {
+  const raw = (e.target as HTMLInputElement).value
+  const parsed = Number(raw)
+  const next: EvalScoreDraftValue = raw === '' || Number.isNaN(parsed) ? '' : parsed
+  selfItemDraft.value = selfItemDraft.value.map((value, i) => (i === index ? next : value))
 }
+
+function getPeerItemScore(type: EvalType, key: string, index: number): EvalScoreDraftValue {
+  return getPeerItemDraft(type, key)[index] ?? ''
+}
+
+function setPeerItemScore(type: EvalType, key: string, index: number, e: Event) {
+  const raw = (e.target as HTMLInputElement).value
+  const parsed = Number(raw)
+  const next: EvalScoreDraftValue = raw === '' || Number.isNaN(parsed) ? '' : parsed
+  const draft = getPeerItemDraft(type, key)
+  draft[index] = next
+  peerItemDrafts.value = { ...peerItemDrafts.value, [key]: draft }
+}
+
+function getPeerItemTotal(type: EvalType, key: string) {
+  const draft = getPeerItemDraft(type, key)
+  return scoreFromEvalDraft(getEvalItemDefinitions(type), draft)
+}
+
+const selfItemTotal = computed(() =>
+  scoreFromEvalDraft(getEvalItemDefinitions('self'), selfItemDraft.value)
+)
 
 // ===== 互评目标 =====
 const groups = computed(() => store.studentGroups.filter((g) => g.courseId === props.courseId))
@@ -328,22 +413,31 @@ function validateForm(): boolean {
   submitError.value = ''
   let valid = true
 
-  // 验证自评
-  const selfScore = modalScores.value.self
-  if (selfScore === undefined || selfScore < 0 || selfScore > 100) {
-    validationErrors.value = { ...validationErrors.value, self: '自评分数必须在 0-100 之间' }
+  // 验证个人自评分项
+  const selfDefs = getEvalItemDefinitions('self')
+  const missingSelf = selfDefs.some((item, index) => {
+    const value = selfItemDraft.value[index]
+    return value === '' || typeof value !== 'number' || Number.isNaN(value) || value < 0 || value > item.max
+  })
+  if (missingSelf) {
+    validationErrors.value = { ...validationErrors.value, self: '请完整填写个人自评各项分数' }
     valid = false
   }
 
-  // 验证未提交的互评分数
+  // 验证未提交的小组内/小组间互评分项
   for (const type of ['intra_group', 'inter_group'] as EvalType[]) {
     for (const target of getPeerTargets(type)) {
       if (hasSubmittedPeerFor(target)) continue
-      const score = peerScoresMap.value[target.key]
-      if (score !== undefined && (score < 0 || score > 100)) {
+      const defs = getEvalItemDefinitions(type)
+      const draft = getPeerItemDraft(type, target.key)
+      const invalid = defs.some((item, index) => {
+        const value = draft[index]
+        return value === '' || typeof value !== 'number' || Number.isNaN(value) || value < 0 || value > item.max
+      })
+      if (invalid) {
         validationErrors.value = {
           ...validationErrors.value,
-          [`peer_${target.key}`]: '分数必须在 0-100 之间'
+          [`peer_${target.key}`]: '请完整填写该对象各项分数'
         }
         valid = false
       }
@@ -363,19 +457,17 @@ function handleModalSubmit() {
   const session = editingSession.value
 
   // 提交自评
-  handleSelfSubmit(session, modalScores.value.self)
+  handleSelfSubmit(session)
 
   // 提交互评
   for (const type of ['intra_group', 'inter_group'] as EvalType[]) {
     for (const target of getPeerTargets(type)) {
       if (hasSubmittedPeerFor(target)) continue
-      const score = peerScoresMap.value[target.key]
-      if (score !== undefined && score >= 0 && score <= 100) {
-        if (type === 'intra_group' && target.studentId) {
-          submitPeerEval(target.studentId, session, type, score)
-        } else if (type === 'inter_group' && target.memberIds) {
-          submitGroupEval(target, session, score)
-        }
+      const draft = getPeerItemDraft(type, target.key)
+      if (type === 'intra_group' && target.studentId) {
+        submitPeerEval(target.studentId, session, type, draft)
+      } else if (type === 'inter_group' && target.memberIds) {
+        submitGroupEval(target, session, draft)
       }
     }
   }
@@ -397,69 +489,81 @@ function getSessionEvals(session: number) {
   return enabledTypes.value.map((type) => ({ type, record: getEvalForType(session, type), icon: icons[type] }))
 }
 
-function handleSelfSubmit(sessionNumber: number, score: number) {
+function handleSelfSubmit(sessionNumber: number) {
   const existing = getEvalForType(sessionNumber, 'self')
-  const ev = {
+  const defs = getEvalItemDefinitions('self')
+  const items = evalItemsFromDraft(defs, selfItemDraft.value)
+  const score = scoreFromEvalDraft(defs, selfItemDraft.value)
+  const ev: Evaluation = {
     id: existing ? existing.id : `ev-${Date.now()}`,
     courseId: props.courseId,
     studentId: props.studentId,
     sessionNumber,
     type: 'self' as EvalType,
     score,
+    items,
     evaluatorId: props.studentId,
     evaluatorName: props.studentName,
     createdAt: getNow().toISOString().split('T')[0],
   }
   if (existing) {
-    store.updateEvaluation(ev.id, { score, createdAt: ev.createdAt })
+    store.updateEvaluation(ev.id, { score, items, createdAt: ev.createdAt })
   } else {
     store.addEvaluation(ev)
   }
   store.markEvalReminderCompleted(props.courseId, props.studentId, sessionNumber)
 }
 
-function submitPeerEval(targetId: string, session: number, type: EvalType, score: number) {
+function submitPeerEval(targetId: string, session: number, type: EvalType, draft: EvalScoreDraftValue[]) {
   const existing = store.evaluations.find(
     (e) => e.courseId === props.courseId && e.studentId === targetId &&
       e.sessionNumber === session && e.type === type && e.evaluatorId === props.studentId
   )
-  const ev = {
+  const defs = getEvalItemDefinitions(type)
+  const items = evalItemsFromDraft(defs, draft)
+  const score = scoreFromEvalDraft(defs, draft)
+  const ev: Evaluation = {
     id: existing ? existing.id : `ev-peer-${Date.now()}-${targetId}`,
     courseId: props.courseId,
     studentId: targetId,
     sessionNumber: session,
     type,
     score,
+    items,
     evaluatorId: props.studentId,
     evaluatorName: props.studentName,
     createdAt: getNow().toISOString().split('T')[0],
   }
   if (existing) {
-    store.updateEvaluation(ev.id, { score, createdAt: ev.createdAt })
+    store.updateEvaluation(ev.id, { score, items, createdAt: ev.createdAt })
   } else {
     store.addEvaluation(ev)
   }
 }
 
-function submitGroupEval(target: PeerTarget, session: number, score: number) {
+function submitGroupEval(target: PeerTarget, session: number, draft: EvalScoreDraftValue[]) {
+  const defs = getEvalItemDefinitions(target.type as EvalType)
+  const items = evalItemsFromDraft(defs, draft)
+  const score = scoreFromEvalDraft(defs, draft)
   target.memberIds!.forEach((mid) => {
     const existing = store.evaluations.find(
       (e) => e.courseId === props.courseId && e.studentId === mid &&
         e.sessionNumber === session && e.type === target.type && e.evaluatorId === props.studentId
     )
-    const ev = {
+    const ev: Evaluation = {
       id: existing ? existing.id : `ev-peer-${Date.now()}-${target.groupId}-${mid}`,
       courseId: props.courseId,
       studentId: mid,
       sessionNumber: session,
       type: target.type as EvalType,
       score,
+      items: items.map((item) => ({ ...item })),
       evaluatorId: props.studentId,
       evaluatorName: props.studentName,
       createdAt: getNow().toISOString().split('T')[0],
     }
     if (existing) {
-      store.updateEvaluation(ev.id, { score, createdAt: ev.createdAt })
+      store.updateEvaluation(ev.id, { score, items: items.map((item) => ({ ...item })), createdAt: ev.createdAt })
     } else {
       store.addEvaluation(ev)
     }

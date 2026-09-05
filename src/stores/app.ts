@@ -205,6 +205,9 @@ export const useAppStore = defineStore('app', () => {
   const isLoggedIn = ref<boolean>(loadFromStorage<boolean>('isLoggedIn', false))
   const currentUser = ref<string | null>(loadFromStorage<string | null>('currentUser', null))
   const currentRole = ref<UserRole>(loadFromStorage<UserRole>('currentRole', null))
+
+  // 临时预览解锁：测试评价填写/查看流程时忽略锁定、时间与已提交限制
+  const EVAL_PREVIEW_UNLOCKED = true
   const hasEvalReminders = ref<boolean>(false)
 
   // 企业导师数据
@@ -1084,7 +1087,7 @@ export const useAppStore = defineStore('app', () => {
           selfScore: self.score,
           avgScore,
           diff,
-          warning: `自评(${self.score}分)与其他评价平均分(${avgScore}分)相差${diff}分，差异过大！`,
+          warning: `个人自评(${self.score}分)与其他评价平均分(${avgScore}分)相差${diff}分，差异过大！`,
         })
       }
     }
@@ -1103,6 +1106,7 @@ export const useAppStore = defineStore('app', () => {
 
   /** 检查某条教师评价是否已提交 */
   function isTeacherEvalSubmitted(courseId: string, studentId: string, session: number, type: string): boolean {
+    if (EVAL_PREVIEW_UNLOCKED) return false
     const key = `${courseId}||${studentId}||${session}||${type}`
     return teacherSubmittedEvals.value.includes(key)
   }
@@ -1410,6 +1414,7 @@ export const useAppStore = defineStore('app', () => {
 
   /** 评价方案是否可编辑（第一节课开始前可编辑，开始后锁定） */
   function isEvalConfigEditable(courseId: string): boolean {
+    if (EVAL_PREVIEW_UNLOCKED) return true
     return !isFirstClassStarted(courseId)
   }
 
@@ -1438,6 +1443,7 @@ export const useAppStore = defineStore('app', () => {
 
   /** 检查某评价轮次是否已锁定 */
   function isSessionLocked(courseId: string, sessionNumber: number, className = ''): boolean {
+    if (EVAL_PREVIEW_UNLOCKED) return false
     return lockedSessions.value.includes(buildSessionKey(courseId, sessionNumber, className))
   }
 
@@ -1498,6 +1504,7 @@ export const useAppStore = defineStore('app', () => {
    * 第k次评价从该轮次对应第一节课上课时开启
    */
   function isSessionTime(courseId: string, sessionNumber: number, className = ''): boolean {
+    if (EVAL_PREVIEW_UNLOCKED) return true
     const totalSessions = getEvalSessions(courseId, className)
     const occurrences = getCourseScheduleOccurrences(courseId, className)
 
@@ -1520,6 +1527,7 @@ export const useAppStore = defineStore('app', () => {
    * 最终评价截止时间为该轮次开启后第三天
    */
   function isFinalSessionDeadlinePassed(courseId: string, totalSessions: number, className = ''): boolean {
+    if (EVAL_PREVIEW_UNLOCKED) return false
     const occurrences = getCourseScheduleOccurrences(courseId, className)
     if (occurrences.length === 0) return false
 

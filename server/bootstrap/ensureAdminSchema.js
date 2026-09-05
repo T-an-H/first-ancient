@@ -51,6 +51,20 @@ async function ensureIndex(connection, tableName, indexName, statement) {
   await connection.query(statement);
 }
 
+async function ensureEvaluationItemsColumn(connection) {
+  const [tables] = await connection.query("SHOW TABLES LIKE 'evaluations'");
+  if (tables.length === 0) {
+    return;
+  }
+
+  await ensureColumn(
+    connection,
+    'evaluations',
+    'items',
+    'items LONGTEXT NULL AFTER score'
+  );
+}
+
 async function dropIndexIfExists(connection, tableName, indexName) {
   if (!(await indexExists(connection, tableName, indexName))) {
     return;
@@ -508,6 +522,7 @@ export async function ensureAdminSchema() {
     try {
       await ensureTables(connection);
       await ensureColumnsAndIndexes(connection);
+      await ensureEvaluationItemsColumn(connection);
 
       const departments = await seedDepartments(connection);
       await syncCourseDepartments(connection, departments);

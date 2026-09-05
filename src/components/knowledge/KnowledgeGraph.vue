@@ -11,7 +11,7 @@
         <div v-if="canManage" class="flex items-center gap-2">
           <button @click="openUploadModal"
             class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition-colors">
-            <Upload class="w-3.5 h-3.5" /> 上传授课计划表
+            <Upload class="w-3.5 h-3.5" /> 上传课程标准
           </button>
           <button @click="openProjectModal()"
             class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition-colors">
@@ -23,15 +23,36 @@
       <!-- 说明 -->
       <div class="mt-3 flex items-start gap-2 px-3 py-2.5 bg-indigo-50/60 rounded-lg text-xs text-indigo-600">
         <Info class="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-        <p>
-          授课计划表 Excel 表头需包含：<strong>项目、学时、教学内容、重点/难点、知识点</strong>。
-          系统按每 2 学时拆分一个项目（泡泡），点击泡泡进入项目学习界面。
+        <p v-if="canManage">
+          上传课程标准文件（支持 PDF / Word / Excel / PPT / 图片等），上传后自动同步到学生端「课程标准」板块，学生可在线查看与下载。
+        </p>
+        <p v-else>
+          教师上传的课程标准文件可在「课程标准」标签页中查看与下载。
         </p>
       </div>
 
       <!-- 导入结果提示 -->
       <div v-if="importMsg" :class="`mt-3 text-sm p-3 rounded-lg ${importMsg.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`">
         {{ importMsg.text }}
+      </div>
+
+      <!-- 已上传的课程标准文件列表 -->
+      <div v-if="standards.length > 0" class="mt-3 space-y-2">
+        <div v-for="f in standards" :key="f.id"
+          class="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg group hover:bg-indigo-400/5 transition-colors">
+          <FileText class="w-4 h-4 text-indigo-500 flex-shrink-0" />
+          <span class="flex-1 min-w-0 truncate text-xs text-gray-700">{{ f.name }}</span>
+          <span class="text-[10px] text-gray-400 flex-shrink-0">{{ formatFileSize(f.size) }}</span>
+          <span class="text-[10px] text-gray-400 flex-shrink-0">{{ formatDateTime(f.createdAt) }}</span>
+          <a :href="f.dataUrl" :download="f.name"
+            class="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 flex-shrink-0" title="查看/下载">
+            <Download class="w-4 h-4" />
+          </a>
+          <button v-if="canManage" @click="deleteStandard(f)"
+            class="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 flex-shrink-0" title="删除">
+            <Trash2 class="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
 
@@ -54,7 +75,7 @@
           <Network class="w-10 h-10 text-indigo-300" />
         </div>
         <p class="text-sm text-gray-500">暂无项目</p>
-        <p class="text-xs text-gray-400 mt-1">上传授课计划表自动生成，或手动新增项目</p>
+        <p class="text-xs text-gray-400 mt-1">点击「新增项目」手动创建项目</p>
       </div>
 
       <div v-else class="relative overflow-x-auto">
@@ -107,39 +128,36 @@
     </div>
 
     <!-- 项目详情弹窗：教师版 / 学生版 -->
-    <ProjectDetailModal v-if="!studentMode && selectedProject" :project="selectedProject" :course-id="courseId" :students="students" :can-manage="canManage" @close="selectedProject = null" />
+    <ProjectDetailModal v-if="!studentMode && selectedProject" :project="selectedProject" :course-id="courseId" :students="students" :can-manage="canManage" :eval-type="evalType || 'teacher'" @close="selectedProject = null" />
     <StudentProjectModal v-else-if="studentMode && selectedProject" :project="selectedProject" :course-id="courseId" :my-student-id="myStudentId" @close="selectedProject = null" />
 
-    <!-- 上传授课计划表弹窗 -->
+    <!-- 上传课程标准弹窗 -->
     <div v-if="showUploadModal" class="fixed inset-0 z-[70] flex items-center justify-center">
       <div class="absolute inset-0 bg-black/40" @click="showUploadModal = false" />
       <div class="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-gray-900">上传授课计划表</h3>
+          <h3 class="text-lg font-semibold text-gray-900">上传课程标准</h3>
           <button @click="showUploadModal = false" class="p-1 text-gray-400 hover:text-gray-600"><X class="w-5 h-5" /></button>
         </div>
-        <p class="text-xs text-gray-500 mb-3">支持 .xlsx / .xls 文件，表头包含：项目、学时、教学内容、重点/难点、知识点。每 2 学时拆分为一个项目。</p>
+        <p class="text-xs text-gray-500 mb-3">支持 PDF / Word / Excel / PPT / 图片等常见格式，单个文件不超过 8MB。上传后将同步到学生端「课程标准」板块。</p>
         <div class="border border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-indigo-400/60 hover:bg-indigo-400/5 transition-colors"
           @click="planFileInput?.click()" @dragover.prevent @drop.prevent="onPlanDrop">
           <Upload class="w-6 h-6 mx-auto text-gray-400 mb-1.5" />
           <p class="text-xs text-gray-500">点击或拖拽文件到此处上传</p>
-          <p class="text-[10px] text-gray-400 mt-1">解析后将生成知识图谱项目</p>
+          <p class="text-[10px] text-gray-400 mt-1">上传后学生端立即可见</p>
         </div>
-        <input ref="planFileInput" type="file" class="hidden" accept=".xlsx,.xls" @change="onPlanFileChange" />
+        <input ref="planFileInput" type="file" class="hidden" @change="onPlanFileChange" />
         <div v-if="planFile" class="mt-3 flex items-center gap-2 text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
-          <FileSpreadsheet class="w-4 h-4 text-green-500 flex-shrink-0" />
+          <FileText class="w-4 h-4 text-indigo-500 flex-shrink-0" />
           <span class="flex-1 min-w-0 truncate">{{ planFile.name }}</span>
           <span class="text-gray-400">{{ formatFileSize(planFile.size) }}</span>
         </div>
         <div v-if="uploadError" class="mt-3 text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{{ uploadError }}</div>
-        <div v-if="parsedCount > 0" class="mt-3 text-xs text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2">
-          解析成功：共 {{ parsedCount }} 个项目（每 2 学时一个）
-        </div>
         <div class="flex items-center justify-end gap-2 mt-5">
           <button @click="showUploadModal = false" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">取消</button>
-          <button @click="confirmImport" :disabled="!planFile || importing"
+          <button @click="confirmUpload" :disabled="!planFile || importing"
             class="px-4 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg disabled:opacity-50">
-            {{ importing ? '导入中…' : '生成知识图谱' }}
+            {{ importing ? '上传中…' : '上传' }}
           </button>
         </div>
       </div>
@@ -192,11 +210,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import * as XLSX from 'xlsx'
-import { Network, Upload, Plus, X, Pencil, Trash2, Info, ListChecks, FileSpreadsheet } from 'lucide-vue-next'
+import { Network, Upload, Plus, X, Pencil, Trash2, Info, ListChecks, FileText, Download } from 'lucide-vue-next'
 import ProjectDetailModal from './ProjectDetailModal.vue'
 import StudentProjectModal from './StudentProjectModal.vue'
-import { javaListProjects, javaAddProjectsBulk, javaAddProject, javaUpdateProject, javaDeleteProject, javaListProjectFiles, javaListProjectProgress } from '@/api/knowledgeGraph'
+import { javaListProjects, javaAddProjectsBulk, javaAddProject, javaUpdateProject, javaDeleteProject, javaListProjectFiles, javaListProjectProgress, javaListCourseStandards, javaAddCourseStandard, javaDeleteCourseStandard } from '@/api/knowledgeGraph'
 
 const props = defineProps<{
   courseId: string
@@ -206,6 +223,7 @@ const props = defineProps<{
   studentMode?: boolean
   /** 学生内部 ID（stu-xxx），学生端模式下必传 */
   myStudentId?: string
+  evalType?: 'teacher' | 'mentor'
 }>()
 
 // ===== 项目数据 =====
@@ -238,102 +256,87 @@ async function loadProjects() {
     projects.value = []
   }
 }
-onMounted(loadProjects)
+onMounted(() => {
+  loadProjects()
+  loadStandards()
+})
 
-// ===== 授课计划表解析 =====
+// ===== 课程标准上传 =====
 const showUploadModal = ref(false)
 const planFileInput = ref<any>(null)
 const planFile = ref<File | null>(null)
-const parsedCount = ref(0)
-const parsedRows = ref<any[]>([])
 const uploadError = ref('')
 const importing = ref(false)
+const standards = ref<any[]>([])
+/** 与后端 express.json({ limit: '12mb' ) 对齐：base64 约膨胀 4/3，文件限制 8MB */
+const MAX_FILE_SIZE = 8 * 1024 * 1024
+
+async function loadStandards() {
+  try {
+    const list: any = await javaListCourseStandards(props.courseId)
+    standards.value = Array.isArray(list) ? list : []
+  } catch {
+    standards.value = []
+  }
+}
 
 function openUploadModal() {
   planFile.value = null
-  parsedCount.value = 0
-  parsedRows.value = []
   uploadError.value = ''
   showUploadModal.value = true
 }
 function onPlanDrop(e: DragEvent) {
   const file = e.dataTransfer?.files[0]
-  if (file) {
-    planFile.value = file
-    parsePlan(file)
-  }
+  if (file) planFile.value = file
 }
 function onPlanFileChange(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) {
-    planFile.value = file
-    parsePlan(file)
-  }
+  if (file) planFile.value = file
 }
 
-/** 解析授课计划表：表头 项目/学时/教学内容/重点难点/知识点，每 2 学时拆 1 个项目 */
-async function parsePlan(file: File) {
-  uploadError.value = ''
-  parsedCount.value = 0
-  parsedRows.value = []
-  try {
-    const data = await file.arrayBuffer()
-    const wb = XLSX.read(data, { type: 'array' })
-    const sheet = wb.Sheets[wb.SheetNames[0]]
-    const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
-    if (rows.length === 0) { uploadError.value = 'Excel 为空，请检查文件内容'; return }
-
-    const out: any[] = []
-    let order = projects.value.length
-    const existingNames = new Set(projects.value.map((p) => p.name))
-    for (const row of rows) {
-      const name = String(row['项目'] || row['项目名称'] || row['name'] || '').trim()
-      const content = String(row['教学内容'] || row['内容'] || row['content'] || '').trim()
-      const keyPoints = String(row['重点/难点'] || row['重点'] || row['难点'] || row['keyPoints'] || row['key_points'] || '').trim()
-      const knowledge = String(row['知识点'] || row['knowledge'] || row['knowledgePoints'] || row['knowledge_points'] || '').trim()
-      const hoursRaw = Number(row['学时'] || row['hours'] || 2) || 2
-      const weekNo = String(row['周次'] || row['week'] || row['weekNo'] || '').trim()
-      if (!name) continue
-      if (existingNames.has(name)) continue
-      existingNames.add(name)
-
-      // 每 2 学时一个项目：拆成 2 学时一段
-      const segCount = Math.max(1, Math.ceil(hoursRaw / 2))
-      for (let s = 0; s < segCount; s++) {
-        const segHours = s === segCount - 1 ? hoursRaw - s * 2 : 2
-        const segName = segCount > 1 ? `${name}（${s + 1}/${segCount}）` : name
-        out.push({
-          name: segName,
-          hours: segHours > 0 ? segHours : 2,
-          content: content || '',
-          keyPoints: keyPoints || '',
-          knowledgePoints: knowledge || '',
-          orderNo: order++,
-          weekNo,
-        })
-      }
-    }
-    if (out.length === 0) { uploadError.value = '未解析到有效项目，请确认包含「项目」「学时」列'; return }
-    parsedRows.value = out
-    parsedCount.value = out.length
-  } catch (e: any) {
-    uploadError.value = '解析失败：' + (e.message || e)
-  }
+function readAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(new Error('文件读取失败'))
+    reader.readAsDataURL(file)
+  })
 }
 
-async function confirmImport() {
-  if (!parsedRows.value.length) return
+async function confirmUpload() {
+  if (!planFile.value) return
+  if (planFile.value.size > MAX_FILE_SIZE) {
+    uploadError.value = '文件超过 8MB，请压缩后再上传'
+    return
+  }
   importing.value = true
+  uploadError.value = ''
   try {
-    await javaAddProjectsBulk(parsedRows.value.map((project) => ({ ...project, courseId: props.courseId })))
+    const dataUrl = await readAsDataUrl(planFile.value)
+    await javaAddCourseStandard({
+      courseId: props.courseId,
+      name: planFile.value.name,
+      size: planFile.value.size,
+      dataUrl,
+    })
     showUploadModal.value = false
-    await loadProjects()
-    importMsg.value = { success: true, text: `成功生成 ${parsedCount.value} 个知识图谱项目` }
+    await loadStandards()
+    importMsg.value = { success: true, text: `课程标准「${planFile.value.name}」上传成功，已同步到学生端` }
     setTimeout(() => (importMsg.value = null), 4000)
   } catch (err: any) {
-    importMsg.value = { success: false, text: '生成失败：' + (err.message || err) }
+    uploadError.value = '上传失败：' + (err.message || err)
   } finally {
     importing.value = false
+  }
+}
+
+async function deleteStandard(f: any) {
+  if (!confirm(`确定删除课程标准「${f.name}」？学生端将不再可见。`)) return
+  try {
+    await javaDeleteCourseStandard(f.id)
+    await loadStandards()
+  } catch (err: any) {
+    alert('删除失败：' + (err.message || err))
   }
 }
 
@@ -435,6 +438,14 @@ function formatFileSize(bytes: number) {
   let v = bytes
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++ }
   return `${v.toFixed(v >= 100 ? 0 : 1)} ${units[i]}`
+}
+
+function formatDateTime(value: any) {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 defineExpose({ loadProjects })
