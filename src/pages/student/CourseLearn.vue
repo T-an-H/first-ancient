@@ -350,66 +350,6 @@
 
           </div>
 
-          <!-- ===== 任务 ===== -->
-          <div v-if="activeTab === 'tasks'" class="space-y-4">
-            <h3 class="text-sm font-semibold text-gray-800">课程任务</h3>
-            <div class="space-y-2">
-              <div v-for="task in courseTasks" :key="task.id"
-                class="flex items-center justify-between p-3 rounded-lg border border-brand-400/20 hover:bg-brand-400/5">
-                <div class="flex items-center gap-3">
-                  <CheckCircle v-if="task.completed" class="w-5 h-5 text-emerald-500" />
-                  <Circle v-else class="w-5 h-5 text-gray-400/60" />
-                  <div>
-                    <p class="text-sm font-medium text-gray-900">{{ task.title }}</p>
-                    <p v-if="task.chapterTitle" class="text-xs text-gray-400">{{ task.chapterTitle }}</p>
-                    <p v-if="task.dueDate" class="text-xs text-gray-400">截止：{{ task.dueDate }}</p>
-                  </div>
-                </div>
-                <button
-                  class="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
-                  @click="goToHomeworkTab()"
-                >
-                  <ArrowRight class="h-3.5 w-3.5" />
-                  去完成
-                </button>
-              </div>
-              <div v-if="courseTasks.length === 0" class="text-center py-8 text-gray-400">暂无任务</div>
-            </div>
-          </div>
-
-          <!-- ===== 资源 ===== -->
-          <div v-if="activeTab === 'resources'" class="space-y-4">
-            <div class="flex items-center justify-between">
-              <h3 class="text-sm font-semibold text-gray-800">课程资源</h3>
-              <span class="text-xs text-gray-400">教师上传的资源，可下载学习</span>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div v-for="res in courseResources" :key="res.id" class="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
-                    <FileText class="w-5 h-5 text-gray-500" />
-                  </div>
-                  <div>
-                    <p class="text-sm font-medium text-gray-900">{{ res.name }}</p>
-                    <p class="text-xs text-gray-400">{{ getFileTypeName(res.type) }} · {{ formatFileSize(res.size) }} · 上传者：{{ res.uploadedBy }}</p>
-                  </div>
-                </div>
-                <button @click="downloadFile(res)" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="下载文件">
-                  <Download class="w-4 h-4" />
-                </button>
-              </div>
-              <div v-if="courseResources.length === 0" class="col-span-full text-center py-8 text-gray-400">暂无课程资源</div>
-            </div>
-          </div>
-
-          <!-- ===== 作业 ===== -->
-          <div v-if="activeTab === 'homework'" class="space-y-4">
-            <StudentHomework
-              :course-id="courseId"
-              :student-id="homeworkStudentId"
-              :tier="tierFinalized ? myTier : undefined"
-            />
-          </div>
           <!-- ===== 素质评价板块 ===== -->
           <div v-if="activeTab === 'evaluations'" class="space-y-6">
             <div class="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-4">
@@ -611,6 +551,21 @@
                 </div>
                 <div v-if="evalDimensions.length === 0" class="text-center py-6 text-gray-400">暂无评价数据</div>
               </div>
+            </div>
+
+            <!-- 能力雷达图 -->
+            <div class="bg-white rounded-2xl p-5 border border-brand-400/20 shadow-sm">
+              <h3 class="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-1.5">
+                <Network class="w-4 h-4 text-blue-500" /> 能力雷达
+                <span v-if="selectedSession !== null" class="text-xs font-normal text-gray-400 ml-1">· 第 {{ selectedSession }} 次</span>
+                <span v-else class="text-xs font-normal text-gray-400 ml-1">· 全部评价</span>
+              </h3>
+              <RadarChart
+                :labels="overviewRadarData.labels"
+                :values="overviewRadarData.values"
+                :count="overviewRadarData.count"
+                empty-text="暂无分项评价数据，评分后自动生成雷达图。"
+              />
             </div>
 
             <!-- 成绩权重说明 -->
@@ -826,10 +781,12 @@ import {
 import StudentHomework from '@/components/Homework/StudentHomework.vue'
 import { javaListCourseStandards } from '@/api/knowledgeGraph'
 import KnowledgeGraph from '@/components/knowledge/KnowledgeGraph.vue'
+import RadarChart from '@/components/RadarChart.vue'
 import type { AITierQuestion, LearningTier, CloudFile, QualityEvalFile, Schedule } from '@/types'
 import Modal from '@/components/Modal.vue'
 import { fetchSchedules } from '@/api'
 import { getNow, parseLocalDate } from '@/lib/date'
+import { computeRadarData } from '@/lib/evalRadar'
 import { getStoredStudentSession } from '@/lib/studentSession'
 
 const route = useRoute()
@@ -945,10 +902,7 @@ const tabs = [
   { id: 'ai_tier', label: 'AI分层', icon: Layers },
   { id: 'course-mgmt', label: '课程图谱', icon: Network },
   { id: 'course_standard', label: '课程标准', icon: BookMarked },
-  { id: 'tasks', label: '任务', icon: Edit3 },
-  { id: 'resources', label: '资源', icon: FileText },
-  { id: 'homework', label: '作业', icon: BookOpen },
-  { id: 'evaluations', label: '评价填写', icon: ClipboardCheck },
+  { id: 'evaluations', label: '素质评价', icon: UserCheck },
   { id: 'eval_overview', label: '综合评价', icon: Award },
 ]
 
@@ -1707,6 +1661,16 @@ const evalDimensions = computed(() => {
   }
 
   return dims
+})
+
+const overviewRadarData = computed(() => {
+  const studentId = myStudent.value?.id
+  if (!studentId) return { labels: [], values: [], count: 0 }
+  const evals = store.evaluations.filter(
+    (e) => e.courseId === courseId && e.studentId === studentId &&
+      (selectedSession.value === null || e.sessionNumber === selectedSession.value)
+  )
+  return computeRadarData(evals)
 })
 
 function formatFileSize(bytes: number): string {

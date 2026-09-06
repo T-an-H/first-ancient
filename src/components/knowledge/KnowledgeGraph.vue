@@ -6,7 +6,7 @@
         <div class="flex items-center gap-2">
           <Network class="w-5 h-5 text-indigo-500" />
           <h2 class="font-semibold text-gray-900">知识图谱</h2>
-          <span class="text-xs text-gray-400">{{ projects.length }} 个项目 · 每 2 学时一个项目</span>
+          <span class="text-xs text-gray-400">{{ displayProjects.length }} 个任务 · 每 2 学时一个任务</span>
         </div>
         <div v-if="canManage" class="flex items-center gap-2">
           <button @click="openUploadModal"
@@ -15,7 +15,7 @@
           </button>
           <button @click="openProjectModal()"
             class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition-colors">
-            <Plus class="w-3.5 h-3.5" /> 新增项目
+            <Plus class="w-3.5 h-3.5" /> 新增任务
           </button>
         </div>
       </div>
@@ -60,8 +60,8 @@
     <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2">
-          <h3 class="font-semibold text-gray-900">项目地图</h3>
-          <span class="text-xs text-gray-400">泡泡大小 = 学时 · 连线按项目顺序</span>
+          <h3 class="font-semibold text-gray-900">任务地图</h3>
+          <span class="text-xs text-gray-400">泡泡大小 = 学时 · 点击名称进入任务详情</span>
         </div>
         <div class="flex items-center gap-1.5 text-[11px] text-gray-400">
           <span class="inline-block w-3 h-3 rounded-full bg-indigo-100 border border-indigo-300"></span> 未开始
@@ -70,12 +70,12 @@
         </div>
       </div>
 
-      <div v-if="projects.length === 0" class="text-center py-14">
+      <div v-if="displayProjects.length === 0" class="text-center py-14">
         <div class="w-20 h-20 mx-auto mb-3 rounded-full bg-indigo-50 flex items-center justify-center">
           <Network class="w-10 h-10 text-indigo-300" />
         </div>
-        <p class="text-sm text-gray-500">暂无项目</p>
-        <p class="text-xs text-gray-400 mt-1">点击「新增项目」手动创建项目</p>
+        <p class="text-sm text-gray-500">暂无任务</p>
+        <p class="text-xs text-gray-400 mt-1">点击「新增任务」手动创建任务</p>
       </div>
 
       <div v-else class="relative overflow-x-auto">
@@ -103,12 +103,12 @@
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2">
           <ListChecks class="w-5 h-5 text-gray-400" />
-          <h3 class="font-semibold text-gray-900">项目列表</h3>
+          <h3 class="font-semibold text-gray-900">任务列表</h3>
         </div>
       </div>
-      <div v-if="projects.length === 0" class="text-center py-8 text-gray-400 text-sm">暂无项目</div>
+      <div v-if="displayProjects.length === 0" class="text-center py-8 text-gray-400 text-sm">暂无任务</div>
       <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <div v-for="(p, i) in projects" :key="p.id" @click="openProjectDetail(p)"
+        <div v-for="(p, i) in displayProjects" :key="p.id" @click="openProjectDetail(p)"
           class="group flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:border-indigo-400/40 hover:bg-indigo-400/5 transition-colors cursor-pointer">
           <div class="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-xs font-bold text-indigo-500 flex-shrink-0">{{ i + 1 }}</div>
           <div class="flex-1 min-w-0">
@@ -168,12 +168,12 @@
       <div class="absolute inset-0 bg-black/40" @click="showProjectModal = false" />
       <div class="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-gray-900">{{ editingProjectId ? '编辑项目' : '新增项目' }}</h3>
+          <h3 class="text-lg font-semibold text-gray-900">{{ editingProjectId ? '编辑任务' : '新增任务' }}</h3>
           <button @click="showProjectModal = false" class="p-1 text-gray-400 hover:text-gray-600"><X class="w-5 h-5" /></button>
         </div>
         <div class="space-y-3">
           <div>
-            <label class="block text-xs font-medium text-gray-500 mb-1">项目名称 <span class="text-red-500">*</span></label>
+            <label class="block text-xs font-medium text-gray-500 mb-1">任务名称 <span class="text-red-500">*</span></label>
             <input v-model="projectForm.name" type="text" placeholder="例如：React 组件化开发" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
           </div>
           <div class="grid grid-cols-2 gap-3">
@@ -184,6 +184,15 @@
             <div>
               <label class="block text-xs font-medium text-gray-500 mb-1">周次（可选）</label>
               <input v-model="projectForm.weekNo" type="text" placeholder="如 1-2" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">可见层次</label>
+            <div class="flex flex-wrap gap-2">
+              <label v-for="tier in tierOptions" :key="tier" class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs">
+                <input v-model="projectForm.visibleTiers" type="checkbox" :value="tier" class="accent-indigo-600" />
+                {{ TierLabels[tier] }}
+              </label>
             </div>
           </div>
           <div>
@@ -214,6 +223,9 @@ import { Network, Upload, Plus, X, Pencil, Trash2, Info, ListChecks, FileText, D
 import ProjectDetailModal from './ProjectDetailModal.vue'
 import StudentProjectModal from './StudentProjectModal.vue'
 import { javaListProjects, javaAddProjectsBulk, javaAddProject, javaUpdateProject, javaDeleteProject, javaListProjectFiles, javaListProjectProgress, javaListCourseStandards, javaAddCourseStandard, javaDeleteCourseStandard } from '@/api/knowledgeGraph'
+import { useAppStore } from '@/stores/app'
+import { TierLabels } from '@/types'
+import type { LearningTier } from '@/types'
 
 const props = defineProps<{
   courseId: string
@@ -225,9 +237,21 @@ const props = defineProps<{
   myStudentId?: string
   evalType?: 'teacher' | 'mentor'
 }>()
+const store = useAppStore()
+const tierOptions: LearningTier[] = ['basic', 'advanced', 'excellent']
 
 // ===== 项目数据 =====
 const projects = ref<any[]>([])
+const displayProjects = computed(() => {
+  if (!props.studentMode) return projects.value
+  const tier = props.myStudentId
+    ? store.getStudentTier(props.courseId, props.myStudentId)?.tier ?? 'basic'
+    : 'basic'
+  return projects.value.filter((p) => {
+    const visible = Array.isArray(p.visibleTiers) ? p.visibleTiers : []
+    return visible.length === 0 || visible.includes(tier)
+  })
+})
 const selectedProject = ref<any>(null)
 const importMsg = ref<{ success: boolean; text: string } | null>(null)
 
@@ -343,13 +367,13 @@ async function deleteStandard(f: any) {
 // ===== 项目 CRUD =====
 const showProjectModal = ref(false)
 const editingProjectId = ref<string | null>(null)
-const projectForm = ref<any>({ name: '', hours: 2, content: '', keyPoints: '', knowledgePoints: '', weekNo: '' })
+const projectForm = ref<any>({ name: '', hours: 2, content: '', keyPoints: '', knowledgePoints: '', weekNo: '', visibleTiers: [...tierOptions] })
 
 function openProjectModal(p?: any) {
   editingProjectId.value = p?.id ?? null
   projectForm.value = p
-    ? { name: p.name, hours: p.hours || 2, content: p.content || '', keyPoints: p.keyPoints || '', knowledgePoints: p.knowledgePoints || '', weekNo: p.weekNo || '' }
-    : { name: '', hours: 2, content: '', keyPoints: '', knowledgePoints: '', weekNo: '' }
+    ? { name: p.name, hours: p.hours || 2, content: p.content || '', keyPoints: p.keyPoints || '', knowledgePoints: p.knowledgePoints || '', weekNo: p.weekNo || '', visibleTiers: p.visibleTiers?.length ? p.visibleTiers : [...tierOptions] }
+    : { name: '', hours: 2, content: '', keyPoints: '', knowledgePoints: '', weekNo: '', visibleTiers: [...tierOptions] }
   showProjectModal.value = true
 }
 async function saveProject() {
@@ -362,6 +386,7 @@ async function saveProject() {
     keyPoints: projectForm.value.keyPoints || '',
     knowledgePoints: projectForm.value.knowledgePoints || '',
     weekNo: projectForm.value.weekNo || '',
+    visibleTiers: projectForm.value.visibleTiers?.length ? projectForm.value.visibleTiers : [...tierOptions],
   }
   try {
     if (editingProjectId.value) {
@@ -376,7 +401,7 @@ async function saveProject() {
   }
 }
 async function deleteProject(p: any) {
-  if (!confirm(`确定删除项目「${p.name}」？其文件与进度记录会一并删除。`)) return
+  if (!confirm(`确定删除任务「${p.name}」？其文件与进度记录会一并删除。`)) return
   try {
     await javaDeleteProject(p.id)
     await loadProjects()
@@ -399,7 +424,7 @@ const chartHeight = computed(() => Math.max(220, Math.ceil(bubbles.value.length 
 
 /** 泡泡节点：蛇形布局 + 状态颜色 */
 const bubbles = computed(() => {
-  return projects.value.map((p, i) => {
+  return displayProjects.value.map((p, i) => {
     const col = i % COLS
     const row = Math.floor(i / COLS)
     const x = 40 + col * COL_W
@@ -414,7 +439,7 @@ const bubbles = computed(() => {
       id: p.id,
       raw: p,
       x, y, r, fill, stroke, textColor,
-      label: String(i + 1),
+      label: p.name || `任务 ${i + 1}`,
       subLabel: `${p.hours || 2}学时`,
     }
   })

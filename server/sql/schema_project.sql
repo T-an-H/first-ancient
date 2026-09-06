@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS course_project (
   knowledge_points   TEXT NULL COMMENT '知识点',
   order_no           INT          DEFAULT 0 COMMENT '排序号',
   week_no            VARCHAR(32)  DEFAULT '' COMMENT '周次（可选）',
+  visible_tiers      LONGTEXT NULL COMMENT '可见层次JSON，如["basic","advanced","excellent"]',
   test_task_id       VARCHAR(64)  DEFAULT '' COMMENT '关联测试任务ID（course_task，评价迁移）',
   created_at         DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'

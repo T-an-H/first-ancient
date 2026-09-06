@@ -204,6 +204,15 @@
               :session-number="projectEvalSession"
             />
           </div>
+          <div class="border-t border-gray-100 pt-4">
+            <h5 class="mb-2 text-xs font-semibold text-gray-500">本任务评价雷达（五项能力百分制均分）</h5>
+            <RadarChart
+              :labels="studentRadarData.labels"
+              :values="studentRadarData.values"
+              :count="studentRadarData.count"
+              empty-text="暂无分项评价数据，评分后自动生成雷达图。"
+            />
+          </div>
         </div>
 
         <!-- ===== 5. 评教 ===== -->
@@ -215,17 +224,25 @@
             <p class="text-xs text-gray-400 mt-1">感谢你的反馈，提交时间：{{ formatTime(myResponse.createdAt) }}</p>
           </div>
           <div v-else>
-            <h5 class="text-sm font-semibold text-gray-700 mb-3">{{ questionnaire.title }}</h5>
+            <h5 class="text-sm font-semibold text-gray-700 mb-1">{{ questionnaire.title }}</h5>
+            <p v-if="questionnaire.builtin" class="text-xs text-gray-400 mb-3">教师尚未发布专属问卷，以下为课程统一评教指标（每项 1-10 分，直接填写）</p>
+            <div v-else class="mb-3"></div>
             <div class="space-y-4">
               <div v-for="(q, qi) in questionnaire.questions || []" :key="qi" class="p-4 rounded-xl border border-gray-100">
                 <p class="text-sm text-gray-800 mb-2">{{ qi + 1 }}. {{ q.text }}</p>
                 <template v-if="q.type === 'rating'">
-                  <div class="flex items-center gap-1.5">
-                    <button v-for="v in 5" :key="v" @click="evalAnswers[qi] = v"
-                      :class="`w-9 h-9 rounded-full text-sm font-medium border transition-all ${evalAnswers[qi] === v ? 'bg-amber-400 text-white border-amber-400' : 'border-gray-200 text-gray-500 hover:border-amber-300'}`">
-                      {{ v }}
-                    </button>
-                    <span class="text-xs text-gray-400 ml-2">{{ evalAnswers[qi] ? ['很差', '较差', '一般', '较好', '很好'][evalAnswers[qi] - 1] : '请打分（1-5）' }}</span>
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      step="1"
+                      :value="evalAnswers[qi] ?? ''"
+                      @input="setRatingAnswer(qi, $event)"
+                      placeholder="填写1-10"
+                      class="w-28 rounded-lg border border-gray-200 px-3 py-2 text-center text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-300/20"
+                    />
+                    <span class="text-xs text-gray-400">分（1-10）</span>
                   </div>
                 </template>
                 <template v-else-if="q.type === 'single'">
@@ -259,9 +276,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { X, FileText, Upload, CheckCircle, BookOpen, Wrench, ClipboardCheck, FileQuestion, Star, GitBranch } from 'lucide-vue-next'
 import StudentEvaluation from '@/components/StudentEvaluation.vue'
+import RadarChart from '@/components/RadarChart.vue'
 import { javaListProjectFiles, javaUpsertProjectProgress, javaListProjectProgress, javaGetQuestionnaire, javaListEvalResponses, javaSubmitEvalResponse } from '@/api/knowledgeGraph'
 import { useAppStore } from '@/stores/app'
 import { EvalTypeLabels } from '@/types'
+import { computeRadarData } from '@/lib/evalRadar'
+import { createBuiltinEvalQuestionnaire } from '@/lib/evalQuestionnaire'
 
 const props = defineProps<{
   project: any
@@ -280,6 +300,14 @@ const projectTeacherEvalRecords = computed(() =>
   store.evaluations.filter(
     (e) => e.courseId === props.courseId && e.studentId === props.myStudentId &&
       e.sessionNumber === projectEvalSession.value && (e.type === 'teacher' || e.type === 'mentor')
+  )
+)
+const studentRadarData = computed(() =>
+  computeRadarData(
+    store.evaluations.filter(
+      (e) => e.courseId === props.courseId && e.studentId === props.myStudentId &&
+        e.sessionNumber === projectEvalSession.value
+    )
   )
 )
 
@@ -399,6 +427,30 @@ async function submitTest() {
 }
 
 // ===== 评教 =====
+/** 系统内置评教指标（来自《评教指标.docx》），教师未发布问卷时作为默认问卷展示 */
+const BUILTIN_EVAL_QUESTIONS = [
+  { type: 'rating', text: '教学准备充分，教学内容契合课程目标' },
+  { type: 'rating', text: '授课逻辑清晰，重难点突出，易于理解' },
+  { type: 'rating', text: '教学节奏适宜，课程难度设置合理' },
+  { type: 'rating', text: '教学方法恰当，注重启发学生独立思考' },
+  { type: 'rating', text: '注重师生互动，课堂氛围良好' },
+  { type: 'rating', text: '教学态度端正，对待学生友善，答疑耐心' },
+  { type: 'rating', text: '课程学习任务布置科学合理' },
+  { type: 'rating', text: '对学习任务能够给出反馈讲解' },
+  { type: 'rating', text: '课堂管理到位，维持良好课堂秩序' },
+  { type: 'rating', text: '课程学习能够带来知识或能力提升' },
+]
+
+/** 内置问卷按课程隔离 id，保证各课程评教记录互不影响 */
+function builtinQuestionnaire() {
+  return {
+    id: `qnr-builtin-${props.courseId}`,
+    title: '课程评教指标',
+    questions: BUILTIN_EVAL_QUESTIONS.map((q) => ({ ...q })),
+    builtin: true,
+  }
+}
+
 const questionnaire = ref<any>(null)
 const myResponse = ref<any>(null)
 const evalAnswers = ref<Record<number, any>>({})
@@ -408,23 +460,29 @@ const evalFormValid = computed(() => {
   if (qs.length === 0) return false
   return qs.every((q: any, i: number) => {
     if (q.type === 'text') return String(evalAnswers.value[i] || '').trim() !== ''
+    if (q.type === 'rating') {
+      const value = Number(evalAnswers.value[i])
+      return Number.isFinite(value) && value >= 1 && value <= 10
+    }
     return evalAnswers.value[i] !== undefined && evalAnswers.value[i] !== ''
   })
 })
 
+function setRatingAnswer(index: number, e: Event) {
+  const raw = (e.target as HTMLInputElement).value
+  evalAnswers.value[index] = raw === '' ? '' : Number(raw)
+}
+
 async function loadQuestionnaire() {
-  questionnaire.value = null
   myResponse.value = null
   evalAnswers.value = {}
+  questionnaire.value = createBuiltinEvalQuestionnaire(props.courseId)
   try {
-    questionnaire.value = await javaGetQuestionnaire(props.courseId)
-    if (questionnaire.value?.id) {
-      const list: any = await javaListEvalResponses(questionnaire.value.id)
-      const arr = Array.isArray(list) ? list : []
-      myResponse.value = arr.find((r) => r.studentId === props.myStudentId) || null
-    }
+    const list: any = await javaListEvalResponses(questionnaire.value.id)
+    const arr = Array.isArray(list) ? list : []
+    myResponse.value = arr.find((r) => r.studentId === props.myStudentId) || null
   } catch {
-    questionnaire.value = null
+    myResponse.value = null
   }
 }
 

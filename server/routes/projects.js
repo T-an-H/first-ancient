@@ -24,6 +24,7 @@ function mapProject(row) {
     knowledgePoints: row.knowledge_points || '',
     orderNo: Number(row.order_no),
     weekNo: row.week_no || '',
+    visibleTiers: parseJson(row.visible_tiers, ['basic', 'advanced', 'excellent']),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -107,9 +108,9 @@ router.post('/projects', async (req, res) => {
     const projectId = p.id || id('proj');
     await pool.execute(
       `INSERT INTO course_projects
-       (id, course_id, name, hours, content, key_points, knowledge_points, order_no, week_no)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [projectId, p.courseId || '', p.name || '', p.hours || 2, p.content || '', p.keyPoints || p.key_points || '', p.knowledgePoints || p.knowledge_points || '', p.orderNo ?? 0, p.weekNo || p.week_no || '']
+       (id, course_id, name, hours, content, key_points, knowledge_points, order_no, week_no, visible_tiers)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [projectId, p.courseId || '', p.name || '', p.hours || 2, p.content || '', p.keyPoints || p.key_points || '', p.knowledgePoints || p.knowledge_points || '', p.orderNo ?? 0, p.weekNo || p.week_no || '', JSON.stringify(p.visibleTiers || ['basic', 'advanced', 'excellent'])]
     );
     const [rows] = await pool.execute('SELECT * FROM course_projects WHERE id = ?', [projectId]);
     return ok(res, mapProject(rows[0]));
@@ -124,9 +125,9 @@ router.post('/projects/bulk', async (req, res) => {
       const projectId = p.id || id('proj');
       await connection.execute(
         `INSERT INTO course_projects
-         (id, course_id, name, hours, content, key_points, knowledge_points, order_no, week_no)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [projectId, p.courseId || '', p.name || '', p.hours || 2, p.content || '', p.keyPoints || p.key_points || '', p.knowledgePoints || p.knowledge_points || '', p.orderNo ?? index, p.weekNo || p.week_no || '']
+         (id, course_id, name, hours, content, key_points, knowledge_points, order_no, week_no, visible_tiers)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [projectId, p.courseId || '', p.name || '', p.hours || 2, p.content || '', p.keyPoints || p.key_points || '', p.knowledgePoints || p.knowledge_points || '', p.orderNo ?? index, p.weekNo || p.week_no || '', JSON.stringify(p.visibleTiers || ['basic', 'advanced', 'excellent'])]
       );
       saved.push(projectId);
     }
@@ -141,8 +142,8 @@ router.put('/projects/:id', async (req, res) => {
   try {
     const p = req.body || {};
     await pool.execute(
-      `UPDATE course_projects SET course_id=?, name=?, hours=?, content=?, key_points=?, knowledge_points=?, order_no=COALESCE(?, order_no), week_no=? WHERE id=?`,
-      [p.courseId || '', p.name || '', p.hours || 2, p.content || '', p.keyPoints || p.key_points || '', p.knowledgePoints || p.knowledge_points || '', p.orderNo ?? null, p.weekNo || p.week_no || '', req.params.id]
+      `UPDATE course_projects SET course_id=?, name=?, hours=?, content=?, key_points=?, knowledge_points=?, order_no=COALESCE(?, order_no), week_no=?, visible_tiers=? WHERE id=?`,
+      [p.courseId || '', p.name || '', p.hours || 2, p.content || '', p.keyPoints || p.key_points || '', p.knowledgePoints || p.knowledge_points || '', p.orderNo ?? null, p.weekNo || p.week_no || '', JSON.stringify(p.visibleTiers || ['basic', 'advanced', 'excellent']), req.params.id]
     );
     const [rows] = await pool.execute('SELECT * FROM course_projects WHERE id = ?', [req.params.id]);
     return ok(res, rows[0] ? mapProject(rows[0]) : null);

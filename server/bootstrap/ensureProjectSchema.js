@@ -19,12 +19,20 @@ export default function ensureProjectSchema() {
           knowledge_points TEXT NULL,
           order_no INT NOT NULL DEFAULT 0,
           week_no VARCHAR(32) NOT NULL DEFAULT '',
+          visible_tiers LONGTEXT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (id),
           KEY idx_course_projects_course (course_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
+      const [projectColumns] = await connection.query(
+        `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'course_projects' AND COLUMN_NAME = 'visible_tiers'`
+      );
+      if (Number(projectColumns[0]?.total || 0) === 0) {
+        await connection.query(`ALTER TABLE course_projects ADD COLUMN visible_tiers LONGTEXT NULL AFTER week_no`);
+      }
       await connection.query(`
         CREATE TABLE IF NOT EXISTS course_project_files (
           id VARCHAR(64) NOT NULL,

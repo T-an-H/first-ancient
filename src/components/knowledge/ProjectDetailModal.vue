@@ -215,6 +215,15 @@
           <!-- 学生完成情况与评价（复用任务评价模型） -->
           <div class="border-t border-gray-100 pt-4">
             <h5 class="text-xs font-semibold text-gray-500 mb-2">学生完成与评价（{{ testSubmittedCount }}/{{ students.length }}）</h5>
+            <div v-if="canManage" class="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 p-2.5">
+              <span class="text-xs font-medium text-gray-500">批量{{ activeEvalType === 'mentor' ? '企业导师' : '教师' }}评价：</span>
+              <button v-for="level in TASK_BATCH_LEVELS" :key="level.label" @click="handleTaskBatchEval(level.range)" class="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs text-indigo-700 hover:bg-indigo-100">
+                {{ level.label }}（{{ level.range[0] }}-{{ level.range[1] }}）
+              </button>
+              <button @click="handleTaskOverdue" class="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-700 hover:bg-amber-100">
+                处理逾期评价（60分）
+              </button>
+            </div>
             <div v-if="students.length === 0" class="text-xs text-gray-400">暂无学生</div>
             <div v-else class="space-y-2">
               <div v-for="s in students" :key="s.id" class="p-2.5 rounded-lg border border-gray-100">
@@ -250,6 +259,14 @@
               </div>
             </div>
           </div>
+          <div class="mt-5 border-t border-gray-100 pt-4">
+            <div class="mb-2 flex items-center justify-between">
+              <h5 class="text-xs font-semibold text-gray-500">本任务评价雷达（五项能力百分制均分）</h5>
+              <span v-if="taskRadarData.count > 0" class="text-[11px] text-gray-400">基于 {{ taskRadarData.count }} 条分项评价</span>
+            </div>
+            <div v-if="taskRadarData.count > 0" id="task-radar-chart" ref="radarChartEl" class="h-72 w-full"></div>
+            <p v-else class="rounded-lg bg-gray-50 px-3 py-6 text-center text-xs text-gray-400">暂无分项评价数据，评分后自动生成雷达图。</p>
+          </div>
         </div>
 
         <!-- ===== 5 评教 ===== -->
@@ -257,15 +274,7 @@
           <div class="flex items-center justify-between mb-4">
             <div>
               <h4 class="font-semibold text-gray-900">评教填写情况</h4>
-              <p class="text-xs text-gray-400 mt-0.5">教师发布评教问卷，学生填写后查看完成情况</p>
-            </div>
-            <div v-if="canManage" class="flex items-center gap-2">
-              <button v-if="!questionnaire" @click="openQuestionnaireModal" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
-                <Plus class="w-3.5 h-3.5" /> 创建评教问卷
-              </button>
-              <button v-else @click="openQuestionnaireModal" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium rounded-lg">
-                <Pencil class="w-3.5 h-3.5" /> 编辑问卷
-              </button>
+              <p class="text-xs text-gray-400 mt-0.5">学生按固定指标给教师评分，教师查看填写情况和每题均分</p>
             </div>
           </div>
           <div v-if="!questionnaire" class="text-center py-8 text-gray-400 text-sm">尚未创建评教问卷</div>
@@ -273,6 +282,16 @@
             <div class="bg-indigo-50 rounded-lg p-4 mb-4">
               <p class="text-sm font-medium text-indigo-900">{{ questionnaire.title }}</p>
               <p class="text-xs text-indigo-500 mt-1">{{ questionnaire.questions?.length || 0 }} 道题目 · 已填写 {{ evalResponseCount }}/{{ students.length }} 人</p>
+              <div v-if="evalTotalAverageText" class="mt-4 flex items-end justify-between gap-3 rounded-xl border border-indigo-200 bg-white/80 px-4 py-3">
+                <div>
+                  <p class="text-xs font-medium text-indigo-500">平均总分</p>
+                  <p class="text-5xl font-bold leading-none text-indigo-700 tabular-nums">{{ evalTotalAverageText }}</p>
+                </div>
+                <div class="pb-1 text-right text-xs text-indigo-400">
+                  <p>满分 100 分</p>
+                  <p>每题平均 {{ evalAverageText }} 分</p>
+                </div>
+              </div>
               <div class="mt-2 h-1.5 rounded-full bg-indigo-100 overflow-hidden">
                 <div class="h-full bg-indigo-500 rounded-full transition-all" :style="{ width: `${students.length ? Math.round((evalResponseCount / students.length) * 100) : 0}%` }" />
               </div>
@@ -280,7 +299,10 @@
             <div class="space-y-1.5">
               <div v-for="(q, qi) in questionnaire.questions" :key="qi" class="bg-gray-50 rounded-lg px-3 py-2">
                 <p class="text-xs text-gray-700"><span class="text-gray-400 mr-1">{{ qi + 1 }}.</span>{{ (q as any).text }}</p>
-                <p class="text-[11px] text-gray-400 mt-0.5">{{ (q as any).type === 'rating' ? '评分题（1-5）' : (q as any).type === 'text' ? '简答题' : '单选题' }}</p>
+                <div class="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-gray-400">
+                  <span>学生填写评分（1-10）</span>
+                  <span v-if="questionAverageText(qi)" class="font-medium text-indigo-600">平均 {{ questionAverageText(qi) }} 分</span>
+                </div>
               </div>
             </div>
             <!-- 填写情况列表 -->
@@ -317,7 +339,7 @@
           <div v-for="(q, qi) in qnrForm.questions" :key="qi" class="border border-gray-100 rounded-lg p-3">
             <div class="flex items-center gap-2 mb-2">
               <select v-model="q.type" class="px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white">
-                <option value="rating">评分题（1-5）</option>
+                <option value="rating">评分题（直接填写 1-10）</option>
                 <option value="single">单选题</option>
                 <option value="text">简答题</option>
               </select>
@@ -385,7 +407,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import * as echarts from 'echarts'
 import { X, FileText, Upload, CheckCircle, Clock, Plus, Pencil, GitBranch, BookOpen, ClipboardCheck, ListChecks, FileQuestion, Star, Wrench } from 'lucide-vue-next'
 import { javaListProjectFiles, javaAddProjectFile, javaDeleteProjectFile, javaListProjectProgress, javaUpsertProjectProgress, javaGradeProjectProgress, javaGetQuestionnaire, javaSaveQuestionnaire, javaListEvalResponses, javaSubmitEvalResponse } from '@/api/knowledgeGraph'
 import { useAppStore } from '@/stores/app'
@@ -395,9 +418,12 @@ import {
   createEmptyEvalDraft,
   evalItemsFromDraft,
   getEvalItemDefinitions,
+  makeEvalItemsForTotal,
   scoreFromEvalDraft,
   type EvalScoreDraftValue,
 } from '@/lib/evalStandards'
+import { computeRadarData } from '@/lib/evalRadar'
+import { createBuiltinEvalQuestionnaire } from '@/lib/evalQuestionnaire'
 
 const props = defineProps<{
   project: any
@@ -628,6 +654,111 @@ function saveTestEval() {
   store.syncEvalToDetailedGrade(props.courseId)
 }
 
+const TASK_BATCH_LEVELS = [
+  { label: 'A 优秀', range: [90, 100] },
+  { label: 'B 良好', range: [80, 89] },
+  { label: 'C 中等', range: [70, 79] },
+  { label: 'D 及格', range: [60, 69] },
+]
+
+function saveTaskEvalRecord(studentId: string, score: number, items: Evaluation['items'] = []) {
+  const type = activeEvalType.value
+  const existing = store.evaluations.find(
+    (e) => e.courseId === props.courseId && e.studentId === studentId &&
+      e.sessionNumber === projectEvalSession.value && e.type === type
+  )
+  const ev: Evaluation = {
+    id: existing ? existing.id : `ev-project-${Date.now()}-${studentId}-${type}`,
+    courseId: props.courseId,
+    studentId,
+    sessionNumber: projectEvalSession.value,
+    type,
+    score,
+    items,
+    evaluatorId: store.currentUser || '',
+    evaluatorName: store.currentUser || (type === 'mentor' ? '企业导师' : '教师'),
+    createdAt: getNow().toISOString().split('T')[0],
+  }
+  if (existing) {
+    store.updateEvaluation(ev.id, { score, items, createdAt: ev.createdAt })
+  } else {
+    store.addEvaluation(ev)
+  }
+  return ev
+}
+
+function handleTaskBatchEval(range: number[]) {
+  const score = Math.round((range[0] + range[1]) / 2)
+  const items = makeEvalItemsForTotal(activeEvalType.value, score)
+  let count = 0
+  for (const student of props.students) {
+    if (!getTestSubmission(student.id)) continue
+    saveTaskEvalRecord(student.id, score, items.map((item) => ({ ...item })))
+    count += 1
+  }
+  store.syncEvalToDetailedGrade(props.courseId)
+  alert(count > 0 ? `已批量评价 ${count} 名学生` : '尚无学生完成本任务测试')
+}
+
+function handleTaskOverdue() {
+  let count = 0
+  for (const student of props.students) {
+    if (getActiveEvalScore(student.id) !== null) continue
+    saveTaskEvalRecord(student.id, 60, makeEvalItemsForTotal(activeEvalType.value, 60))
+    count += 1
+  }
+  store.syncEvalToDetailedGrade(props.courseId)
+  alert(count > 0 ? `已将 ${count} 名逾期学生按 60 分处理` : '当前没有需要按 60 分处理的学生')
+}
+
+// ===== 本任务评价雷达 =====
+const radarChartEl = ref<HTMLDivElement | null>(null)
+let radarChart: echarts.ECharts | null = null
+
+const taskRadarData = computed(() =>
+  computeRadarData(
+    store.evaluations.filter(
+      (e) => e.courseId === props.courseId && e.sessionNumber === projectEvalSession.value
+    )
+  )
+)
+
+function renderTaskRadar() {
+  if (!radarChartEl.value || taskRadarData.value.count === 0) return
+  if (!radarChart) radarChart = echarts.init(radarChartEl.value)
+  radarChart.setOption({
+    tooltip: {},
+    radar: {
+      indicator: taskRadarData.value.labels.map((name) => ({ name, max: 100 })),
+      radius: '68%',
+      splitNumber: 4,
+    },
+    series: [{
+      type: 'radar',
+      data: [{ value: taskRadarData.value.values, name: '能力评价', areaStyle: { opacity: 0.22 } }],
+    }],
+  })
+}
+
+watch(
+  () => [taskRadarData.value.count, ...taskRadarData.value.values],
+  () => nextTick(renderTaskRadar),
+  { flush: 'post' }
+)
+
+watch(
+  activeSection,
+  (section) => {
+    if (section === 'test') nextTick(renderTaskRadar)
+  },
+  { flush: 'post' }
+)
+
+onBeforeUnmount(() => {
+  radarChart?.dispose()
+  radarChart = null
+})
+
 // ===== 评教问卷 =====
 const questionnaire = ref<any>(null)
 const evalResponses = ref<any[]>([])
@@ -635,21 +766,59 @@ const showQuestionnaireModal = ref(false)
 const qnrForm = ref<{ title: string; questions: any[] }>({ title: '', questions: [] })
 
 async function loadQuestionnaire() {
+  questionnaire.value = createBuiltinEvalQuestionnaire(props.courseId)
   try {
-    questionnaire.value = await javaGetQuestionnaire(props.courseId)
-    if (questionnaire.value?.id) {
-      const list: any = await javaListEvalResponses(questionnaire.value.id)
-      evalResponses.value = Array.isArray(list) ? list : []
-    } else {
-      evalResponses.value = []
-    }
+    const list: any = await javaListEvalResponses(questionnaire.value.id)
+    evalResponses.value = Array.isArray(list) ? list : []
   } catch {
-    questionnaire.value = null
     evalResponses.value = []
   }
 }
 const evalResponseCount = computed(() => evalResponses.value.length)
 const hasEvalResponse = (sid: string) => evalResponses.value.some((r) => r.studentId === sid)
+function questionAverageText(questionIndex: number) {
+  const values: number[] = []
+  for (const response of evalResponses.value) {
+    const raw = Array.isArray(response.answers) ? response.answers[questionIndex] : undefined
+    const value = Number(raw)
+    if (Number.isFinite(value) && value > 0) values.push(value)
+  }
+  if (!values.length) return ''
+  return (values.reduce((sum, item) => sum + item, 0) / values.length).toFixed(1)
+}
+const evalAverageText = computed(() => {
+  const questions = questionnaire.value?.questions || []
+  if (!questions.length || evalResponses.value.length === 0) return ''
+  let total = 0
+  let count = 0
+  for (const response of evalResponses.value) {
+    const answers = Array.isArray(response.answers) ? response.answers : []
+    questions.forEach((question: any, qi: number) => {
+      if (question?.type === 'text') return
+      const value = Number(answers[qi])
+      if (Number.isFinite(value)) {
+        total += value
+        count += 1
+      }
+    })
+  }
+  if (!count) return ''
+  return (total / count).toFixed(1)
+})
+
+const evalTotalAverageText = computed(() => {
+  let total = 0
+  let count = 0
+  for (const response of evalResponses.value) {
+    const answers = Array.isArray(response.answers) ? response.answers : []
+    const numeric = answers.map((value: any) => Number(value)).filter((value: number) => Number.isFinite(value) && value > 0)
+    if (numeric.length === 0) continue
+    total += numeric.reduce((sum: number, value: number) => sum + value, 0)
+    count += 1
+  }
+  if (!count) return ''
+  return (total / count).toFixed(1)
+})
 
 function openQuestionnaireModal() {
   qnrForm.value = questionnaire.value
@@ -682,6 +851,7 @@ onMounted(() => {
   loadFiles()
   loadProgress()
   loadQuestionnaire()
+  nextTick(renderTaskRadar)
 })
 
 watch(() => props.project?.id, () => {
@@ -690,5 +860,6 @@ watch(() => props.project?.id, () => {
   loadFiles()
   loadProgress()
   loadQuestionnaire()
+  nextTick(renderTaskRadar)
 })
 </script>
