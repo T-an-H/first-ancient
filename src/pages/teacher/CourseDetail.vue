@@ -460,6 +460,34 @@
 
         <!-- 完整权重配置区域 -->
         <div class="space-y-6">
+          <Section title="评价模板" :hint="`启用 ${TEMPLATE_EVAL_TYPES[activeEvalConfig.template].length} 种评价方式`" :valid="true">
+            <div v-if="!isReadOnly && !evalConfigLocked && !isViewOnly" class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <button
+                v-for="tpl in EVAL_TEMPLATE_KEYS"
+                :key="tpl"
+                @click="handleSetConfig({ template: tpl })"
+                :class="`text-left p-3 rounded-lg border transition-all ${activeEvalConfig.template === tpl ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 bg-white hover:border-gray-300'}`"
+              >
+                <span class="text-sm font-medium text-gray-900">{{ EvalTemplateLabels[tpl] }}</span>
+                <p class="text-xs text-gray-400 mt-0.5">{{ EvalTemplateDescs[tpl] }}</p>
+                <div class="flex flex-wrap gap-1 mt-1.5">
+                  <span v-for="et in TEMPLATE_EVAL_TYPES[tpl]" :key="et" class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+                    {{ EvalTypeLabels[et] }}
+                  </span>
+                </div>
+              </button>
+            </div>
+            <div v-else class="rounded-lg bg-gray-50 p-3">
+              <p class="text-sm font-medium text-gray-700">{{ EvalTemplateLabels[activeEvalConfig.template] }}</p>
+              <p class="text-xs text-gray-500 mt-0.5">{{ EvalTemplateDescs[activeEvalConfig.template] }}</p>
+              <div class="flex flex-wrap gap-1 mt-1.5">
+                <span v-for="et in TEMPLATE_EVAL_TYPES[activeEvalConfig.template]" :key="et" class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">
+                  {{ EvalTypeLabels[et] }}
+                </span>
+              </div>
+            </div>
+          </Section>
+
           <Section title="总成绩权重" :hint="`合计：${mainTotal}%${mainTotal !== 100 ? '（须等于 100%）' : ''}`" :valid="mainTotal === 100">
             <Slider label="平时成绩" :val="gradeConfig.regularWeight" @change="(v) => updateGradeConfig('regularWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
             <Slider label="期中成绩" :val="gradeConfig.midtermWeight" @change="(v) => updateGradeConfig('midtermWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
@@ -467,11 +495,11 @@
           </Section>
 
           <Section title="平时成绩构成" :hint="`合计：${regularTotal}%${regularTotal !== 100 ? '（须等于 100%）' : ''}`" :valid="regularTotal === 100">
-            <Slider label="个人自评" :val="gradeConfig.selfEvalWeight" @change="(v) => updateGradeConfig('selfEvalWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
-            <Slider label="小组内互评" :val="gradeConfig.peerReviewWeight" @change="(v) => updateGradeConfig('peerReviewWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
-            <Slider label="小组间互评" :val="gradeConfig.interGroupEvalWeight" @change="(v) => updateGradeConfig('interGroupEvalWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
-            <Slider label="教师评价" :val="gradeConfig.teacherScoreWeight" @change="(v) => updateGradeConfig('teacherScoreWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
-            <Slider label="企业导师评价" :val="gradeConfig.mentorScoreWeight" @change="(v) => updateGradeConfig('mentorScoreWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
+            <Slider label="个人自评" :val="gradeConfig.selfEvalWeight" @change="(v) => updateGradeConfig('selfEvalWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly || !isEvalTypeEnabled('self')" />
+            <Slider label="小组内互评" :val="gradeConfig.peerReviewWeight" @change="(v) => updateGradeConfig('peerReviewWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly || !isEvalTypeEnabled('intra_group')" />
+            <Slider label="小组间互评" :val="gradeConfig.interGroupEvalWeight" @change="(v) => updateGradeConfig('interGroupEvalWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly || !isEvalTypeEnabled('inter_group')" />
+            <Slider label="教师评价" :val="gradeConfig.teacherScoreWeight" @change="(v) => updateGradeConfig('teacherScoreWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly || !isEvalTypeEnabled('teacher')" />
+            <Slider label="企业导师评价" :val="gradeConfig.mentorScoreWeight" @change="(v) => updateGradeConfig('mentorScoreWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly || !isEvalTypeEnabled('mentor')" />
           </Section>
 
           <Section title="期中成绩构成" :hint="`合计：${midtermSubTotal}%${midtermSubTotal !== 100 ? '（须等于 100%）' : ''}`" :valid="midtermSubTotal === 100">
@@ -2109,7 +2137,6 @@ const completedCount = computed(() =>
 const tabList = [
   { key: 'students',     label: '学生管理', icon: Users },
   { key: 'course-mgmt',  label: '课程管理', icon: Network },
-  { key: 'comments',     label: '评价管理', icon: ClipboardCheck },
   { key: 'quality-eval', label: '素质评价', icon: UserCheck },
   { key: 'grade-config', label: '成绩配置', icon: Settings },
   { key: 'grade-entry',  label: '成绩管理', icon: TrendingUp },
@@ -2479,6 +2506,30 @@ watch(() => courseId.value, (id) => {
 const updateGradeConfig = (key: keyof GradeWeightConfig, val: number) => {
   gradeConfig.value = { ...gradeConfig.value, [key]: Math.max(0, Math.min(100, val || 0)) }
 }
+
+const evalTypeWeightKeyMap: Record<EvalType, keyof GradeWeightConfig> = {
+  self: 'selfEvalWeight',
+  intra_group: 'peerReviewWeight',
+  inter_group: 'interGroupEvalWeight',
+  teacher: 'teacherScoreWeight',
+  mentor: 'mentorScoreWeight',
+}
+
+function isEvalTypeEnabled(type: EvalType) {
+  return TEMPLATE_EVAL_TYPES[activeEvalConfig.value.template].includes(type)
+}
+
+function normalizeGradeConfigForTemplate() {
+  const zeroed: Partial<GradeWeightConfig> = {}
+  for (const type of ALL_EVAL_TYPES) {
+    if (!isEvalTypeEnabled(type)) zeroed[evalTypeWeightKeyMap[type]] = 0
+  }
+  gradeConfig.value = { ...gradeConfig.value, ...zeroed }
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'grade-config') normalizeGradeConfigForTemplate()
+})
 /** 素质评价加成上限（0-20分） */
 const updateQualityMaxBonus = (val: number) => {
   const v = Number.isFinite(val) ? Math.round(val) : 0
@@ -2490,6 +2541,7 @@ const midtermSubTotal = computed(() => gradeConfig.value.midtermExamWeight + gra
 const finalSubTotal = computed(() => gradeConfig.value.finalExamWeight + gradeConfig.value.finalProjectWeight)
 function handleSaveGradeConfig() {
   if (!courseId.value) return
+  normalizeGradeConfigForTemplate()
   store.saveGradeConfig({ ...gradeConfig.value, courseId: courseId.value })
   store.markConfigCompleted(courseId.value, 'weights')
 }
@@ -3860,6 +3912,16 @@ const handleSetConfig = (updates: Partial<import('@/types').EvaluationConfig>) =
     overdueRule: existing?.overdueRule || 'average',
     ...existing,
     ...updates,
+  }
+  if (updates.template) {
+    const enabledTypes = TEMPLATE_EVAL_TYPES[updates.template]
+    const zeroed: Partial<GradeWeightConfig> = {}
+    for (const type of ALL_EVAL_TYPES) {
+      if (!enabledTypes.includes(type)) {
+        zeroed[evalTypeWeightKeyMap[type]] = 0
+      }
+    }
+    gradeConfig.value = { ...gradeConfig.value, ...zeroed }
   }
   store.setEvalConfig(config)
   store.markConfigCompleted(courseId.value, 'evalConfig')

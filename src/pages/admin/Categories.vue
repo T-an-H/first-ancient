@@ -25,23 +25,6 @@
         </div>
       </div>
 
-      <div class="flex items-center justify-between rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-        <div class="flex items-center gap-2 text-sm text-gray-500">
-          <span>最近一次同步时间：</span>
-          <span class="font-medium text-gray-700">{{ lastSyncTime || '暂无同步记录' }}</span>
-        </div>
-        <button
-          @click="handleSync"
-          :disabled="isSyncing"
-          class="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all"
-          :class="isSyncing ? 'cursor-not-allowed bg-gray-100 text-gray-400' : 'bg-blue-500 text-white hover:bg-blue-600'"
-        >
-          <Loader2 v-if="isSyncing" class="h-4 w-4 animate-spin" />
-          <RefreshCw v-else class="h-4 w-4" />
-          {{ isSyncing ? '同步中...' : '立即同步教务数据' }}
-        </button>
-      </div>
-
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         <div
           v-for="cat in visibleCategories"
@@ -388,35 +371,6 @@
       </div>
     </Teleport>
 
-    <Teleport to="body">
-      <div v-if="showSyncResult" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/50" @click="closeSyncResult" />
-        <div class="relative mx-4 w-full max-w-sm rounded-xl bg-white p-6 text-center shadow-2xl">
-          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-50">
-            <CheckCircle class="h-7 w-7 text-green-500" />
-          </div>
-          <h3 class="mb-1 text-lg font-semibold text-gray-900">同步完成</h3>
-          <p class="mb-5 text-xs text-gray-400">{{ lastSyncTime }}</p>
-          <div class="mb-5 space-y-2 rounded-lg bg-gray-50 p-4 text-sm">
-            <div class="flex justify-between">
-              <span class="text-gray-500">新增</span>
-              <span class="font-medium text-green-600">+{{ syncResult.added }} 条</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500">更新</span>
-              <span class="font-medium text-blue-600">{{ syncResult.updated }} 条</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500">失败</span>
-              <span class="font-medium text-red-500">{{ syncResult.failed }} 条</span>
-            </div>
-          </div>
-          <button @click="closeSyncResult" class="w-full rounded-lg bg-blue-500 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-600">
-            知道了
-          </button>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -428,8 +382,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   BookOpen,
-  CheckCircle,
-  Loader2,
   PenLine,
   Plus,
   RefreshCw,
@@ -449,12 +401,10 @@ import {
   fetchDepartments,
   fetchSchedules,
   fetchTeachers,
-  syncCategoriesFromSchedules,
   updateCategory,
   updateCourse,
   updateSchedule,
 } from '@/api'
-import { getNow } from '@/lib/date'
 import type { Category, Course, Department, Schedule, Teacher } from '@/types'
 
 type CategoryRow = Category & {
@@ -519,10 +469,6 @@ const editingSchedule = ref<Schedule | null>(null)
 const courseForm = ref<CourseFormState>(createCourseFormState())
 const selectedSlots = ref<SlotSelection[]>([])
 
-const isSyncing = ref(false)
-const showSyncResult = ref(false)
-const syncResult = ref({ added: 0, updated: 0, failed: 0 })
-const lastSyncTime = ref(localStorage.getItem('lastSyncTime') || '')
 const hasLoadedData = ref(false)
 
 const dayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
@@ -788,39 +734,6 @@ function getCourseCount(categoryId: string) {
   const category = categoryList.value.find((item) => item.id === categoryId)
   if (!category) return 0
   return apiCourses.value.filter((course) => courseBelongsToCategory(course, category)).length
-}
-
-function formatNow() {
-  const date = getNow()
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-}
-
-function closeSyncResult() {
-  showSyncResult.value = false
-  lastSyncTime.value = formatNow()
-  localStorage.setItem('lastSyncTime', lastSyncTime.value)
-}
-
-async function handleSync() {
-  if (isSyncing.value) return
-  isSyncing.value = true
-
-  try {
-    const result = await syncCategoriesFromSchedules()
-    syncResult.value = {
-      added: result.createdCategories ?? result.createdCourses ?? result.added ?? 0,
-      updated: result.updatedCourses ?? result.updated ?? 0,
-      failed: result.failed ?? 0,
-    }
-    showSyncResult.value = true
-    await loadData()
-  } catch {
-    syncResult.value = { added: 0, updated: 0, failed: 1 }
-    showSyncResult.value = true
-  } finally {
-    isSyncing.value = false
-  }
 }
 
 function selectCategory(category: CategoryRow) {
