@@ -45,6 +45,7 @@ jobs:
           username: ${{ secrets.ALIYUN_USER }}
           key: ${{ secrets.ALIYUN_SSH_KEY }}
           script: |
+            set -e
             mkdir -p /var/www/first-ancient
             cd /var/www/first-ancient
             # 保留服务器上的 .env（tar 里不含 .env，解压后还原）
@@ -54,5 +55,9 @@ jobs:
             rm -f /tmp/deploy.tar.gz /tmp/.env.bak
             cd server
             npm ci --registry=https://registry.npmmirror.com
-            pm2 restart course-api || pm2 start index.js --name course-api
-            pm2 save
+            # 非交互 shell 不加载 .bashrc，pm2 全局 bin 不在 PATH，用绝对路径调用
+            PM2_BIN="$(npm config get prefix)/bin/pm2"
+            [ -x "$PM2_BIN" ] || npm install -g pm2 --registry=https://registry.npmmirror.com
+            PM2_BIN="$(npm config get prefix)/bin/pm2"
+            "$PM2_BIN" restart course-api || "$PM2_BIN" start index.js --name course-api
+            "$PM2_BIN" save
