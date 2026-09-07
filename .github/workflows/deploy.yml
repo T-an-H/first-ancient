@@ -23,34 +23,35 @@ jobs:
           npm ci
           VITE_API_BASE=/api npm run build
 
-      - name: Rsync dist to server
-        uses: appleboy/rsync-action@v1.0.0
+      - name: Pack artifacts
+        run: |
+          tar --exclude='server/node_modules' --exclude='server/.env' \
+              -czf /tmp/deploy.tar.gz dist server
+
+      - name: Upload tarball
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.ALIYUN_HOST }}
           username: ${{ secrets.ALIYUN_USER }}
           key: ${{ secrets.ALIYUN_SSH_KEY }}
-          source: "dist/"
-          target: "/var/www/first-ancient/dist/"
-          rsync_args: "-avz --delete"
+          source: "/tmp/deploy.tar.gz"
+          target: "/tmp/deploy.tar.gz"
 
-      - name: Rsync server code to server
-        uses: appleboy/rsync-action@v1.0.0
-        with:
-          host: ${{ secrets.ALIYUN_HOST }}
-          username: ${{ secrets.ALIYUN_USER }}
-          key: ${{ secrets.ALIYUN_SSH_KEY }}
-          source: "server/"
-          target: "/var/www/first-ancient/server/"
-          rsync_args: "-avz --exclude=node_modules --exclude=.env"
-
-      - name: Install deps & restart pm2
+      - name: Extract & restart
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.ALIYUN_HOST }}
           username: ${{ secrets.ALIYUN_USER }}
           key: ${{ secrets.ALIYUN_SSH_KEY }}
           script: |
-            cd /var/www/first-ancient/server
+            mkdir -p /var/www/first-ancient
+            cd /var/www/first-ancient
+            # 保留服务器上的 .env（tar 里不含 .env，解压后还原）
+            [ -f server/.env ] && cp server/.env /tmp/.env.bak
+            tar -xzf /tmp/deploy.tar.gz -C /var/www/first-ancient
+            [ -f /tmp/.env.bak ] && cp /tmp/.env.bak server/.env
+            rm -f /tmp/deploy.tar.gz /tmp/.env.bak
+            cd server
             npm ci --registry=https://registry.npmmirror.com
             pm2 restart course-api || pm2 start index.js --name course-api
             pm2 save

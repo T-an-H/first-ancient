@@ -2,7 +2,7 @@
 
 公网 IP：`8.137.91.87`，系统：Ubuntu 22.04。
 部署：Vue 前端（Nginx 静态）+ Node.js Express 后端（pm2）+ MySQL。
-自动部署：push 到 `main` 分支 → GitHub Actions 构建 + rsync 推送 + pm2 重启。
+自动部署：push 到 `main` 分支 → GitHub Actions 构建 + scp 推送 tarball + ssh 解压 + pm2 重启。
 
 > 服务器全程不访问 GitHub，规避大陆网络问题。构建在 GitHub Actions runner（境外）完成。
 
@@ -29,7 +29,7 @@ ssh root@8.137.91.87
 
 ```bash
 apt update && apt upgrade -y
-apt install -y nginx mysql-server git rsync
+apt install -y nginx mysql-server git
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt install -y nodejs
 npm i -g pm2
@@ -129,7 +129,7 @@ nginx -t && systemctl reload nginx
 
 ## 阶段 B：首次上线
 
-服务器不用 `git clone`，代码全靠 GitHub Actions rsync 推上来。
+服务器不用 `git clone`，代码全靠 GitHub Actions 打 tarball 用 scp 推上来再解压。
 
 1. 完成阶段 C（配置自动部署）后，push 一次到 `main`，或在 GitHub Actions 页面点 **Run workflow**。
 2. 等 Actions 跑完（绿勾），服务器上已有 `dist/` 和 `server/` 代码。
@@ -198,7 +198,7 @@ git commit -m "说明改了啥"
 git push origin main        # 上传，和以前一模一样
 ```
 
-push 完 → GitHub 自动触发 Actions → 境外 runner 构建 → rsync 推服务器 → `npm ci + pm2 restart` → 刷新 `http://8.137.91.87` 即最新。
+push 完 → GitHub 自动触发 Actions → 境外 runner 构建 → 打 tarball + scp 推服务器 → ssh 解压 + `npm ci + pm2 restart` → 刷新 `http://8.137.91.87` 即最新。
 
 **你不用碰服务器，上传方式不变。**
 
@@ -232,8 +232,8 @@ tail -f /var/log/nginx/access.log
 
 ## 注意事项
 
-- **GitHub 网络问题已规避**：构建在境外 runner，服务器只收 rsync + 访问 npmmirror + DeepSeek API，不连 GitHub。
-- **rsync 排除 `.env` 和 `node_modules`**：不覆盖服务器真实配置，不传无用文件。
+- **GitHub 网络问题已规避**：构建在境外 runner，服务器只收 scp + 访问 npmmirror + DeepSeek API，不连 GitHub。
+- **tar 排除 `.env` 和 `node_modules`**：不覆盖服务器真实配置，不传无用文件；解压前备份还原 `.env`。
 - **数据库密码**：`server/db.js` 有硬编码 fallback `LZH88888888`，被 `server/.env` 的 `DB_PASSWORD` 覆盖；服务器用新强密码，别提交进仓库。
 - **CORS**：走 nginx 同源代理不触发跨域；`CORS_ORIGINS` 保留以防直连 3000 调试。
 - **不部署 Java 后端**：`java-backend/` 不参与。
