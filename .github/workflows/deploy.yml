@@ -25,8 +25,9 @@ jobs:
 
       - name: Pack artifacts
         run: |
-          tar --exclude='server/node_modules' --exclude='server/.env' \
-              -czf /tmp/deploy.tar.gz dist server
+          ls -la dist/index.html server/index.js
+          tar --exclude='server/node_modules' --exclude='server/.env' -czf /tmp/deploy.tar.gz dist server
+          ls -lh /tmp/deploy.tar.gz
 
       - name: Upload tarball
         uses: appleboy/scp-action@v0.1.7
