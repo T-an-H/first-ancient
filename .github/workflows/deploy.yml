@@ -26,8 +26,8 @@ jobs:
       - name: Pack artifacts
         run: |
           ls -la dist/index.html server/index.js
-          tar --exclude='server/node_modules' --exclude='server/.env' -czf /tmp/deploy.tar.gz dist server
-          ls -lh /tmp/deploy.tar.gz
+          tar --exclude='server/node_modules' --exclude='server/.env' -czf deploy.tar.gz dist server
+          ls -lh deploy.tar.gz
 
       - name: Upload tarball
         uses: appleboy/scp-action@v0.1.7
@@ -35,8 +35,8 @@ jobs:
           host: ${{ secrets.ALIYUN_HOST }}
           username: ${{ secrets.ALIYUN_USER }}
           key: ${{ secrets.ALIYUN_SSH_KEY }}
-          source: "/tmp/deploy.tar.gz"
-          target: "/tmp/deploy.tar.gz"
+          source: "deploy.tar.gz"
+          target: "/tmp"
 
       - name: Extract & restart
         uses: appleboy/ssh-action@v1.0.3

@@ -7,3 +7,4 @@ dist/
 .env.*
 .DS_Store
 *.log
+deploy.tar.gz
