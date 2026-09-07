@@ -1,0 +1,56 @@
+name: Deploy to Aliyun
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Build frontend
+        run: |
+          npm ci
+          VITE_API_BASE=/api npm run build
+
+      - name: Rsync dist to server
+        uses: appleboy/rsync-action@v1.0.0
+        with:
+          host: ${{ secrets.ALIYUN_HOST }}
+          username: ${{ secrets.ALIYUN_USER }}
+          key: ${{ secrets.ALIYUN_SSH_KEY }}
+          source: "dist/"
+          target: "/var/www/first-ancient/dist/"
+          rsync_args: "-avz --delete"
+
+      - name: Rsync server code to server
+        uses: appleboy/rsync-action@v1.0.0
+        with:
+          host: ${{ secrets.ALIYUN_HOST }}
+          username: ${{ secrets.ALIYUN_USER }}
+          key: ${{ secrets.ALIYUN_SSH_KEY }}
+          source: "server/"
+          target: "/var/www/first-ancient/server/"
+          rsync_args: "-avz --exclude=node_modules --exclude=.env"
+
+      - name: Install deps & restart pm2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ALIYUN_HOST }}
+          username: ${{ secrets.ALIYUN_USER }}
+          key: ${{ secrets.ALIYUN_SSH_KEY }}
+          script: |
+            cd /var/www/first-ancient/server
+            npm ci --registry=https://registry.npmmirror.com
+            pm2 restart course-api || pm2 start index.js --name course-api
+            pm2 save
