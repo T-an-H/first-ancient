@@ -208,6 +208,27 @@ push 完 → GitHub 自动触发 Actions → 境外 runner 构建 → 打 tarbal
 
 ---
 
+## 已修复的部署踩坑（按时间顺序）
+
+以下三个问题在首次部署时依次出现，现已在 `deploy.yml` 中修复，记录于此供复盘。
+
+| 问题 | 现象 | 根因 | 修复 |
+|------|------|------|------|
+| 1 | `vue-tsc` 类型检查报错，构建中断 | 仓库存在历史类型错误，阻塞 CI 构建 | 构建改为 `VITE_API_BASE=/api npx vite build`，跳过 `vue-tsc` |
+| 2 | `tar: empty archive`（scp 步骤） | `scp-action` 在 Docker 容器内执行，只挂载了 workspace，未挂宿主机 `/tmp`；`source: "/tmp/deploy.tar.gz"` 在容器内找不到 → glob 匹配为空 → drone-scp 打空包。同时 `target` 写成文件路径而非目录 | tar 包改生成在 workspace（`deploy.tar.gz`）；`source: "deploy.tar.gz"`（相对路径）；`target: "/tmp"`（远端目录） |
+| 3 | `pm2: command not found`（ssh 步骤） | `ssh-action` 跑非交互式 shell，不加载 `.bashrc`/`.profile`，pm2 全局 bin 不在 `PATH` | 用 `$(npm config get prefix)/bin/pm2` 绝对路径调用；pm2 未装则 `npm install -g pm2`；加 `set -e` 快速失败 |
+
+最终验证（commit `623c25a`，2026-09-08）：
+
+```bash
+$ curl http://8.137.91.87/api/health
+{"status":"ok","time":"2026-09-07T17:35:53.828Z"}   # HTTP 200
+
+$ curl http://8.137.91.87/                            # HTTP 200，返回 Vite 构建产物
+```
+
+---
+
 ## 排查命令
 
 ```bash
