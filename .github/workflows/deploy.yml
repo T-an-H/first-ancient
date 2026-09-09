@@ -22,23 +22,36 @@ jobs:
         run: |
           npm ci
           VITE_API_BASE=/api npx vite build
+          ls -la dist/index.html
 
-      - name: Pack artifacts
+      - name: Install backend dependencies
         run: |
-          ls -la dist/index.html server/index.js
-          tar --exclude='server/node_modules' --exclude='server/.env' -czf deploy.tar.gz dist server
-          ls -lh deploy.tar.gz
+          cd server
+          npm ci
 
-      - name: Upload tarball
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.ALIYUN_HOST }}
-          username: ${{ secrets.ALIYUN_USER }}
-          key: ${{ secrets.ALIYUN_SSH_KEY }}
-          source: "deploy.tar.gz"
-          target: "/tmp"
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.ALIYUN_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.ALIYUN_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Extract & restart
+      - name: Rsync deploy
+        run: |
+          set -e
+          SSH_OPTS="ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no"
+          # 前端静态产物
+          rsync -avz --delete \
+            --exclude '.env' --exclude '.env.local' \
+            -e "$SSH_OPTS" \
+            dist/ root@${{ secrets.ALIYUN_HOST }}:/var/www/first-ancient/dist/
+          # 后端代码 + node_modules（runner 上装好，服务器免装依赖）
+          rsync -avz --delete \
+            --exclude '.env' --exclude '.env.local' \
+            -e "$SSH_OPTS" \
+            server/ root@${{ secrets.ALIYUN_HOST }}:/var/www/first-ancient/server/
+
+      - name: Restart pm2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.ALIYUN_HOST }}
@@ -46,18 +59,9 @@ jobs:
           key: ${{ secrets.ALIYUN_SSH_KEY }}
           script: |
             set -e
-            mkdir -p /var/www/first-ancient
-            cd /var/www/first-ancient
-            # 保留服务器上的 .env（tar 里不含 .env，解压后还原）
-            [ -f server/.env ] && cp server/.env /tmp/.env.bak
-            tar -xzf /tmp/deploy.tar.gz -C /var/www/first-ancient
-            [ -f /tmp/.env.bak ] && cp /tmp/.env.bak server/.env
-            rm -f /tmp/deploy.tar.gz /tmp/.env.bak
-            cd server
-            npm ci --registry=https://registry.npmmirror.com
-            # 非交互 shell 不加载 .bashrc，pm2 全局 bin 不在 PATH，用绝对路径调用
+            cd /var/www/first-ancient/server
+            # pm2 全局 bin 可能不在非交互 shell 的 PATH，用绝对路径兜底
             PM2_BIN="$(npm config get prefix)/bin/pm2"
-            [ -x "$PM2_BIN" ] || npm install -g pm2 --registry=https://registry.npmmirror.com
-            PM2_BIN="$(npm config get prefix)/bin/pm2"
+            [ -x "$PM2_BIN" ] || PM2_BIN="pm2"
             "$PM2_BIN" restart course-api || "$PM2_BIN" start index.js --name course-api
             "$PM2_BIN" save
