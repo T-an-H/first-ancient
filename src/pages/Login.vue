@@ -192,9 +192,18 @@ async function handleLogin() {
   try {
     const data = await unifiedLogin(acc, pwd)
     if (data.need_change_password) {
-      // 首登强制改密：存 portal，跳改密页
-      localStorage.setItem('token', data.token)
-      localStorage.setItem('userInfo', JSON.stringify({ ...data.user, userNo: data.user?.userNo || '' }))
+      // 首登强制改密：把 token 写入 sessionStorage 让改密接口能鉴权
+      // （api 层从 sessionStorage.activeSession 读 token）；portal 暂存 localStorage
+      const firstLoginUserInfo = { ...data.user, userNo: data.user?.userNo || '' }
+      try {
+        sessionStorage.setItem('activeSession', JSON.stringify({
+          token: data.token,
+          userInfo: firstLoginUserInfo,
+          role: data.user.role,
+          sub_role: data.user.sub_role,
+          secondaryRoles: [],
+        }))
+      } catch { /* ignore */ }
       localStorage.setItem('pendingPortal', data.portal || '/')
       loading.value = false
       router.push('/change-password')

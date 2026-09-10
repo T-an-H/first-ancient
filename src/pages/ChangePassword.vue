@@ -47,11 +47,17 @@ import { useAppStore } from '@/stores/app'
 const router = useRouter()
 const store = useAppStore()
 
-// 首登临时中转：Login.vue 把 token/userInfo/portal 写入 localStorage
-const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
+// 首登临时中转：Login.vue 把 token/userInfo 写入 sessionStorage.activeSession，portal 写入 localStorage
+const __session = (() => {
+  try {
+    const raw = sessionStorage.getItem('activeSession')
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+})()
+const userInfo = __session?.userInfo ?? {}
 const userNo = userInfo?.userNo || ''
 const portal = localStorage.getItem('pendingPortal') || '/'
-const token = localStorage.getItem('token') || ''
+const token = __session?.token || ''
 
 const newPassword = ref('')
 const confirmPassword = ref('')
@@ -107,10 +113,8 @@ async function handleSubmit() {
       account,
       portal,
     })
-    // 清理首登临时中转
+    // 清理首登临时中转（store.login 已正式写入 sessionStorage.activeSession）
     localStorage.removeItem('pendingPortal')
-    localStorage.removeItem('token')
-    localStorage.removeItem('userInfo')
     router.push(portal)
   } catch (err: any) {
     error.value = err instanceof Error ? err.message : '修改失败，请稍后再试'
