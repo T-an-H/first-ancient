@@ -129,10 +129,18 @@ async function createAccount(connection, { name, phone, idCard, role, subRole, d
       [refId, refId, normalizedName, validatedPhone, className || '', department || '']
     );
   } else {
-    // teacher
+    // teacher — 查找 department_id 并写入 phone/department_id
+    let deptId = null;
+    if (department) {
+      const [deptRows] = await connection.query(
+        'SELECT id FROM departments WHERE name = ? LIMIT 1',
+        [department]
+      );
+      if (deptRows.length > 0) deptId = deptRows[0].id;
+    }
     const [teacherResult] = await connection.query(
-      `INSERT INTO teachers (name, department_id) VALUES (?, NULL)`,
-      [normalizedName]
+      `INSERT INTO teachers (name, phone, department_id) VALUES (?, ?, ?)`,
+      [normalizedName, validatedPhone, deptId]
     );
     refId = String(teacherResult.insertId);
   }

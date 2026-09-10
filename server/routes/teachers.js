@@ -17,13 +17,14 @@ function buildTeacherListQuery(whereClause = '') {
   return `SELECT
     teacher.id,
     teacher.name,
-    teacher.phone,
+    COALESCE(teacher.phone, usr.account) AS phone,
     teacher.email,
     teacher.department_id,
-    teacher.created_at,
-    dept.name AS department_name
+    COALESCE(dept.name, usr.department) AS department_name,
+    teacher.created_at
   FROM teachers AS teacher
   LEFT JOIN departments AS dept ON dept.id = teacher.department_id
+  LEFT JOIN users AS usr ON usr.ref_id = CAST(teacher.id AS CHAR) AND usr.ref_type = 'teacher'
   ${whereClause}
   ORDER BY dept.name, teacher.name`;
 }
