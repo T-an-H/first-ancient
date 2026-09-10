@@ -48,13 +48,6 @@ async function request(url: string, options: RequestOptions = {}) {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok || data.success === false) {
-      // 401：会话失效（改密踢下线等），清当前标签会话并跳登录页
-      if (response.status === 401) {
-        try { sessionStorage.removeItem('activeSession') } catch { /* ignore */ }
-        if (!window.location.hash.includes('/login')) {
-          window.location.hash = '#/login'
-        }
-      }
       if (typeof data.code === 'string') {
         const error = new Error(data.message || `Request failed (${response.status})`) as RequestError
         error.code = data.code
@@ -457,11 +450,6 @@ export async function createAccountTeacher(data: {
 export async function fetchAccounts(params: Record<string, any> = {}) {
   const query = buildQuery(params)
   return request(`/accounts${query ? `?${query}` : ''}`)
-}
-
-export async function fetchStudentsPool(keyword: string) {
-  const query = buildQuery({ keyword })
-  return request(`/teaching/students-pool${query ? `?${query}` : ''}`)
 }
 
 export async function updateAccountStatus(id: string, status: 'active' | 'inactive') {

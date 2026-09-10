@@ -6,7 +6,6 @@
  */
 import jwt from 'jsonwebtoken';
 import JWT_SECRET from '../lib/jwt-secret.js';
-import { verifyAuth } from '../lib/auth-check.js';
 
 /** 无需登录即可访问的接口（登录 / 健康检查） */
 const PUBLIC_PATHS = [
@@ -22,19 +21,23 @@ function extractToken(req) {
   return '';
 }
 
-export async function authMiddleware(req, res, next) {
+export function authMiddleware(req, res, next) {
   // 读接口与 CORS 预检放行
   if (req.method === 'GET' || req.method === 'OPTIONS') return next();
 
   // 登录等公开接口放行
   if (PUBLIC_PATHS.some((p) => req.originalUrl.startsWith(p))) return next();
 
-  const decoded = await verifyAuth(req);
-  if (!decoded) {
-    return res.status(401).json({ success: false, message: '登录已过期，请重新登录', code: 'AUTH_EXPIRED' });
+  const token = extractToken(req);
+  if (!token) {
+    return res.status(401).json({ success: false, message: '未登录或登录已过期' });
   }
-  req.user = decoded;
-  return next();
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    return next();
+  } catch (e) {
+    return res.status(401).json({ success: false, message: '登录凭证无效，请重新登录' });
+  }
 }
 
 export function requireTeacher(req, res, next) {
@@ -47,14 +50,18 @@ export function requireTeacher(req, res, next) {
   return res.status(403).json({ success: false, message: '无权限执行该操作' });
 }
 
-export async function requireAdmin(req, res, next) {
-  // authMiddleware 跳过了 GET 请求的 JWT 校验，这里补验（含 token_version 校验）
+export function requireAdmin(req, res, next) {
+  // authMiddleware 跳过了 GET 请求的 JWT 校验，这里补验
   if (!req.user) {
-    const decoded = await verifyAuth(req);
-    if (!decoded) {
-      return res.status(401).json({ success: false, message: '登录已过期，请重新登录', code: 'AUTH_EXPIRED' });
+    const token = extractToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, message: '未登录或登录已过期' });
     }
-    req.user = decoded;
+    try {
+      req.user = jwt.verify(token, JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ success: false, message: '登录凭证无效，请重新登录' });
+    }
   }
   if (req.user.role === 'admin') {
     return next();

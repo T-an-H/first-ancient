@@ -3,7 +3,12 @@
  * 接口与 GitHub main 保持一致，独立放在这里，避免改动本地 src/api/index.ts。
  */
 
-import { API_BASE } from '@/api'
+const API_PROTOCOL = window.location.protocol === 'https:' ? 'https:' : 'http:'
+const API_HOST = window.location.hostname || '127.0.0.1'
+// The course platform's active backend is Express on port 3002. Keep the
+// Java override for deployments that still expose the standalone service.
+const API_PORT = (import.meta.env.VITE_API_PORT as string | undefined) ?? '3002'
+const JAVA_API_BASE = (import.meta.env.VITE_JAVA_API_BASE as string | undefined) ?? `${API_PROTOCOL}//${API_HOST}:${API_PORT}/api`
 
 type RequestOptions = RequestInit & {
   timeoutMs?: number
@@ -29,7 +34,7 @@ async function javaRequest(url: string, options: RequestOptions = {}) {
   }
 
   try {
-    const response = await fetch(`${API_BASE}${url}`, config)
+    const response = await fetch(`${JAVA_API_BASE}${url}`, config)
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok || data.code !== 200) {
