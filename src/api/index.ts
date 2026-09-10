@@ -48,6 +48,13 @@ async function request(url: string, options: RequestOptions = {}) {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok || data.success === false) {
+      // 401：会话失效（改密踢下线等），清当前标签会话并跳登录页
+      if (response.status === 401) {
+        try { sessionStorage.removeItem('activeSession') } catch { /* ignore */ }
+        if (!window.location.hash.includes('/login')) {
+          window.location.hash = '#/login'
+        }
+      }
       if (typeof data.code === 'string') {
         const error = new Error(data.message || `Request failed (${response.status})`) as RequestError
         error.code = data.code

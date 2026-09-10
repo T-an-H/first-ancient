@@ -216,7 +216,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchUserProfile, changePassword, changePhone, uploadAvatar } from '@/api'
+import { fetchUserProfile, changePassword, changePhone, uploadAvatar, unifiedLogin } from '@/api'
 import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
@@ -382,9 +382,32 @@ async function handleChangePassword() {
     return
   }
   pwdLoading.value = true
+  const newPwd = pwdForm.value.newPassword
   try {
-    await changePassword(pwdForm.value.newPassword, pwdForm.value.oldPassword)
-    pwdSuccess.value = '密码修改成功'
+    await changePassword(newPwd, pwdForm.value.oldPassword)
+    // 改密后旧 token 已失效（token_version 自增），用新密码重登刷新当前会话，避免自己被踢
+    try {
+      const account = profile.value?.phone || ''
+      if (account) {
+        const data = await unifiedLogin(account, newPwd)
+        if (data?.token && data?.user) {
+          store.login(
+            data.user.name,
+            (data.user.role as any) || 'student',
+            undefined,
+            undefined,
+            {
+              token: data.token,
+              userInfo: data.user,
+              sub_role: data.user.sub_role,
+              account: data.user.account,
+              portal: data.portal,
+            },
+          )
+        }
+      }
+    } catch { /* 重登失败不阻塞，后续请求 401 会自动跳登录 */ }
+    pwdSuccess.value = '密码修改成功，其他设备已下线'
     pwdForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' }
   } catch (err: any) {
     pwdError.value = err instanceof Error ? err.message : '修改失败'
