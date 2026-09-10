@@ -54,7 +54,7 @@ async function getCourseRow(connection, courseId, title = '') {
 router.get('/', async (req, res) => {
   try {
     const { class: className, courseId } = req.query;
-    let sql = 'SELECT id, course_id, title, teacher, mentor, semester, room, class_name, day, start_date, end_date, time_slot FROM schedules';
+    let sql = 'SELECT id, course_id, title, teacher, mentor, room, class_name, day, start_date, end_date, time_slot FROM schedules';
     const params = [];
     const conditions = [];
 
@@ -82,7 +82,6 @@ router.get('/', async (req, res) => {
       title: s.title,
       teacher: s.teacher,
       mentor: s.mentor || '',
-      semester: s.semester || '',
       room: s.room,
       className: s.class_name || '',
       day: s.day || '',
@@ -122,7 +121,6 @@ router.post('/bulk', async (req, res) => {
       const title = (s.title || '').trim();
       const className = (s.className || '').trim();
       const day = (s.day || '').trim();
-      const semester = (s.semester || '').trim();
 
       // 跳过无效行（只需要 title、日期、时段）
       if (!title || !s.startDate || !s.timeSlot) {
@@ -140,27 +138,25 @@ router.post('/bulk', async (req, res) => {
            AND time_slot = ?
            AND COALESCE(day, '') = ?
            AND COALESCE(class_name, '') = ?
-           AND COALESCE(semester, '') = ?
          LIMIT 1`,
-        [lookupId, s.startDate, s.timeSlot, day, className, semester]
+        [lookupId, s.startDate, s.timeSlot, day, className]
       );
 
       if (existing.length > 0) {
         // 重复则更新信息（教师、班级等可能变化）
         await connection.execute(
-          'UPDATE schedules SET title = ?, teacher = ?, mentor = ?, semester = ?, room = ?, class_name = ?, day = ?, end_date = ? WHERE id = ?',
-          [title, teacher, mentor || null, semester || null, room, className || null, day || null, s.endDate || s.startDate, existing[0].id]
+          'UPDATE schedules SET title = ?, teacher = ?, mentor = ?, room = ?, class_name = ?, day = ?, end_date = ? WHERE id = ?',
+          [title, teacher, mentor || null, room, className || null, day || null, s.endDate || s.startDate, existing[0].id]
         );
         updated++;
       } else {
         await connection.execute(
-          'INSERT INTO schedules (course_id, title, teacher, mentor, semester, room, class_name, day, start_date, end_date, time_slot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO schedules (course_id, title, teacher, mentor, room, class_name, day, start_date, end_date, time_slot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           [
             lookupId,
             title,
             teacher,
             mentor || null,
-            semester || null,
             room,
             className || null,
             day || null,
@@ -216,10 +212,9 @@ router.put('/:id', async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const { id } = req.params;
-    const { title, teacher, mentor, semester, room, className, day, startDate, endDate, timeSlot } = req.body;
+    const { title, teacher, mentor, room, className, day, startDate, endDate, timeSlot } = req.body;
     const normalizedTeacher = (teacher || '').trim();
     const normalizedMentor = (mentor || '').trim();
-    const normalizedSemester = (semester || '').trim();
     const normalizedRoom = (room || '').trim();
     const normalizedDay = (day || '').trim();
     const [scheduleRows] = await connection.execute(
@@ -228,8 +223,8 @@ router.put('/:id', async (req, res) => {
     );
 
     await connection.execute(
-      'UPDATE schedules SET title = ?, teacher = ?, mentor = ?, semester = ?, room = ?, class_name = ?, day = ?, start_date = ?, end_date = ?, time_slot = ? WHERE id = ?',
-      [title, normalizedTeacher, normalizedMentor || null, normalizedSemester || null, normalizedRoom, className || null, normalizedDay || null, startDate, endDate || startDate, timeSlot, id]
+      'UPDATE schedules SET title = ?, teacher = ?, mentor = ?, room = ?, class_name = ?, day = ?, start_date = ?, end_date = ?, time_slot = ? WHERE id = ?',
+      [title, normalizedTeacher, normalizedMentor || null, normalizedRoom, className || null, normalizedDay || null, startDate, endDate || startDate, timeSlot, id]
     );
 
     if (normalizedMentor && scheduleRows[0]?.course_id) {

@@ -191,9 +191,6 @@ router.post('/teachers', async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const subRole = normalizeText(req.body?.subRole) || 'teacher';
-    if (!['teacher', 'mentor', 'leader'].includes(subRole)) {
-      throw httpError(400, `无法识别的身份「${subRole}」，请填写：教师 / 企业导师 / 学院领导`, 'IDENTITY_UNKNOWN');
-    }
     const result = await createAccount(connection, {
       name: req.body?.name,
       phone: req.body?.phone,
@@ -404,42 +401,22 @@ router.put('/:id/assign', async (req, res) => {
 // ====== 身份中文值 → role/subRole/refType 映射 ======
 
 /**
- * 兼容中文全称/常用缩写/英文值。
- * 无法识别的身份直接报错，不再静默按学生入库（避免“导入成功却变成学生”）。
+ * 兼容中文"学生/教师/企业导师/学院领导"和旧英文"student/teacher/mentor/leader"。
+ * 默认按学生处理。
  */
-const IDENTITY_MAP = {
-  '学生': { role: 'student', subRole: null, refType: 'student' },
-  'student': { role: 'student', subRole: null, refType: 'student' },
-  '学': { role: 'student', subRole: null, refType: 'student' },
-  '生': { role: 'student', subRole: null, refType: 'student' },
-  '教师': { role: 'teacher', subRole: 'teacher', refType: 'teacher' },
-  'teacher': { role: 'teacher', subRole: 'teacher', refType: 'teacher' },
-  '老师': { role: 'teacher', subRole: 'teacher', refType: 'teacher' },
-  '师': { role: 'teacher', subRole: 'teacher', refType: 'teacher' },
-  '企业导师': { role: 'teacher', subRole: 'mentor', refType: 'teacher' },
-  'mentor': { role: 'teacher', subRole: 'mentor', refType: 'teacher' },
-  '企导': { role: 'teacher', subRole: 'mentor', refType: 'teacher' },
-  '导师': { role: 'teacher', subRole: 'mentor', refType: 'teacher' },
-  '学院领导': { role: 'teacher', subRole: 'leader', refType: 'teacher' },
-  'leader': { role: 'teacher', subRole: 'leader', refType: 'teacher' },
-  '领导': { role: 'teacher', subRole: 'leader', refType: 'teacher' },
-  '院领导': { role: 'teacher', subRole: 'leader', refType: 'teacher' },
-};
-
 function identityToRole(identity) {
-  const value = normalizeText(identity);
-  if (!value) {
-    throw httpError(400, '身份不能为空，请填写：学生 / 教师 / 企业导师 / 学院领导', 'IDENTITY_REQUIRED');
-  }
-  const mapped = IDENTITY_MAP[value];
-  if (!mapped) {
-    throw httpError(
-      400,
-      `无法识别的身份「${value}」，请填写：学生 / 教师 / 企业导师 / 学院领导`,
-      'IDENTITY_UNKNOWN'
-    );
-  }
-  return mapped;
+  const value = normalizeText(identity) || '学生';
+  const map = {
+    '学生': { role: 'student', subRole: null, refType: 'student' },
+    'student': { role: 'student', subRole: null, refType: 'student' },
+    '教师': { role: 'teacher', subRole: 'teacher', refType: 'teacher' },
+    'teacher': { role: 'teacher', subRole: 'teacher', refType: 'teacher' },
+    '企业导师': { role: 'teacher', subRole: 'mentor', refType: 'teacher' },
+    'mentor': { role: 'teacher', subRole: 'mentor', refType: 'teacher' },
+    '学院领导': { role: 'teacher', subRole: 'leader', refType: 'teacher' },
+    'leader': { role: 'teacher', subRole: 'leader', refType: 'teacher' },
+  };
+  return map[value] || map['学生'];
 }
 
 // ====== 批量导入 / 导出 ======

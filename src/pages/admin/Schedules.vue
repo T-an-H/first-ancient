@@ -238,14 +238,6 @@
             </div>
 
             <div>
-              <label class="mb-1.5 block text-xs font-medium text-gray-500">学期 <span class="text-red-500">*</span></label>
-              <select v-model="scheduleForm.semester" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
-                <option value="" disabled>请选择学期</option>
-                <option v-for="semester in semesterOptions" :key="semester" :value="semester">{{ semester }}</option>
-              </select>
-            </div>
-
-            <div>
               <label class="mb-1.5 block text-xs font-medium text-gray-500">授课教师</label>
               <input v-model="scheduleForm.teacher" type="text" placeholder="输入教师姓名" class="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
             </div>
@@ -519,7 +511,6 @@ type CourseFormState = {
 }
 
 type ScheduleFormState = {
-  semester: string
   teacher: string
   mentor: string
   startDate: string
@@ -578,44 +569,6 @@ const importMsg = ref<{ success: boolean; text: string } | null>(null)
 const hasLoadedMasterData = ref(false)
 
 const presetColors = DEPARTMENT_COLOR_OPTIONS.map((color) => color.value)
-const semesterNow = ref(new Date())
-
-function buildSemesterOptions(now: Date) {
-  const year = now.getFullYear()
-  const month = now.getMonth() + 1
-  let currentYear = year
-  let currentSeason: '春季' | '秋季' = '春季'
-
-  if (month >= 8) {
-    currentSeason = '秋季'
-  } else if (month <= 1) {
-    currentYear = year - 1
-    currentSeason = '秋季'
-  }
-
-  const options: string[] = []
-  let optionYear = currentYear
-  let optionSeason = currentSeason
-  for (let index = 0; index < 6; index += 1) {
-    options.push(`${optionYear}${optionSeason}学期`)
-    if (optionSeason === '春季') {
-      optionSeason = '秋季'
-    } else {
-      optionSeason = '春季'
-      optionYear += 1
-    }
-  }
-  return options
-}
-
-const semesterOptions = computed(() => buildSemesterOptions(semesterNow.value))
-
-function defaultSemester() {
-  const now = semesterNow.value
-  const year = now.getFullYear()
-  const month = now.getMonth() + 1
-  return month === 1 || month >= 8 ? `${year}秋季学期` : `${year}春季学期`
-}
 const routeDepartmentId = computed(() => (typeof route.query.departmentId === 'string' ? route.query.departmentId : ''))
 const routeCategoryId = computed(() => (typeof route.query.categoryId === 'string' ? route.query.categoryId : ''))
 const routeCourseId = computed(() => (typeof route.query.courseId === 'string' ? route.query.courseId : ''))
@@ -705,7 +658,6 @@ const dateRangeWarning = computed(() => {
 const canSaveSchedule = computed(() => {
   return Boolean(
     selectedCourse.value &&
-    scheduleForm.value.semester &&
     scheduleForm.value.teacher.trim() &&
     scheduleForm.value.startDate &&
     scheduleForm.value.endDate &&
@@ -1151,7 +1103,6 @@ function isConflicting(schedule: Schedule) {
 
 function createScheduleFormState(course: Course | null, schedule?: Schedule | null): ScheduleFormState {
   return {
-    semester: schedule?.semester || course?.semester || defaultSemester(),
     teacher: schedule?.teacher || course?.teacher || '',
     mentor: schedule?.mentor || course?.mentor || '',
     startDate: schedule?.startDate || '',
@@ -1162,7 +1113,6 @@ function createScheduleFormState(course: Course | null, schedule?: Schedule | nu
 }
 
 function openAdd() {
-  semesterNow.value = new Date()
   editingSchedule.value = null
   scheduleForm.value = createScheduleFormState(selectedCourse.value)
   selectedSlots.value = []
@@ -1193,7 +1143,6 @@ function handleSlotClick(day: string, slot: { start: string; end: string }) {
 }
 
 function openEdit(schedule: Schedule) {
-  semesterNow.value = new Date()
   editingSchedule.value = schedule
   scheduleForm.value = createScheduleFormState(selectedCourse.value, schedule)
 
@@ -1220,9 +1169,8 @@ function closeScheduleModal() {
   selectedSlots.value = []
 }
 
-async function persistCourseMeta(course: Course, payload: { semester: string; teacher: string; mentor: string; duration: number; credits: number }) {
+async function persistCourseMeta(course: Course, payload: { teacher: string; mentor: string; duration: number; credits: number }) {
   const updatePayload = {
-    semester: payload.semester,
     teacher: payload.teacher,
     mentor: payload.mentor,
     duration: payload.duration,
@@ -1238,12 +1186,11 @@ async function handleSaveSchedule() {
   const course = selectedCourse.value
   const teacher = scheduleForm.value.teacher.trim()
   const mentor = scheduleForm.value.mentor.trim()
-  const semester = scheduleForm.value.semester
   const duration = Number(scheduleForm.value.duration)
   const credits = Number(scheduleForm.value.credits)
 
   try {
-    await persistCourseMeta(course, { semester, teacher, mentor, duration, credits })
+    await persistCourseMeta(course, { teacher, mentor, duration, credits })
 
     if (editingSchedule.value) {
       const slot = selectedSlots.value[0]
@@ -1252,7 +1199,6 @@ async function handleSaveSchedule() {
         title: course.title,
         teacher,
         mentor,
-        semester,
         day: slot.dayLabel,
         room: slot.room.trim(),
         startDate: scheduleForm.value.startDate,
@@ -1265,7 +1211,6 @@ async function handleSaveSchedule() {
         title: course.title,
         teacher,
         mentor,
-        semester,
         day: slot.dayLabel,
         room: slot.room.trim(),
         startDate: scheduleForm.value.startDate,

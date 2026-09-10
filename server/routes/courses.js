@@ -45,7 +45,6 @@ async function getCourseRowById(connection, courseId) {
        course.credits,
        course.duration,
        course.status,
-       course.semester,
        course.teacher,
        course.mentor,
        course.department,
@@ -131,7 +130,6 @@ router.get('/', async (req, res) => {
          course.credits,
          course.duration,
          course.status,
-         course.semester,
          course.teacher,
          course.mentor,
          course.department,
@@ -180,7 +178,6 @@ router.post('/', async (req, res) => {
     const credits = Number(req.body?.credits || 0);
     const duration = Number(req.body?.duration || 0);
     const status = normalizeText(req.body?.status) || 'active';
-    const semester = normalizeOptionalText(req.body?.semester);
 
     await connection.beginTransaction();
 
@@ -195,12 +192,11 @@ router.post('/', async (req, res) => {
          credits,
          duration,
          status,
-         semester,
          teacher,
          mentor,
          department,
          department_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         courseId,
         title,
@@ -211,7 +207,6 @@ router.post('/', async (req, res) => {
         Number.isFinite(credits) ? credits : 0,
         Number.isFinite(duration) ? duration : 0,
         status || 'active',
-        semester || null,
         teacher,
         mentor || null,
         department.name,
@@ -276,7 +271,6 @@ router.get('/teacher/:name', async (req, res) => {
          course.credits,
          course.duration,
          course.status,
-         course.semester,
          course.teacher,
          course.mentor,
          course.department,
@@ -317,7 +311,6 @@ router.get('/department/:dept', async (req, res) => {
          course.credits,
          course.duration,
          course.status,
-         course.semester,
          course.teacher,
          course.mentor,
          course.department,
@@ -437,7 +430,6 @@ router.put('/:id', async (req, res) => {
     const credits = Number(req.body?.credits ?? existingCourse.credits ?? 0);
     const duration = Number(req.body?.duration ?? existingCourse.duration ?? 0);
     const status = normalizeText(req.body?.status) || existingCourse.status || 'active';
-    const semester = normalizeOptionalText(req.body?.semester ?? existingCourse.semester);
 
     const { category, department } = await resolveCourseDepartment(connection, req.body, existingCourse);
 
@@ -453,7 +445,6 @@ router.put('/:id', async (req, res) => {
            credits = ?,
            duration = ?,
            status = ?,
-           semester = ?,
            teacher = ?,
            mentor = ?,
            department = ?,
@@ -468,7 +459,6 @@ router.put('/:id', async (req, res) => {
         Number.isFinite(credits) ? credits : 0,
         Number.isFinite(duration) ? duration : 0,
         status,
-        semester || null,
         teacher,
         mentor || null,
         department.name,

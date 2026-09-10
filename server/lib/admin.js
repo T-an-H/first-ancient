@@ -135,7 +135,6 @@ export function mapCourseRow(row) {
     credits: Number(row.credits || 0),
     duration: Number(row.duration || 0),
     status: row.status || 'active',
-    semester: row.semester || '',
     createdAt: formatDate(row.created_at),
     teacher: row.teacher || '',
     mentor: row.mentor || '',

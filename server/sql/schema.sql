@@ -71,7 +71,6 @@ CREATE TABLE IF NOT EXISTS schedules (
   course_id  VARCHAR(64) DEFAULT '' COMMENT '课程ID',
   title      VARCHAR(255) DEFAULT '' COMMENT '课程名',
   teacher    VARCHAR(64)  DEFAULT '' COMMENT '教师',
-  semester   VARCHAR(32)  DEFAULT '' COMMENT '学期',
   room       VARCHAR(64)  DEFAULT '' COMMENT '教室',
   class_name VARCHAR(64)  DEFAULT NULL COMMENT '班级',
   start_date VARCHAR(32)  DEFAULT '' COMMENT '开始日期',
