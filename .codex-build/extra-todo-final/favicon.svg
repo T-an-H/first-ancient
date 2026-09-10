@@ -1,0 +1,14 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" rx="8" fill="url(#doubao-bg)"/>
+  <path d="M16 6.5C10.75 6.5 6.5 10.16 6.5 14.68C6.5 18.04 8.84 20.92 12.18 22.18L12.06 25.16C12.04 25.78 12.74 26.16 13.25 25.8L16.4 23.57C21.44 23.39 25.5 19.82 25.5 15.38C25.5 10.84 21.25 6.5 16 6.5Z" fill="white"/>
+  <path d="M12.25 15.28C12.25 14.35 13 13.6 13.93 13.6C14.86 13.6 15.61 14.35 15.61 15.28C15.61 16.21 14.86 16.96 13.93 16.96C13 16.96 12.25 16.21 12.25 15.28Z" fill="#4D5BFF"/>
+  <path d="M17.95 15.28C17.95 14.35 18.7 13.6 19.63 13.6C20.56 13.6 21.31 14.35 21.31 15.28C21.31 16.21 20.56 16.96 19.63 16.96C18.7 16.96 17.95 16.21 17.95 15.28Z" fill="#4D5BFF"/>
+  <path d="M12.2 10.62C13.12 9.84 14.44 9.38 16 9.38C17.56 9.38 18.88 9.84 19.8 10.62" stroke="#7C8BFF" stroke-width="1.4" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="doubao-bg" x1="4" y1="3" x2="29" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#35C7FF"/>
+      <stop offset="0.5" stop-color="#5B73FF"/>
+      <stop offset="1" stop-color="#9B5CFF"/>
+    </linearGradient>
+  </defs>
+</svg>

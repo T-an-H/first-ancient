@@ -111,6 +111,7 @@
           <thead>
             <tr class="border-b border-gray-100 bg-gray-50">
               <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">课程名称</th>
+              <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">学期</th>
               <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">教师</th>
               <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">状态</th>
               <th class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">操作</th>
@@ -134,6 +135,7 @@
                   </div>
                 </div>
               </td>
+              <td class="px-4 py-3 text-sm text-gray-600">{{ course.semester || '-' }}</td>
               <td class="px-4 py-3 text-sm text-gray-600">{{ course.teacher || '-' }}</td>
               <td class="px-4 py-3">
                 <span class="rounded-full px-2 py-1 text-xs" :class="statusClass(course.status)">
@@ -212,9 +214,10 @@
                 v-model="courseForm.teacher"
                 list="category-course-teachers"
                 type="text"
-                placeholder="输入或选择教师姓名"
+                placeholder="从列表选择或输入教师姓名"
                 class="w-full rounded-xl border border-gray-200 px-5 py-4 text-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               />
+              <p class="mt-2 text-sm text-gray-400">教师须为教师管理中已存在的人员，否则课程不会出现在该教师端</p>
               <datalist id="category-course-teachers">
                 <option v-for="teacher in courseTeacherOptions" :key="teacher.id" :value="teacher.name">{{ teacher.name }}</option>
               </datalist>
@@ -242,6 +245,18 @@
                   {{ classItem.name }}
                 </option>
               </select>
+            </div>
+
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700">学期</label>
+              <select
+                v-model="courseForm.semester"
+                @change="onSemesterChange"
+                class="w-full rounded-xl border border-gray-200 bg-white px-5 py-4 text-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              >
+                <option v-for="sem in semesterOptions" :key="sem" :value="sem">{{ sem }}</option>
+              </select>
+              <p class="mt-2 text-sm text-gray-400">选择学期后自动填充起止日期（可手动调整）</p>
             </div>
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -405,6 +420,7 @@ import {
   updateCourse,
   updateSchedule,
 } from '@/api'
+import { getSemesterOf } from '@/lib/date'
 import type { Category, Course, Department, Schedule, Teacher } from '@/types'
 
 type CategoryRow = Category & {
@@ -426,6 +442,7 @@ type CourseFormState = {
   teacher: string
   mentor: string
   className: string
+  semester: string
   startDate: string
   endDate: string
   duration: number | ''
@@ -542,6 +559,37 @@ const dateRangeWarning = computed(() => {
   if (!courseForm.value.startDate || !courseForm.value.endDate) return ''
   return courseForm.value.endDate < courseForm.value.startDate ? '结束时间不能早于开始时间' : ''
 })
+
+// ===== 学期选择 =====
+
+/** 学期选项：上一年至下一年的春秋学期（如 2025春季 ~ 2027秋季） */
+const semesterOptions = computed(() => {
+  const year = new Date().getFullYear()
+  const list: string[] = []
+  for (let y = year - 1; y <= year + 1; y++) {
+    list.push(`${y}春季学期`, `${y}秋季学期`)
+  }
+  return list
+})
+
+/** 学期 → 起止日期（与教师端 getSemesterOf 的划分保持一致：2-7月春、8-1月秋） */
+function semesterDateRange(semester: string): { start: string; end: string } | null {
+  const match = semester.match(/^(\d{4})(春季|秋季)学期$/)
+  if (!match) return null
+  const year = Number(match[1])
+  return match[2] === '春季'
+    ? { start: `${year}-02-24`, end: `${year}-07-15` }
+    : { start: `${year}-09-01`, end: `${year + 1}-01-31` }
+}
+
+/** 切换学期时自动填充起止日期 */
+function onSemesterChange() {
+  const range = semesterDateRange(courseForm.value.semester)
+  if (range) {
+    courseForm.value.startDate = range.start
+    courseForm.value.endDate = range.end
+  }
+}
 
 const conflictWarning = computed(() => {
   const teacherName = normalizeOptionalValue(courseForm.value.teacher)
@@ -861,6 +909,10 @@ function statusClass(status: string) {
 }
 
 function createCourseFormState(course: Course | null = null, schedule: Schedule | null = null): CourseFormState {
+  const currentSemester = getSemesterOf(new Date().toISOString())
+  const derivedSemester = schedule?.startDate
+    ? getSemesterOf(schedule.startDate)
+    : course?.semester || (course?.startDate ? getSemesterOf(course.startDate) : '')
   return {
     title: selectedCategory.value?.name || course?.title || '',
     description: course?.description || '',
@@ -868,6 +920,7 @@ function createCourseFormState(course: Course | null = null, schedule: Schedule 
     teacher: schedule?.teacher || course?.teacher || '',
     mentor: schedule?.mentor || course?.mentor || '',
     className: schedule?.className || '',
+    semester: derivedSemester || currentSemester,
     startDate: schedule?.startDate || '',
     endDate: schedule?.endDate || '',
     duration: typeof course?.duration === 'number' && course.duration > 0 ? course.duration : '',
@@ -933,6 +986,17 @@ async function handleSaveCourse() {
   const className = courseForm.value.className.trim()
   const duration = Number(courseForm.value.duration)
   const credits = Number(courseForm.value.credits)
+
+  // 教师姓名必须与教师库一致，否则课程不会出现在任何教师端
+  const knownTeacherNames = new Set(teacherList.value.map((item) => item.name))
+  if (teacher && !knownTeacherNames.has(teacher)) {
+    window.alert(`教师「${teacher}」不存在，请在教师管理中先添加该教师，或从下拉列表中选择已有教师。`)
+    return
+  }
+  if (mentor && !knownTeacherNames.has(mentor)) {
+    window.alert(`企业导师「${mentor}」不存在，请先在教师管理中以「企业导师」身份添加该人员。`)
+    return
+  }
 
   try {
     const targetCourse = await ensureCourseRecord({
@@ -1123,6 +1187,7 @@ async function ensureCourseRecord(payload: {
       duration: payload.duration,
       credits: payload.credits,
       status: 'active',
+      semester: courseForm.value.semester,
     })
 
     courseTarget.value = result.course
@@ -1141,6 +1206,7 @@ async function ensureCourseRecord(payload: {
     duration: payload.duration,
     credits: payload.credits,
     status: courseTarget.value.status || 'active',
+    semester: courseForm.value.semester,
   })
 
   courseTarget.value = result.course

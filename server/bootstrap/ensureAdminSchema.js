@@ -186,6 +186,7 @@ async function ensureColumnsAndIndexes(connection) {
   await ensureColumn(connection, 'students', 'class_id', 'class_id INT NULL AFTER department');
   await ensureColumn(connection, 'schedules', 'day', 'day VARCHAR(20) NULL AFTER class_name');
   await ensureColumn(connection, 'schedules', 'mentor', 'mentor VARCHAR(100) NULL AFTER teacher');
+  await ensureColumn(connection, 'schedules', 'semester', 'semester VARCHAR(32) DEFAULT "" COMMENT "学期，如 2026秋季学期" AFTER mentor');
   await ensureColumn(connection, 'teachers', 'phone', 'phone VARCHAR(50) NULL AFTER name');
   await ensureColumn(connection, 'teachers', 'email', 'email VARCHAR(255) NULL AFTER phone');
   await ensureColumn(connection, 'teachers', 'department_id', 'department_id INT NULL AFTER email');
@@ -196,6 +197,7 @@ async function ensureColumnsAndIndexes(connection) {
   await ensureColumn(connection, 'courses', 'description', 'description TEXT NULL AFTER title');
   await ensureColumn(connection, 'courses', 'cover', 'cover VARCHAR(255) NULL AFTER category_name');
   await ensureColumn(connection, 'courses', 'created_at', 'created_at DATETIME DEFAULT CURRENT_TIMESTAMP AFTER department_id');
+  await ensureColumn(connection, 'courses', 'semester', 'semester VARCHAR(32) DEFAULT "" COMMENT "学期，如 2026秋季学期" AFTER status');
 
   // ====== 账号入库制：users 表扩展字段 ======
   await ensureColumn(connection, 'users', 'user_no', 'user_no VARCHAR(32) DEFAULT NULL COMMENT "学号/工号"');

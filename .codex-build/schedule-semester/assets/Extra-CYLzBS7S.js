@@ -1,0 +1,1 @@
+import{_ as o}from"./ExtraFeatures.vue_vue_type_script_setup_true_lang-1q5PIUtx.js";import{d as r,j as t,o as e}from"./index-J59XDhs0.js";import"./arrow-right-BPNvzS7z.js";import"./circle-check-big-DJ7Uvmd-.js";const i=r({__name:"Extra",setup(a){return(_,m)=>(e(),t(o))}});export{i as default};
