@@ -264,8 +264,7 @@ async function handleImport(e: Event) {
       idCard: String(row['身份证号'] || row['idCard'] || ''),
       department: row['学院'] || row['department'] || '',
       className: row['班级'] || row['className'] || '',
-      role: row['角色'] || row['role'] || 'student',
-      subRole: row['子角色'] || row['subRole'] || '',
+      identity: row['身份'] || row['role'] || row['角色'] || '学生',
     }))
 
     const result = await importAccounts(payload)
@@ -329,9 +328,24 @@ async function handleExportTeachers() {
 async function handleDownloadTemplate() {
   try {
     const XLSX = await import('xlsx')
-    const header = [['姓名', '手机号', '身份证号', '学院', '班级', '角色', '子角色']]
-    const example = [['张三', '13800138000', '110101200001011234', '计算机学院', '计科2101', 'student', '']]
+    const header = [['姓名', '手机号', '身份证号', '学院', '班级', '身份']]
+    const example = [['张三', '13800138000', '110101200001011234', '计算机学院', '计科2101', '学生']]
     const ws = XLSX.utils.aoa_to_sheet([...header, ...example])
+
+    // 给"身份"列（F 列）加下拉数据验证：学生/教师/企业导师/学院领导
+    const identities = '学生,教师,企业导师,学院领导'
+    if (ws['!dataValidations']) {
+      ws['!dataValidations'].push({
+        sqref: 'F2:F1000',
+        type: 'list',
+        formulae: [`"${identities}"`],
+      })
+    } else {
+      ws['!dataValidations'] = [
+        { sqref: 'F2:F1000', type: 'list', formulae: [`"${identities}"`] },
+      ]
+    }
+
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, '导入模板')
     XLSX.writeFile(wb, '账号导入模板.xlsx')

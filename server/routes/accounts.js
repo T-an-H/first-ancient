@@ -339,6 +339,27 @@ router.put('/:id/assign', async (req, res) => {
   }
 });
 
+// ====== 身份中文值 → role/subRole/refType 映射 ======
+
+/**
+ * 兼容中文"学生/教师/企业导师/学院领导"和旧英文"student/teacher/mentor/leader"。
+ * 默认按学生处理。
+ */
+function identityToRole(identity) {
+  const value = normalizeText(identity) || '学生';
+  const map = {
+    '学生': { role: 'student', subRole: null, refType: 'student' },
+    'student': { role: 'student', subRole: null, refType: 'student' },
+    '教师': { role: 'teacher', subRole: 'teacher', refType: 'teacher' },
+    'teacher': { role: 'teacher', subRole: 'teacher', refType: 'teacher' },
+    '企业导师': { role: 'teacher', subRole: 'mentor', refType: 'teacher' },
+    'mentor': { role: 'teacher', subRole: 'mentor', refType: 'teacher' },
+    '学院领导': { role: 'teacher', subRole: 'leader', refType: 'teacher' },
+    'leader': { role: 'teacher', subRole: 'leader', refType: 'teacher' },
+  };
+  return map[value] || map['学生'];
+}
+
 // ====== 批量导入 / 导出 ======
 
 /**
@@ -354,9 +375,7 @@ router.post('/import', async (req, res) => {
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       try {
-        const refType = row.role === 'teacher' ? 'teacher' : 'student';
-        const role = refType === 'teacher' ? 'teacher' : 'student';
-        const subRole = refType === 'teacher' ? (normalizeText(row.subRole) || 'teacher') : null;
+        const { role, subRole, refType } = identityToRole(row.identity || row.role);
         await createAccount(connection, {
           name: row.name,
           phone: row.phone,
