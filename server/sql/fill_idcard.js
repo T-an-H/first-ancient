@@ -14,7 +14,7 @@ import bcrypt from 'bcryptjs';
 const isApply = process.argv.includes('--apply');
 
 function log(msg) {
-  console.log(`[${isApply ? 'APPLY' : 'DRY-RUN''}] ${msg}`);
+  console.log(`[${isApply ? 'APPLY' : 'DRY-RUN'}] ${msg}`);
 }
 
 // 生成随机 18 位身份证号
