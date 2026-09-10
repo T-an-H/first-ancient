@@ -6,6 +6,10 @@
         <p class="mt-1 text-gray-500">统一管理所有入库账号（启用/禁用、重置密码、分配学院）</p>
       </div>
       <div class="flex items-center gap-3">
+        <button @click="showAddModal = true"
+          class="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-600">
+          <Plus class="h-4 w-4" /> 添加账号
+        </button>
         <button @click="handleExportStudents" :disabled="exporting"
           class="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50">
           <Download class="h-4 w-4" /> 导出学生
@@ -110,13 +114,59 @@
         </div>
       </div>
     </div>
+
+    <!-- 添加账号弹窗 -->
+    <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showAddModal = false">
+      <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h2 class="mb-4 text-lg font-bold text-gray-900">添加账号入库</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">身份 *</label>
+            <select v-model="addForm.roleType" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500">
+              <option value="student">学生</option>
+              <option value="teacher">教师</option>
+              <option value="mentor">企业导师</option>
+              <option value="leader">学院领导</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">姓名 *</label>
+            <input v-model="addForm.name" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">手机号 *</label>
+            <input v-model="addForm.phone" type="text" maxlength="11" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">身份证号 *</label>
+            <input v-model="addForm.idCard" type="text" maxlength="18" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">学院</label>
+            <input v-model="addForm.department" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <div v-if="addForm.roleType === 'student'">
+            <label class="block text-sm font-medium text-gray-700 mb-1">班级</label>
+            <input v-model="addForm.className" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <p v-if="addError" class="text-sm text-red-500">{{ addError }}</p>
+          <p v-if="addSuccess" class="text-sm text-green-600">{{ addSuccess }}</p>
+        </div>
+        <div class="mt-6 flex justify-end gap-3">
+          <button @click="closeAddModal" class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100">关闭</button>
+          <button @click="handleAddAccount" :disabled="adding" class="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50">
+            {{ adding ? '入库中...' : '入库' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Search, LoaderCircle, Download, Upload, FileSpreadsheet } from 'lucide-vue-next'
-import { fetchAccounts, updateAccountStatus, resetAccountPassword, importAccounts, exportAccounts, exportStudents, exportTeachers } from '@/api'
+import { Search, LoaderCircle, Download, Upload, FileSpreadsheet, Plus } from 'lucide-vue-next'
+import { fetchAccounts, updateAccountStatus, resetAccountPassword, importAccounts, exportAccounts, exportStudents, exportTeachers, createAccountStudent, createAccountTeacher } from '@/api'
 
 const accounts = ref<any[]>([])
 const loading = ref(false)
@@ -288,6 +338,59 @@ async function handleDownloadTemplate() {
     showToast('模板已下载')
   } catch (err: any) {
     showToast(err instanceof Error ? err.message : '下载失败')
+  }
+}
+
+// ====== 单个添加账号 ======
+const showAddModal = ref(false)
+const adding = ref(false)
+const addError = ref('')
+const addSuccess = ref('')
+const addForm = ref({ roleType: 'student', name: '', phone: '', idCard: '', department: '', className: '' })
+
+function closeAddModal() {
+  showAddModal.value = false
+  addError.value = ''
+  addSuccess.value = ''
+  addForm.value = { roleType: 'student', name: '', phone: '', idCard: '', department: '', className: '' }
+}
+
+async function handleAddAccount() {
+  addError.value = ''
+  addSuccess.value = ''
+  if (!addForm.value.name.trim() || !addForm.value.phone.trim() || !addForm.value.idCard.trim()) {
+    addError.value = '姓名、手机号、身份证号为必填'
+    return
+  }
+  adding.value = true
+  try {
+    const roleType = addForm.value.roleType
+    if (roleType === 'student') {
+      const data = await createAccountStudent({
+        name: addForm.value.name.trim(),
+        phone: addForm.value.phone.trim(),
+        idCard: addForm.value.idCard.trim(),
+        department: addForm.value.department.trim(),
+        className: addForm.value.className.trim(),
+      })
+      addSuccess.value = `入库成功！学号：${data.account.userNo}，初始密码：身份证后 6 位`
+    } else {
+      const subRole = roleType === 'mentor' ? 'mentor' : roleType === 'leader' ? 'leader' : 'teacher'
+      const data = await createAccountTeacher({
+        name: addForm.value.name.trim(),
+        phone: addForm.value.phone.trim(),
+        idCard: addForm.value.idCard.trim(),
+        subRole,
+        department: addForm.value.department.trim(),
+      })
+      addSuccess.value = `入库成功！工号：${data.account.userNo}，初始密码：身份证后 6 位`
+    }
+    addForm.value = { roleType: addForm.value.roleType, name: '', phone: '', idCard: '', department: '', className: '' }
+    loadAccounts()
+  } catch (err: any) {
+    addError.value = err instanceof Error ? err.message : '入库失败'
+  } finally {
+    adding.value = false
   }
 }
 
