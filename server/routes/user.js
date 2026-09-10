@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pool from '../db.js';
 import JWT_SECRET, { JWT_EXPIRES } from '../lib/jwt-secret.js';
+import { verifyAuth } from '../lib/auth-check.js';
 
 const router = Router();
 
@@ -43,7 +44,7 @@ router.post('/login', async (req, res) => {
     // 多标识查询：手机号(account) 或 学号/工号(user_no)
     const [rows] = await pool.query(
       `SELECT id, account, name, department, role, sub_role, status, password,
-              user_no, need_change_password, fail_count, lock_until
+              user_no, need_change_password, fail_count, lock_until, token_version
        FROM users
        WHERE account = ? OR user_no = ?
        LIMIT 1`,
@@ -99,9 +100,9 @@ router.post('/login', async (req, res) => {
       [user.id]
     );
 
-    // 生成 JWT
+    // 生成 JWT（携带 token_version，改密后自增使旧 token 失效）
     const token = jwt.sign(
-      { id: user.id, account: user.account, name: user.name, role: user.role, sub_role: user.sub_role },
+      { id: user.id, account: user.account, name: user.name, role: user.role, sub_role: user.sub_role, tv: Number(user.token_version) || 0 },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES }
     );
@@ -139,17 +140,10 @@ router.post('/login', async (req, res) => {
  */
 router.post('/change-password', async (req, res) => {
   try {
-    // 自行校验 JWT（authMiddleware 尚未全局挂载）
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    if (!token) {
-      return res.status(401).json({ success: false, message: '未登录' });
-    }
-    let decoded;
-    try {
-      decoded = jwt.verify(token, JWT_SECRET);
-    } catch {
-      return res.status(401).json({ success: false, message: '登录凭证无效，请重新登录' });
+    // 校验 JWT + token_version
+    const decoded = await verifyAuth(req);
+    if (!decoded) {
+      return res.status(401).json({ success: false, message: '登录已过期，请重新登录', code: 'AUTH_EXPIRED' });
     }
 
     const newPassword = String(req.body?.newPassword || '');
@@ -180,7 +174,7 @@ router.post('/change-password', async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
     await pool.query(
-      'UPDATE users SET password = ?, need_change_password = 0 WHERE id = ?',
+      'UPDATE users SET password = ?, need_change_password = 0, token_version = token_version + 1 WHERE id = ?',
       [hashedPassword, decoded.id]
     );
 
@@ -191,17 +185,10 @@ router.post('/change-password', async (req, res) => {
   }
 });
 
-// ====== 从 JWT 提取用户 ID 的工具函数 ======
-function extractUserId(req) {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (!token) return null;
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    return decoded.id;
-  } catch {
-    return null;
-  }
+// ====== 从 JWT 提取用户 ID 的工具函数（含 token_version 校验） ======
+async function extractUserId(req) {
+  const decoded = await verifyAuth(req);
+  return decoded ? decoded.id : null;
 }
 
 /**
@@ -209,7 +196,7 @@ function extractUserId(req) {
  */
 router.get('/profile', async (req, res) => {
   try {
-    const userId = extractUserId(req);
+    const userId = await extractUserId(req);
     if (!userId) {
       return res.status(401).json({ success: false, message: '未登录或登录已过期' });
     }
@@ -284,7 +271,7 @@ router.get('/profile', async (req, res) => {
  */
 router.post('/change-phone', async (req, res) => {
   try {
-    const userId = extractUserId(req);
+    const userId = await extractUserId(req);
     if (!userId) {
       return res.status(401).json({ success: false, message: '未登录或登录已过期' });
     }
@@ -347,7 +334,7 @@ router.post('/change-phone', async (req, res) => {
  */
 router.post('/avatar', async (req, res) => {
   try {
-    const userId = extractUserId(req);
+    const userId = await extractUserId(req);
     if (!userId) {
       return res.status(401).json({ success: false, message: '未登录或登录已过期' });
     }
