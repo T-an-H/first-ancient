@@ -5,14 +5,12 @@
  * - requireTeacher: 要求教师及以上角色（teacher / admin），用于教学写接口
  */
 import jwt from 'jsonwebtoken';
+import JWT_SECRET from '../lib/jwt-secret.js';
 
-const JWT_SECRET = 'course-platform-secret-key-2026';
-
-/** 无需登录即可访问的接口（登录 / 注册 / 健康检查） */
+/** 无需登录即可访问的接口（登录 / 健康检查） */
 const PUBLIC_PATHS = [
   '/api/user/login',
   '/api/auth/login',
-  '/api/auth/register',
   '/api/health',
   '/api/assistant/navigate',
 ];
@@ -50,4 +48,14 @@ export function requireTeacher(req, res, next) {
     return next();
   }
   return res.status(403).json({ success: false, message: '无权限执行该操作' });
+}
+
+export function requireAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: '未登录或登录已过期' });
+  }
+  if (req.user.role === 'admin') {
+    return next();
+  }
+  return res.status(403).json({ success: false, message: '仅管理员可执行该操作' });
 }

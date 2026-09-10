@@ -8,11 +8,10 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pool from '../db.js';
+import JWT_SECRET from '../lib/jwt-secret.js';
 
 const router = Router();
 
-// JWT 密钥（生产环境应该放在环境变量里）
-const JWT_SECRET = 'course-platform-secret-key-2026';
 const JWT_EXPIRES = '7d'; // 令牌有效期 7 天
 
 /**
@@ -86,67 +85,6 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('登录错误:', error);
-    res.status(500).json({
-      success: false,
-      message: '服务器内部错误，请稍后重试',
-    });
-  }
-});
-
-/**
- * POST /api/auth/register - 学生注册
- * 接收: { studentId, name, password, phone?, email?, className? }
- * 返回: { success, message }
- */
-router.post('/register', async (req, res) => {
-  try {
-    const { studentId, name, password, phone, email, className } = req.body;
-
-    // 1. 校验必填字段
-    if (!studentId || !name || !password) {
-      return res.status(400).json({
-        success: false,
-        message: '学号、姓名、密码为必填项',
-      });
-    }
-
-    // 2. 密码长度检查
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: '密码长度不能少于6位',
-      });
-    }
-
-    // 3. 检查学号是否已被注册
-    const [existing] = await pool.execute(
-      'SELECT id FROM students WHERE student_id = ?',
-      [studentId]
-    );
-
-    if (existing.length > 0) {
-      return res.status(409).json({
-        success: false,
-        message: '该学号已被注册',
-      });
-    }
-
-    // 4. 加密密码
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // 5. 插入数据库
-    await pool.execute(
-      'INSERT INTO students (student_id, name, password, phone, email, class_name) VALUES (?, ?, ?, ?, ?, ?)',
-      [studentId, name, hashedPassword, phone || null, email || null, className || null]
-    );
-
-    res.status(201).json({
-      success: true,
-      message: '注册成功，请登录',
-    });
-  } catch (error) {
-    console.error('注册错误:', error);
     res.status(500).json({
       success: false,
       message: '服务器内部错误，请稍后重试',

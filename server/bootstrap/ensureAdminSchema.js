@@ -155,6 +155,29 @@ async function ensureTables(connection) {
       KEY idx_quality_submissions_score (course_id, score)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
   );
+
+  await connection.query(
+    `CREATE TABLE IF NOT EXISTS account_sequences (
+      type VARCHAR(16) NOT NULL,
+      year INT NOT NULL,
+      last_no INT NOT NULL DEFAULT 0,
+      PRIMARY KEY (type, year)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学号/工号派号序列'`
+  );
+
+  await connection.query(
+    `CREATE TABLE IF NOT EXISTS account_logs (
+      id INT NOT NULL AUTO_INCREMENT,
+      operator_id INT NULL,
+      operator_name VARCHAR(64) DEFAULT '',
+      action VARCHAR(32) NOT NULL,
+      target_id VARCHAR(64) DEFAULT '',
+      detail TEXT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_account_logs_target (target_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账号操作审计日志'`
+  );
 }
 
 async function ensureColumnsAndIndexes(connection) {
@@ -167,6 +190,30 @@ async function ensureColumnsAndIndexes(connection) {
   await ensureColumn(connection, 'teachers', 'email', 'email VARCHAR(255) NULL AFTER phone');
   await ensureColumn(connection, 'teachers', 'department_id', 'department_id INT NULL AFTER email');
   await ensureColumn(connection, 'teachers', 'created_at', 'created_at DATETIME DEFAULT CURRENT_TIMESTAMP AFTER department_id');
+
+  // ====== 账号入库制：users 表扩展字段 ======
+  await ensureColumn(connection, 'users', 'user_no', 'user_no VARCHAR(32) DEFAULT NULL COMMENT "学号/工号"');
+  await ensureColumn(connection, 'users', 'id_card_hash', 'id_card_hash CHAR(64) DEFAULT NULL COMMENT "身份证SHA-256查重"');
+  await ensureColumn(connection, 'users', 'id_card_enc', 'id_card_enc VARCHAR(255) DEFAULT NULL COMMENT "身份证AES加密原文"');
+  await ensureColumn(connection, 'users', 'ref_type', 'ref_type VARCHAR(16) DEFAULT "" COMMENT "student/teacher"');
+  await ensureColumn(connection, 'users', 'ref_id', 'ref_id VARCHAR(64) DEFAULT "" COMMENT "关联总库人员ID"');
+  await ensureColumn(connection, 'users', 'need_change_password', 'need_change_password TINYINT(1) DEFAULT 0 COMMENT "首登强制改密"');
+  await ensureColumn(connection, 'users', 'fail_count', 'fail_count INT DEFAULT 0 COMMENT "连续失败次数"');
+  await ensureColumn(connection, 'users', 'lock_until', 'lock_until DATETIME DEFAULT NULL COMMENT "锁定截止时间"');
+  await ensureColumn(connection, 'users', 'last_login_at', 'last_login_at DATETIME DEFAULT NULL COMMENT "最近登录时间"');
+
+  await ensureIndex(
+    connection,
+    'users',
+    'uk_user_no',
+    'CREATE UNIQUE INDEX uk_user_no ON users (user_no)'
+  );
+  await ensureIndex(
+    connection,
+    'users',
+    'uk_id_card_hash',
+    'CREATE UNIQUE INDEX uk_id_card_hash ON users (id_card_hash)'
+  );
 
   await dropIndexIfExists(connection, 'categories', 'name');
   await ensureIndex(

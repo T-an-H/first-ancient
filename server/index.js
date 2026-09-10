@@ -25,6 +25,8 @@ import qualityEvaluationRoutes from './routes/qualityEvaluations.js';
 import ensureAdminSchema from './bootstrap/ensureAdminSchema.js';
 import ensureProjectSchema from './bootstrap/ensureProjectSchema.js';
 import projectRoutes from './routes/projects.js';
+import accountRoutes from './routes/accounts.js';
+import { authMiddleware, requireAdmin } from './middleware/auth.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -99,6 +101,9 @@ app.use('/api/quality-evaluations', qualityEvaluationRoutes);
 app.use('/api/tier-test', tierTestRoutes);
 app.use('/api/assistant', assistantRoutes);
 app.use('/api', projectRoutes);
+
+// 账号管理路由（仅管理员，需 JWT + admin 角色）
+app.use('/api/accounts', authMiddleware, requireAdmin, accountRoutes);
 
 // ====== 启动服务器 ======
 async function start() {

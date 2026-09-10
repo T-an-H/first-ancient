@@ -35,7 +35,7 @@
               <input
                 v-model="account"
                 type="text"
-                placeholder="请输入账号"
+                placeholder="手机号 / 学号 / 工号"
                 class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none transition-all"
                 @input="error = ''"
               />
@@ -84,12 +84,8 @@
           </button>
 
           <div class="bg-brand-50 border border-brand-200 rounded-lg p-3 text-xs text-brand-700">
-            <p class="font-medium mb-1">测试账号（统一密码：666666）</p>
-            <p>管理员：admin</p>
-            <p>授课教师：teacher-wang、teacher-li</p>
-            <p>企业导师：mentor-zhang</p>
-            <p>学院领导：leader-liu ~ leader-zheng</p>
-            <p>学生：S2024001、S2024002、202511053250</p>
+            <p class="font-medium mb-1">登录方式：手机号 或 学号/工号 + 密码</p>
+            <p>首登密码为身份证后 6 位，登录后需修改密码</p>
           </div>
         </form>
       </div>
@@ -101,7 +97,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { User, Lock, Eye, EyeOff, LogIn, LoaderCircle } from 'lucide-vue-next'
-import { studentLogin, unifiedLogin } from '@/api'
+import { unifiedLogin } from '@/api'
 import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
@@ -112,33 +108,6 @@ const password = ref('')
 const showPassword = ref(false)
 const error = ref('')
 const loading = ref(false)
-
-const MOCK_USERS: Record<string, { password: string; name: string; role: string; sub_role?: string }> = {
-  admin: { password: '666666', name: '系统管理员', role: 'admin' },
-  'teacher-wang': { password: '666666', name: '王老师', role: 'teacher' },
-  'teacher-li': { password: '666666', name: '李老师', role: 'teacher' },
-  'mentor-zhang': { password: '666666', name: '张导师', role: 'teacher', sub_role: 'mentor' },
-  'leader-liu': { password: '666666', name: '刘院长', role: 'teacher', sub_role: 'leader' },
-  'leader-zhou': { password: '666666', name: '周院长', role: 'teacher', sub_role: 'leader' },
-  'leader-wu': { password: '666666', name: '吴院长', role: 'teacher', sub_role: 'leader' },
-  'leader-zheng': { password: '666666', name: '郑院长', role: 'teacher', sub_role: 'leader' },
-  'leader-chen': { password: '666666', name: '陈院长', role: 'teacher', sub_role: 'leader' },
-  'leader-zhang': { password: '666666', name: '张院长', role: 'teacher', sub_role: 'leader' },
-  S2024001: { password: '666666', name: '张明', role: 'student' },
-  S2024002: { password: '666666', name: '李华', role: 'student' },
-  '202511053250': { password: '666666', name: '李傲天', role: 'student' },
-}
-
-function mockPortal(role: string, subRole?: string): string {
-  if (role === 'admin') return '/admin'
-  if (role === 'teacher') {
-    if (subRole === 'mentor') return '/mentor/courses'
-    if (subRole === 'leader') return '/leader/courses'
-    return '/teacher/courses'
-  }
-  if (role === 'student') return '/student/courses'
-  return '/'
-}
 
 function resolveStoreRole(role: string, subRole?: string) {
   if (role === 'teacher' && subRole && subRole !== 'teacher') {
@@ -163,7 +132,6 @@ function getExtraRoleFlags(name: string, subRole?: string) {
 function completeLogin(user: { name: string; role: string; sub_role?: string }, portal: string, options?: {
   token?: string
   userInfo?: unknown
-  demoMode?: boolean
 }) {
   const { isTeacherFromDb, isMentorFromDb } = getExtraRoleFlags(user.name, user.sub_role)
 
@@ -173,12 +141,6 @@ function completeLogin(user: { name: string; role: string; sub_role?: string }, 
 
   if (options?.userInfo) {
     localStorage.setItem('userInfo', JSON.stringify(options.userInfo))
-  }
-
-  if (options?.demoMode) {
-    localStorage.setItem('isDemoMode', 'true')
-  } else {
-    localStorage.removeItem('isDemoMode')
   }
 
   store.login(
@@ -192,24 +154,6 @@ function completeLogin(user: { name: string; role: string; sub_role?: string }, 
   router.push(portal)
 }
 
-function isBackendConnectionError(err: unknown) {
-  const message = err instanceof Error ? err.message : String(err || '')
-  return /failed to fetch|network|timeout|abort|load failed/i.test(message)
-}
-
-function getLoginErrorMessage(...errors: unknown[]) {
-  if (errors.some((error) => isBackendConnectionError(error))) {
-    return '连接后端失败，请确认后端已启动'
-  }
-
-  for (const error of errors) {
-    const message = error instanceof Error ? error.message : String(error || '')
-    if (message) return message
-  }
-
-  return '登录失败，请稍后再试'
-}
-
 async function handleLogin() {
   if (!account.value.trim() || !password.value.trim()) {
     error.value = '请输入账号和密码'
@@ -221,49 +165,25 @@ async function handleLogin() {
 
   const acc = account.value.trim()
   const pwd = password.value.trim()
-  const mock = MOCK_USERS[acc]
 
   try {
     const data = await unifiedLogin(acc, pwd)
-    completeLogin(data.user, data.portal || mockPortal(data.user.role, data.user.sub_role), {
+    if (data.need_change_password) {
+      // 首登强制改密：存 portal，跳改密页
+      localStorage.setItem('token', data.token)
+      localStorage.setItem('userInfo', JSON.stringify({ ...data.user, userNo: data.user?.userNo || '' }))
+      localStorage.setItem('pendingPortal', data.portal || '/')
+      loading.value = false
+      router.push('/change-password')
+      return
+    }
+    completeLogin(data.user, data.portal || '/', {
       token: data.token,
       userInfo: data.user,
     })
-    return
-  } catch (unifiedErr: any) {
-    if (isBackendConnectionError(unifiedErr) && mock && mock.role !== 'student') {
-      if (mock.password !== pwd) {
-        error.value = '账号或密码错误'
-        loading.value = false
-        return
-      }
-
-      completeLogin(mock, mockPortal(mock.role, mock.sub_role), {
-        demoMode: true,
-        userInfo: {
-          account: acc,
-          name: mock.name,
-          role: mock.role,
-          sub_role: mock.sub_role,
-        },
-      })
-      return
-    }
-
-    try {
-      const data = await studentLogin(acc, pwd)
-      completeLogin(
-        { name: data.user.name, role: 'student' },
-        '/student/courses',
-        {
-          token: data.token,
-          userInfo: data.user,
-        },
-      )
-    } catch (studentErr: any) {
-      error.value = getLoginErrorMessage(studentErr, unifiedErr)
-      loading.value = false
-    }
+  } catch (err: any) {
+    error.value = err instanceof Error ? err.message : '登录失败，请稍后再试'
+    loading.value = false
   }
 }
 </script>

@@ -31,6 +31,14 @@ async function request(url: string, options: RequestOptions = {}) {
     ...fetchOptions,
   }
 
+  // 自动注入 JWT token（登录等公开接口无 token 时跳过）
+  const token = localStorage.getItem('token')
+  if (token) {
+    const headers = new Headers(config.headers)
+    headers.set('Authorization', `Bearer ${token}`)
+    config.headers = headers
+  }
+
   try {
     const response = await fetch(`${API_BASE}${url}`, config)
     const data = await response.json().catch(() => ({}))
@@ -62,13 +70,6 @@ export async function studentLogin(studentId: string, password: string) {
   return request('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ studentId, password }),
-  })
-}
-
-export async function studentRegister(data: any) {
-  return request('/auth/register', {
-    method: 'POST',
-    body: JSON.stringify(data),
   })
 }
 
@@ -411,5 +412,65 @@ export async function invokeAssistant(payload: AssistantAgentRequest): Promise<A
     method: 'POST',
     body: JSON.stringify(payload),
     timeoutMs: 30000,
+  })
+}
+
+// ====== 账号管理（管理员入库） ======
+
+export async function createAccountStudent(data: {
+  name: string
+  phone: string
+  idCard: string
+  department?: string
+  className?: string
+}) {
+  return request('/accounts/students', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function createAccountTeacher(data: {
+  name: string
+  phone: string
+  idCard: string
+  subRole?: string
+  department?: string
+}) {
+  return request('/accounts/teachers', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function fetchAccounts(params: Record<string, any> = {}) {
+  const query = buildQuery(params)
+  return request(`/accounts${query ? `?${query}` : ''}`)
+}
+
+export async function updateAccountStatus(id: string, status: 'active' | 'inactive') {
+  return request(`/accounts/${id}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status }),
+  })
+}
+
+export async function resetAccountPassword(id: string) {
+  return request(`/accounts/${id}/password`, {
+    method: 'PUT',
+  })
+}
+
+export async function assignAccount(id: string, data: { department?: string; className?: string }) {
+  return request(`/accounts/${id}/assign`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function changePassword(newPassword: string) {
+  return request('/user/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ newPassword }),
   })
 }

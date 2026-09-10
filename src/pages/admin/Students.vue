@@ -8,15 +8,23 @@
             {{ selectedDepartment ? `${selectedDepartment.name} 下的班级，点击班级查看学生名单` : '请先选择学院，再查看该学院的班级' }}
           </p>
         </div>
-        <div
-          class="flex items-center gap-2 text-xs"
-          :class="loading ? 'text-amber-500' : !selectedDepartment ? 'text-gray-400' : 'text-green-500'"
-        >
-          <span
-            class="h-2 w-2 rounded-full"
-            :class="loading ? 'animate-pulse bg-amber-500' : !selectedDepartment ? 'bg-gray-400' : 'bg-green-500'"
-          />
-          {{ loading ? '加载中...' : !selectedDepartment ? '请先选择学院' : `已连接 · ${classes.length} 个班级` }}
+        <div class="flex items-center gap-3">
+          <button
+            @click="showAddModal = true"
+            class="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-600"
+          >
+            <Plus class="h-4 w-4" /> 添加学生入库
+          </button>
+          <div
+            class="flex items-center gap-2 text-xs"
+            :class="loading ? 'text-amber-500' : !selectedDepartment ? 'text-gray-400' : 'text-green-500'"
+          >
+            <span
+              class="h-2 w-2 rounded-full"
+              :class="loading ? 'animate-pulse bg-amber-500' : !selectedDepartment ? 'bg-gray-400' : 'bg-green-500'"
+            />
+            {{ loading ? '加载中...' : !selectedDepartment ? '请先选择学院' : `已连接 · ${classes.length} 个班级` }}
+          </div>
         </div>
       </div>
 
@@ -140,13 +148,50 @@
       </div>
     </template>
   </div>
+
+  <!-- 添加学生入库弹窗 -->
+  <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showAddModal = false">
+    <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <h2 class="mb-4 text-lg font-bold text-gray-900">添加学生入库</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">姓名 *</label>
+          <input v-model="addForm.name" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">手机号 *</label>
+          <input v-model="addForm.phone" type="text" maxlength="11" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">身份证号 *</label>
+          <input v-model="addForm.idCard" type="text" maxlength="18" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">学院</label>
+          <input v-model="addForm.department" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">班级</label>
+          <input v-model="addForm.className" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+        </div>
+        <p v-if="addError" class="text-sm text-red-500">{{ addError }}</p>
+        <p v-if="addSuccess" class="text-sm text-green-600">{{ addSuccess }}</p>
+      </div>
+      <div class="mt-6 flex justify-end gap-3">
+        <button @click="showAddModal = false" class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100">关闭</button>
+        <button @click="handleAddStudent" :disabled="adding" class="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50">
+          {{ adding ? '入库中...' : '入库' }}
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, ArrowRight, LoaderCircle, Search, Users } from 'lucide-vue-next'
-import { fetchClasses, fetchDepartments, fetchStudents } from '@/api'
+import { ArrowLeft, ArrowRight, LoaderCircle, Search, Users, Plus } from 'lucide-vue-next'
+import { fetchClasses, fetchDepartments, fetchStudents, createAccountStudent } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Department, Student } from '@/types'
 
@@ -167,6 +212,38 @@ const loadingStudents = ref(false)
 const classSearch = ref('')
 const studentSearch = ref('')
 const selectedClassId = ref('')
+
+// 添加学生入库
+const showAddModal = ref(false)
+const adding = ref(false)
+const addError = ref('')
+const addSuccess = ref('')
+const addForm = ref({ name: '', phone: '', idCard: '', department: '', className: '' })
+
+async function handleAddStudent() {
+  addError.value = ''
+  addSuccess.value = ''
+  if (!addForm.value.name.trim() || !addForm.value.phone.trim() || !addForm.value.idCard.trim()) {
+    addError.value = '姓名、手机号、身份证号为必填'
+    return
+  }
+  adding.value = true
+  try {
+    const data = await createAccountStudent({
+      name: addForm.value.name.trim(),
+      phone: addForm.value.phone.trim(),
+      idCard: addForm.value.idCard.trim(),
+      department: addForm.value.department.trim(),
+      className: addForm.value.className.trim(),
+    })
+    addSuccess.value = `入库成功！学号：${data.account.userNo}，初始密码：身份证后 6 位`
+    addForm.value = { name: '', phone: '', idCard: '', department: '', className: '' }
+  } catch (err: any) {
+    addError.value = err instanceof Error ? err.message : '入库失败'
+  } finally {
+    adding.value = false
+  }
+}
 
 const selectedDepartment = computed<Department | null>(() => store.getSelectedDepartment())
 const selectedClass = computed(() => classes.value.find((item) => item.id === selectedClassId.value) || null)
