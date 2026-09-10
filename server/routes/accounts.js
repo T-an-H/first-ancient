@@ -251,19 +251,33 @@ router.get('/', async (req, res) => {
     );
     const [rows] = await pool.query(
       `SELECT id, account, name, department, role, sub_role, status,
-              user_no, ref_type, ref_id, need_change_password, last_login_at, created_at
+              user_no, ref_type, ref_id, need_change_password, last_login_at, created_at,
+              id_card_enc
        FROM users ${whereClause}
        ORDER BY id DESC
        LIMIT ? OFFSET ?`,
       [...params, pageSize, offset]
     );
 
+    // 解密身份证取初始密码
+    const accounts = rows.map((r) => {
+      let initialPassword = '';
+      if (r.id_card_enc) {
+        try {
+          const idCard = decryptIdCard(r.id_card_enc);
+          initialPassword = initialPasswordFromIdCard(idCard);
+        } catch { initialPassword = ''; }
+      }
+      const { id_card_enc, ...rest } = r;
+      return { ...rest, initial_password: initialPassword };
+    });
+
     res.json({
       success: true,
       total: countRow.total,
       page,
       pageSize,
-      accounts: rows,
+      accounts,
     });
   } catch (error) {
     handleRouteError(res, error);

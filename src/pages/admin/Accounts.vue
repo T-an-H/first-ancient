@@ -66,6 +66,7 @@
             <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">手机号</th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">角色</th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">学院</th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">初始密码</th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">状态</th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">操作</th>
           </tr>
@@ -77,6 +78,7 @@
             <td class="px-4 py-3 text-sm text-gray-600">{{ a.account }}</td>
             <td class="px-4 py-3 text-sm text-gray-600">{{ roleLabel(a.role, a.sub_role) }}</td>
             <td class="px-4 py-3 text-sm text-gray-600">{{ a.department || '-' }}</td>
+            <td class="px-4 py-3 text-sm text-gray-600">{{ a.initial_password || '-' }}</td>
             <td class="px-4 py-3">
               <span class="rounded-full px-2 py-0.5 text-xs" :class="a.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'">
                 {{ a.status === 'active' ? '正常' : '禁用' }}
@@ -93,7 +95,7 @@
             </td>
           </tr>
           <tr v-if="accounts.length === 0">
-            <td colspan="7" class="px-4 py-12 text-center text-gray-400">暂无账号数据</td>
+            <td colspan="8" class="px-4 py-12 text-center text-gray-400">暂无账号数据</td>
           </tr>
         </tbody>
       </table>
