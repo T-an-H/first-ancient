@@ -340,21 +340,21 @@ async function handleExportTeachers() {
 async function handleDownloadTemplate() {
   try {
     const XLSX = await import('xlsx')
-    const header = [['姓名', '手机号', '身份证号', '学院', '班级', '身份']]
-    const example = [['张三', '13800138000', '110101200001011234', '计算机学院', '计科2101', '学生']]
+    const header = [['姓名', '手机号', '身份证号', '学院', '身份']]
+    const example = [['张三', '13800138000', '110101200001011234', '计算机学院', '学生']]
     const ws = XLSX.utils.aoa_to_sheet([...header, ...example])
 
-    // 给"身份"列（F 列）加下拉数据验证：学生/教师/企业导师/学院领导
+    // 给"身份"列（E 列）加下拉数据验证：学生/教师/企业导师/学院领导
     const identities = '学生,教师,企业导师,学院领导'
     if (ws['!dataValidations']) {
       ws['!dataValidations'].push({
-        sqref: 'F2:F1000',
+        sqref: 'E2:E1000',
         type: 'list',
         formulae: [`"${identities}"`],
       })
     } else {
       ws['!dataValidations'] = [
-        { sqref: 'F2:F1000', type: 'list', formulae: [`"${identities}"`] },
+        { sqref: 'E2:E1000', type: 'list', formulae: [`"${identities}"`] },
       ]
     }
 
