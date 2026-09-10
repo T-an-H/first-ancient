@@ -17,6 +17,7 @@ const adminNavItems = [
   { to: '/admin/categories', icon: 'calendar' as const, label: '课程管理' },
   { to: '/admin/students', icon: 'users' as const, label: '班级管理' },
   { to: '/admin/teachers', icon: 'userCheck' as const, label: '教师管理' },
+  { to: '/admin/accounts', icon: 'userCheck' as const, label: '账号管理' },
 ]
 
 const teacherNavItems = [
@@ -179,6 +180,14 @@ function renderSidebar() {
 
   const footer = aside.append('div')
     .attr('class', 'p-4 border-t border-white/10')
+
+  footer.append('button')
+    .attr('class', 'flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-black/10 transition-all duration-200 w-full mb-1')
+    .on('click', () => router.push('/change-password-inapp'))
+    .call((sel) => {
+      renderIcon(sel, 'key', 'w-5 h-5 flex-shrink-0')
+      sel.append('span').text('修改密码')
+    })
 
   footer.append('button')
     .attr('class', 'flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-black/10 transition-all duration-200 w-full')

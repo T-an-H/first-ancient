@@ -83,11 +83,34 @@
             </template>
           </button>
 
+          <div class="text-right">
+            <button type="button" @click="showForgotPassword = true" class="text-sm text-brand-600 hover:text-brand-700">
+              忘记密码？
+            </button>
+          </div>
+
           <div class="bg-brand-50 border border-brand-200 rounded-lg p-3 text-xs text-brand-700">
             <p class="font-medium mb-1">登录方式：手机号 或 学号/工号 + 密码</p>
             <p>首登密码为身份证后 6 位，登录后需修改密码</p>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- 忘记密码弹窗 -->
+    <div v-if="showForgotPassword" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showForgotPassword = false">
+      <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h2 class="mb-4 text-lg font-bold text-gray-900">忘记密码</h2>
+        <div class="space-y-3 text-sm text-gray-600">
+          <p>请联系管理员重置您的密码。</p>
+          <p>管理员可以在<strong>账号管理</strong>页面找到您的账号，点击<strong>重置密码</strong>，系统会将密码重置为身份证后 6 位。</p>
+          <p>重置后首次登录时，系统会要求您修改为新密码。</p>
+        </div>
+        <div class="mt-6 flex justify-end">
+          <button @click="showForgotPassword = false" class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+            我知道了
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -108,6 +131,7 @@ const password = ref('')
 const showPassword = ref(false)
 const error = ref('')
 const loading = ref(false)
+const showForgotPassword = ref(false)
 
 function resolveStoreRole(role: string, subRole?: string) {
   if (role === 'teacher' && subRole && subRole !== 'teacher') {

@@ -191,6 +191,12 @@ async function ensureColumnsAndIndexes(connection) {
   await ensureColumn(connection, 'teachers', 'department_id', 'department_id INT NULL AFTER email');
   await ensureColumn(connection, 'teachers', 'created_at', 'created_at DATETIME DEFAULT CURRENT_TIMESTAMP AFTER department_id');
 
+  // ====== 修复：categories/courses 缺失字段 ======
+  await ensureColumn(connection, 'categories', 'created_at', 'created_at DATETIME DEFAULT CURRENT_TIMESTAMP AFTER department_id');
+  await ensureColumn(connection, 'courses', 'description', 'description TEXT NULL AFTER title');
+  await ensureColumn(connection, 'courses', 'cover', 'cover VARCHAR(255) NULL AFTER category_name');
+  await ensureColumn(connection, 'courses', 'created_at', 'created_at DATETIME DEFAULT CURRENT_TIMESTAMP AFTER department_id');
+
   // ====== 账号入库制：users 表扩展字段 ======
   await ensureColumn(connection, 'users', 'user_no', 'user_no VARCHAR(32) DEFAULT NULL COMMENT "学号/工号"');
   await ensureColumn(connection, 'users', 'id_card_hash', 'id_card_hash CHAR(64) DEFAULT NULL COMMENT "身份证SHA-256查重"');

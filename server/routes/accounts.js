@@ -339,4 +339,102 @@ router.put('/:id/assign', async (req, res) => {
   }
 });
 
+// ====== 批量导入 / 导出 ======
+
+/**
+ * POST /api/accounts/import - Excel 批量入库（JSON 行数组）
+ * 接收: { rows: [{ name, phone, idCard, department?, className?, role?, subRole? }] }
+ * 返回: { success, results: { inserted, failed, errors: [] } }
+ */
+router.post('/import', async (req, res) => {
+  const connection = await pool.getConnection();
+  const results = { inserted: 0, failed: 0, errors: [] };
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      try {
+        const refType = row.role === 'teacher' ? 'teacher' : 'student';
+        const role = refType === 'teacher' ? 'teacher' : 'student';
+        const subRole = refType === 'teacher' ? (normalizeText(row.subRole) || 'teacher') : null;
+        await createAccount(connection, {
+          name: row.name,
+          phone: row.phone,
+          idCard: row.idCard,
+          role,
+          subRole,
+          department: row.department,
+          className: row.className,
+          refType,
+          operator: req.user,
+        });
+        results.inserted++;
+      } catch (error) {
+        results.failed++;
+        results.errors.push({ row: i + 1, name: row.name || '', message: error.message || '入库失败' });
+      }
+    }
+    res.json({ success: true, results });
+  } catch (error) {
+    handleRouteError(res, error);
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * GET /api/accounts/export - 导出全部账号（身份证脱敏）
+ */
+router.get('/export', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, account, name, department, role, sub_role, status,
+              user_no, ref_type, ref_id, need_change_password, last_login_at, created_at
+       FROM users ORDER BY id ASC`
+    );
+    // 身份证脱敏：不返回 id_card_enc，只返回脱敏标记
+    const accounts = rows.map((r) => ({
+      ...r,
+      id_card: '******', // 脱敏，不透出
+    }));
+    res.json({ success: true, accounts });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+/**
+ * GET /api/accounts/export-students - 导出在库学生全量数据
+ */
+router.get('/export-students', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT student_id AS 学号, name AS 姓名, phone AS 手机号,
+              department AS 学院, class_name AS 班级, status AS 状态
+       FROM students ORDER BY student_id ASC`
+    );
+    res.json({ success: true, students: rows });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+/**
+ * GET /api/accounts/export-teachers - 导出在库教师全量数据
+ */
+router.get('/export-teachers', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT t.name AS 姓名, t.phone AS 手机号, t.email AS 邮箱,
+              d.name AS 学院
+       FROM teachers t
+       LEFT JOIN departments d ON d.id = t.department_id
+       ORDER BY t.name ASC`
+    );
+    res.json({ success: true, teachers: rows });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
 export default router;

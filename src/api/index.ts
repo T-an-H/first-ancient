@@ -468,9 +468,35 @@ export async function assignAccount(id: string, data: { department?: string; cla
   })
 }
 
-export async function changePassword(newPassword: string) {
+export async function changePassword(newPassword: string, oldPassword?: string) {
   return request('/user/change-password', {
     method: 'POST',
-    body: JSON.stringify({ newPassword }),
+    body: JSON.stringify({ newPassword, oldPassword }),
+  })
+}
+
+export async function importAccounts(rows: any[]) {
+  return request('/accounts/import', {
+    method: 'POST',
+    body: JSON.stringify({ rows }),
+    timeoutMs: 30000,
+  })
+}
+
+export async function exportAccounts() {
+  return request('/accounts/export', {
+    timeoutMs: 30000,
+  })
+}
+
+export async function exportStudents() {
+  return request('/accounts/export-students', {
+    timeoutMs: 30000,
+  })
+}
+
+export async function exportTeachers() {
+  return request('/accounts/export-teachers', {
+    timeoutMs: 30000,
   })
 }

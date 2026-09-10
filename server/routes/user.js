@@ -134,7 +134,8 @@ router.post('/login', async (req, res) => {
 
 /**
  * POST /api/user/change-password - 修改密码（首登强制改密 / 日常改密）
- * 需 JWT，接收: { newPassword }
+ * 需 JWT，接收: { newPassword, oldPassword? }
+ * 有 oldPassword 时先验旧密码（登录后改密场景）；无则跳过（首登场景）
  */
 router.post('/change-password', async (req, res) => {
   try {
@@ -157,6 +158,22 @@ router.post('/change-password', async (req, res) => {
     }
     if (!/[a-zA-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
       return res.status(400).json({ success: false, message: '新密码需同时包含字母和数字' });
+    }
+
+    // 有 oldPassword 时先验旧密码（登录后改密场景）
+    const oldPassword = String(req.body?.oldPassword || '');
+    if (oldPassword) {
+      const [userRows] = await pool.query(
+        'SELECT password FROM users WHERE id = ? LIMIT 1',
+        [decoded.id]
+      );
+      if (userRows.length === 0) {
+        return res.status(404).json({ success: false, message: '用户不存在' });
+      }
+      const isOldMatch = await bcrypt.compare(oldPassword, userRows[0].password);
+      if (!isOldMatch) {
+        return res.status(400).json({ success: false, message: '旧密码不正确' });
+      }
     }
 
     const salt = await bcrypt.genSalt(10);

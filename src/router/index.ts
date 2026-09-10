@@ -15,6 +15,11 @@ const router = createRouter({
       component: () => import('@/pages/ChangePassword.vue'),
     },
     {
+      path: '/change-password-inapp',
+      name: 'ChangePasswordInApp',
+      component: () => import('@/pages/ChangePasswordInApp.vue'),
+    },
+    {
       path: '/admin',
       component: Layout,
       children: [
@@ -42,6 +47,11 @@ const router = createRouter({
           path: 'teachers',
           name: 'AdminTeachers',
           component: () => import('@/pages/admin/Teachers.vue'),
+        },
+        {
+          path: 'accounts',
+          name: 'AdminAccounts',
+          component: () => import('@/pages/admin/Accounts.vue'),
         },
         {
           path: 'students/:id',

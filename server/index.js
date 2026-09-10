@@ -117,8 +117,7 @@ async function start() {
     void warmAssistantModel();
     console.log(`✅ 后端服务已启动！`);
     console.log(`  地址: http://localhost:${PORT}`);
-    console.log(`  登录API: http://localhost:${PORT}/api/auth/login`);
-    console.log(`  注册API: http://localhost:${PORT}/api/auth/register`);
+    console.log(`  登录API: http://localhost:${PORT}/api/user/login`);
     console.log(`  健康检查: http://localhost:${PORT}/api/health`);
   });
 }

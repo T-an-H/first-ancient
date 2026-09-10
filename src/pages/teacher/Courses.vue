@@ -510,7 +510,7 @@ import {
 } from '@/types'
 import type { EvalTemplate, EvalType, Evaluation, EvalFrequency, OverdueRule, EvaluationConfig, Course } from '@/types'
 import { getNow } from '@/lib/date'
-import { fetchTeacherCourses } from '@/api'
+import { fetchTeacherCourses, fetchAccounts } from '@/api'
 
 
 const router = useRouter()
@@ -1293,7 +1293,7 @@ async function handleImportCourseInfo() {
   input.click()
 }
 
-/** Excel 导入学员 */
+/** Excel 导入学员（核库：只加入总库中已有的学生，未入库名单单独提示） */
 async function handleImportStudents() {
   const input = document.createElement('input')
   input.type = 'file'
@@ -1309,27 +1309,50 @@ async function handleImportStudents() {
     const rows: any[] = XLSX.utils.sheet_to_json(sheet)
 
     let imported = 0
+    const notInRepo: string[] = []
+
     for (const row of rows) {
       const name = row['姓名'] || row['name'] || ''
       const studentId = row['学号'] || row['studentId'] || ''
       const className = row['班级'] || row['className'] || '未分班'
       if (!name) continue
 
+      // 先从本地 store 找
       let stu = store.students.find(s => s.studentId === studentId || s.name === name)
+
+      // 本地没找到，查总库
       if (!stu) {
-        const newId = `stu-import-${Date.now()}-${Math.random()}`
-        store.addStudent({
-          id: newId,
-          name,
-          studentId: studentId || undefined,
-          className,
-          phone: row['手机号'] || row['phone'] || '',
-          email: row['邮箱'] || row['email'] || '',
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
-          joinDate: getNow().toISOString().split('T')[0],
-          status: 'active',
-        })
-        stu = store.students.find(s => s.id === newId)!
+        try {
+          const keyword = studentId || name
+          const repoData = await fetchAccounts({ refType: 'student', keyword, pageSize: 5 })
+          const match = (repoData.accounts || []).find(
+            (a: any) => a.name === name || a.user_no === studentId || a.account === studentId,
+          )
+          if (match) {
+            // 总库命中，加入本地 store
+            const newId = match.ref_id || match.user_no || `stu-${Date.now()}`
+            store.addStudent({
+              id: newId,
+              name: match.name,
+              studentId: match.user_no || studentId || undefined,
+              className,
+              phone: match.account || '',
+              email: '',
+              avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
+              joinDate: getNow().toISOString().split('T')[0],
+              status: 'active',
+            })
+            stu = store.students.find(s => s.id === newId)!
+          }
+        } catch {
+          // 查询失败，跳过
+        }
+      }
+
+      // 仍然没找到 → 不在总库，记录提示
+      if (!stu) {
+        notInRepo.push(`${name}（${studentId || '无学号'}）`)
+        continue
       }
 
       const enrolled = store.enrollments.some(e => e.studentId === stu!.id && e.courseId === selectedCourseId.value)
@@ -1346,7 +1369,12 @@ async function handleImportStudents() {
       }
       imported++
     }
-    alert(`成功导入 ${imported} 名学生`)
+
+    if (notInRepo.length > 0) {
+      alert(`成功导入 ${imported} 名学生\n\n以下 ${notInRepo.length} 名学生不在系统总库，请联系管理员添加入库：\n${notInRepo.join('、')}`)
+    } else {
+      alert(`成功导入 ${imported} 名学生`)
+    }
   }
   input.click()
 }
