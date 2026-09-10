@@ -415,8 +415,8 @@ async function handleStudentImport(e: Event) {
 async function handleDownloadStudentTemplate() {
   try {
     const XLSX = await import('xlsx')
-    const header = [['姓名', '手机号', '身份证号', '学院', '班级']]
-    const example = [['张三', '13800138000', '110101200001011234', '计算机学院', '计科2101']]
+    const header = [['姓名', '手机号', '身份证号', '学院']]
+    const example = [['张三', '13800138000', '110101200001011234', '计算机学院']]
     const ws = XLSX.utils.aoa_to_sheet([...header, ...example])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, '学生导入模板')
