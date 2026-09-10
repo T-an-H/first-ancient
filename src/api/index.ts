@@ -459,6 +459,11 @@ export async function fetchAccounts(params: Record<string, any> = {}) {
   return request(`/accounts${query ? `?${query}` : ''}`)
 }
 
+export async function fetchStudentsPool(keyword: string) {
+  const query = buildQuery({ keyword })
+  return request(`/teaching/students-pool${query ? `?${query}` : ''}`)
+}
+
 export async function updateAccountStatus(id: string, status: 'active' | 'inactive') {
   return request(`/accounts/${id}/status`, {
     method: 'PUT',

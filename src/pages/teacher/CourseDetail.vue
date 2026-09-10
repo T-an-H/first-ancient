@@ -2110,7 +2110,7 @@ import {
   bulkImportGroups,
   bulkImportSchedules,
   bulkImportScores,
-  fetchAccounts,
+  fetchStudentsPool,
   fetchCourseStudents,
   fetchSchedules,
   saveCourseGroups,
@@ -2825,11 +2825,19 @@ async function searchRepoStudents() {
   }
   repoSearchTimer = setTimeout(async () => {
     repoSearching.value = true
+    repoAddMsg.value = ''
     try {
-      const data = await fetchAccounts({ refType: 'student', keyword: kw, pageSize: 20 })
-      repoSearchResults.value = data.accounts || []
-    } catch {
+      const data = await fetchStudentsPool(kw)
+      repoSearchResults.value = data.students || []
+    } catch (err: any) {
       repoSearchResults.value = []
+      if (err?.status === 401 || err?.status === 403) {
+        repoAddMsg.value = '无权限，请重新登录'
+        repoAddMsgType.value = 'error'
+      } else {
+        repoAddMsg.value = '网络异常，请稍后重试'
+        repoAddMsgType.value = 'error'
+      }
     } finally {
       repoSearching.value = false
     }

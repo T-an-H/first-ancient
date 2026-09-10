@@ -243,4 +243,24 @@ router.post('/groups/bulk', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
+/** GET /api/teaching/students-pool?keyword=xxx - 教师搜索总库学生（不返回敏感字段） */
+router.get('/students-pool', async (req, res) => {
+  try {
+    const keyword = String(req.query.keyword || '').trim();
+    if (!keyword) return res.json({ success: true, students: [] });
+
+    const like = `%${keyword}%`;
+    const [rows] = await pool.execute(
+      `SELECT id, user_no, name, ref_id
+       FROM users
+       WHERE ref_type = 'student' AND status = 'active'
+         AND (name LIKE ? OR user_no LIKE ?)
+       ORDER BY name ASC
+       LIMIT 20`,
+      [like, like]
+    );
+    res.json({ success: true, students: rows });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
 export default router;
