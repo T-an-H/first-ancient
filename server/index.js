@@ -59,6 +59,9 @@ app.use(cors({
 // 解析 JSON 请求体
 app.use(express.json({ limit: '12mb' }));
 
+// 全链路鉴权：写接口（POST/PUT/DELETE）必须 JWT，读接口放行
+app.use(authMiddleware);
+
 // ====== 路由 ======
 
 // 健康检查
@@ -102,8 +105,8 @@ app.use('/api/tier-test', tierTestRoutes);
 app.use('/api/assistant', assistantRoutes);
 app.use('/api', projectRoutes);
 
-// 账号管理路由（仅管理员，需 JWT + admin 角色）
-app.use('/api/accounts', authMiddleware, requireAdmin, accountRoutes);
+// 账号管理路由（仅管理员，authMiddleware 已全局挂载）
+app.use('/api/accounts', requireAdmin, accountRoutes);
 
 // ====== 启动服务器 ======
 async function start() {

@@ -14,9 +14,15 @@ router.post('/enrollments/bulk', async (req, res) => {
     const { enrollments } = req.body;
     if (!enrollments?.length) return res.json({ success: true, inserted: 0 });
 
-    let inserted = 0, skipped = 0;
+    let inserted = 0, skipped = 0, rejected = 0;
     for (const e of enrollments) {
       if (!e.studentId || !e.courseId) { skipped++; continue; }
+      // 校验学生必须在总库中
+      const [student] = await pool.execute(
+        'SELECT id FROM students WHERE id = ? OR student_id = ? LIMIT 1',
+        [e.studentId, e.studentId]
+      );
+      if (student.length === 0) { rejected++; continue; }
       const [exist] = await pool.execute(
         'SELECT id FROM enrollments WHERE student_id = ? AND course_id = ?',
         [e.studentId, e.courseId]
@@ -28,7 +34,7 @@ router.post('/enrollments/bulk', async (req, res) => {
       );
       inserted++;
     }
-    res.json({ success: true, message: `导入 ${inserted} 条选课${skipped ? `，跳过 ${skipped} 条` : ''}`, inserted, skipped });
+    res.json({ success: true, message: `导入 ${inserted} 条选课${skipped ? `，跳过 ${skipped} 条` : ''}${rejected ? `，拒绝 ${rejected} 条（不在总库）` : ''}`, inserted, skipped, rejected });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 

@@ -1471,41 +1471,42 @@
         </div>
       </Teleport>
 
-      <!-- ====== 新增学生弹窗（加入本课程） ====== -->
+      <!-- ====== 新增学生弹窗（从总库选人加入本课程） ====== -->
       <Teleport to="body">
         <div v-if="showAddStudentModal" class="fixed inset-0 z-50 flex items-center justify-center">
           <div class="absolute inset-0 bg-black/50" @click="showAddStudentModal = false" />
-          <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+          <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
             <div class="flex items-center justify-between mb-4">
-              <h3 class="font-semibold text-gray-900 text-lg">新增学生</h3>
+              <h3 class="font-semibold text-gray-900 text-lg">从总库选择学生</h3>
               <button @click="showAddStudentModal = false" class="text-gray-400 hover:text-gray-600"><X class="w-4 h-4" /></button>
             </div>
-            <p class="text-xs text-gray-400 mb-4">新增单个学生并将其加入本课程（用于补录班级导入遗漏的学生）</p>
+            <p class="text-xs text-gray-400 mb-4">搜索系统总库中的学生并加入本课程；不在库的学生请联系管理员添加入库</p>
             <div class="space-y-3">
-              <div>
-                <label class="text-xs text-gray-500 block mb-1">学生姓名 <span class="text-red-500">*</span></label>
-                <input v-model="addStudentForm.name" placeholder="请输入学生姓名"
-                  class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 outline-none" />
+              <div class="relative">
+                <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input v-model="repoSearchKeyword" @input="searchRepoStudents" placeholder="搜索姓名 / 学号 / 手机号"
+                  class="w-full pl-10 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 outline-none" />
               </div>
-              <div>
-                <label class="text-xs text-gray-500 block mb-1">学号</label>
-                <input v-model="addStudentForm.studentId" placeholder="可选，输入学号（留空将自动生成）"
-                  class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 outline-none" />
+              <div class="max-h-64 overflow-y-auto rounded-lg border border-gray-100">
+                <div v-if="repoSearching" class="py-6 text-center text-sm text-gray-400">搜索中...</div>
+                <div v-else-if="repoSearchResults.length === 0" class="py-6 text-center text-sm text-gray-400">
+                  {{ repoSearchKeyword ? '未找到匹配学生，请联系管理员添加入库' : '请输入关键词搜索总库' }}
+                </div>
+                <div v-else>
+                  <div v-for="s in repoSearchResults" :key="s.id"
+                    @click="addRepoStudentToCourse(s)"
+                    class="flex items-center justify-between px-4 py-3 cursor-pointer border-b border-gray-50 last:border-0 hover:bg-emerald-50">
+                    <div>
+                      <p class="text-sm font-medium text-gray-900">{{ s.name }}</p>
+                      <p class="text-xs text-gray-400">{{ s.user_no || '-' }} · {{ s.account || '-' }}</p>
+                    </div>
+                    <span class="text-xs text-emerald-600">加入</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label class="text-xs text-gray-500 block mb-1">所属班级</label>
-                <select v-model="addStudentForm.className"
-                  class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:border-emerald-400 outline-none">
-                  <option value="">不分配班级（未分班）</option>
-                  <option v-for="cb in classBlocks.filter(c => c.className)" :key="cb.className" :value="cb.className">
-                    {{ cb.className }}
-                  </option>
-                </select>
-              </div>
+              <p v-if="repoAddMsg" class="text-sm" :class="repoAddMsgType === 'error' ? 'text-red-500' : 'text-emerald-600'">{{ repoAddMsg }}</p>
               <div class="flex gap-2 pt-2">
-                <button @click="showAddStudentModal = false" class="flex-1 px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">取消</button>
-                <button @click="saveAddStudent" :disabled="!addStudentForm.name.trim()"
-                  class="flex-1 px-4 py-2 text-sm text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg">加入课程</button>
+                <button @click="showAddStudentModal = false" class="flex-1 px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">关闭</button>
               </div>
             </div>
           </div>
@@ -1985,6 +1986,7 @@ import {
   bulkImportGroups,
   bulkImportSchedules,
   bulkImportScores,
+  fetchAccounts,
   fetchCourseStudents,
   fetchSchedules,
   updateStudent as syncStudent,
@@ -2377,57 +2379,60 @@ async function saveAddClass() {
   showAddClass.value = false
   alert(msg)
 }
-// 新增单个学生（加入本课程）
+// 从总库选择学生加入本课程
 const showAddStudentModal = ref(false)
-const addStudentForm = ref({ name: '', studentId: '', className: '' })
+const repoSearchKeyword = ref('')
+const repoSearchResults = ref<any[]>([])
+const repoSearching = ref(false)
+const repoAddMsg = ref('')
+const repoAddMsgType = ref('')
+let repoSearchTimer: ReturnType<typeof setTimeout> | null = null
 
 function openAddStudentModal() {
-  addStudentForm.value = { name: '', studentId: '', className: '' }
+  repoSearchKeyword.value = ''
+  repoSearchResults.value = []
+  repoAddMsg.value = ''
   showAddStudentModal.value = true
 }
 
-async function saveAddStudent() {
-  if (!courseId.value) return
-  const name = addStudentForm.value.name.trim()
-  if (!name) return
-  const sid = addStudentForm.value.studentId.trim()
-  const targetClass = addStudentForm.value.className.trim()
-  // 查找已有学生（按学号/ID 或姓名）
-  let student = sid
-    ? store.students.find((s) => s.id === sid || s.studentId === sid || s.name === name)
-    : store.students.find((s) => s.name === name)
-  if (!student) {
-    const id = sid || `stu-${Date.now()}`
-    store.addStudent({
-      id,
-      name,
-      phone: '',
-      email: '',
-      avatar: '',
-      joinDate: getNow().toISOString().split('T')[0],
-      status: 'active',
-      studentId: sid || undefined,
-      className: targetClass || undefined,
-    })
-    student = store.students.find((s) => s.id === id)!
-  } else if (targetClass) {
-    // 已有学生，若指定班级则更新其班级归属
-    store.updateStudent(student.id, { className: targetClass })
-  }
-  // 检查是否已选本课程
-  const exists = store.enrollments.some(
-    (e) => e.courseId === courseId.value && e.studentId === student!.id && e.status !== 'dropped'
-  )
-  if (exists) {
-    alert(`学生"${name}"已在本课程中，无需重复加入`)
-    showAddStudentModal.value = false
+async function searchRepoStudents() {
+  if (repoSearchTimer) clearTimeout(repoSearchTimer)
+  const kw = repoSearchKeyword.value.trim()
+  if (!kw) {
+    repoSearchResults.value = []
     return
   }
-  const enrId = `enr-${courseId.value}-${student!.id}-${Date.now()}`
+  repoSearchTimer = setTimeout(async () => {
+    repoSearching.value = true
+    try {
+      const data = await fetchAccounts({ refType: 'student', keyword: kw, pageSize: 20 })
+      repoSearchResults.value = data.accounts || []
+    } catch {
+      repoSearchResults.value = []
+    } finally {
+      repoSearching.value = false
+    }
+  }, 300)
+}
+
+async function addRepoStudentToCourse(s: any) {
+  if (!courseId.value) return
+  repoAddMsg.value = ''
+  const studentId = s.ref_id || s.user_no || s.id
+  // 检查是否已选本课程
+  const exists = store.enrollments.some(
+    (e) => e.courseId === courseId.value && e.studentId === studentId && e.status !== 'dropped'
+  )
+  if (exists) {
+    repoAddMsg.value = `学生"${s.name}"已在本课程中，无需重复加入`
+    repoAddMsgType.value = 'error'
+    return
+  }
+  const enrId = `enr-${courseId.value}-${studentId}-${Date.now()}`
   store.addEnrollment({
     id: enrId,
     courseId: courseId.value,
-    studentId: student!.id,
+    studentId,
     scheduleId: '',
     status: 'enrolled',
     progress: 0,
@@ -2435,10 +2440,11 @@ async function saveAddStudent() {
   })
   // 同步到 MySQL
   try {
-    await bulkImportEnrollments([{ id: enrId, studentId: student!.id, courseId: courseId.value }])
+    await bulkImportEnrollments([{ id: enrId, studentId, courseId: courseId.value }])
   } catch {}
-  showAddStudentModal.value = false
-  alert(`已将"${name}"加入本课程`)
+  repoAddMsg.value = `已将"${s.name}"加入本课程`
+  repoAddMsgType.value = 'success'
+  repoSearchResults.value = repoSearchResults.value.filter((r) => r.id !== s.id)
 }
 // 编辑班级
 const showEditClassModal = ref(false)
