@@ -475,16 +475,22 @@ router.get('/export-students', async (req, res) => {
     const [rows] = await pool.query(
       `SELECT s.student_id AS 学号, s.name AS 姓名, s.phone AS 手机号,
               s.department AS 学院, s.class_name AS 班级, s.status AS 状态,
-              u.need_change_password AS 需改密
+              u.id_card_enc, u.need_change_password AS 需改密
        FROM students s
        LEFT JOIN users u ON u.ref_id = s.id AND u.ref_type = 'student'
        ORDER BY s.student_id ASC`
     );
-    const students = rows.map((r) => ({
-      ...r,
-      初始密码: r.需改密 === 1 ? '666666' : '已修改',
-      需改密: undefined,
-    }));
+    const students = rows.map((r) => {
+      let initialPassword = '已修改';
+      if (r.需改密 === 1 && r.id_card_enc) {
+        try {
+          const idCard = decryptIdCard(r.id_card_enc);
+          initialPassword = initialPasswordFromIdCard(idCard);
+        } catch { initialPassword = '666666'; }
+      }
+      const { id_card_enc, 需改密, ...rest } = r;
+      return { ...rest, 初始密码: initialPassword };
+    });
     res.json({ success: true, students });
   } catch (error) {
     handleRouteError(res, error);
@@ -501,18 +507,28 @@ router.get('/export-teachers', async (req, res) => {
               d.name AS 学院,
               u.user_no AS 工号,
               u.sub_role AS 身份,
+              u.id_card_enc,
               u.need_change_password AS 需改密
        FROM teachers t
        LEFT JOIN departments d ON d.id = t.department_id
        LEFT JOIN users u ON u.ref_id = CONCAT(t.id) AND u.ref_type = 'teacher'
        ORDER BY t.name ASC`
     );
-    const teachers = rows.map((r) => ({
-      ...r,
-      身份: r.身份 === 'mentor' ? '企业导师' : r.身份 === 'leader' ? '学院领导' : '教师',
-      初始密码: r.需改密 === 1 ? '666666' : '已修改',
-      需改密: undefined,
-    }));
+    const teachers = rows.map((r) => {
+      let initialPassword = '已修改';
+      if (r.需改密 === 1 && r.id_card_enc) {
+        try {
+          const idCard = decryptIdCard(r.id_card_enc);
+          initialPassword = initialPasswordFromIdCard(idCard);
+        } catch { initialPassword = '666666'; }
+      }
+      const { id_card_enc, 需改密, ...rest } = r;
+      return {
+        ...rest,
+        身份: r.身份 === 'mentor' ? '企业导师' : r.身份 === 'leader' ? '学院领导' : '教师',
+        初始密码: initialPassword,
+      };
+    });
     res.json({ success: true, teachers });
   } catch (error) {
     handleRouteError(res, error);
