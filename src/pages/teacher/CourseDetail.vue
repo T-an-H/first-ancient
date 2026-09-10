@@ -1986,7 +1986,10 @@ import {
   bulkImportGroups,
   bulkImportSchedules,
   bulkImportScores,
-  fetchAccounts,
+  fetchStudentsPool,
+  fetchCourseClasses,
+  createCourseClass,
+  deleteCourseClass,
   fetchCourseStudents,
   fetchSchedules,
   updateStudent as syncStudent,
@@ -2082,8 +2085,9 @@ onMounted(async () => {
   } catch (e) {
     console.error('加载课程学员失败:', e)
   }
+  // 加载课程班级列表（含空班级）
+  await loadCourseClasses()
   await store.syncCourseEvaluationState(courseId.value)
-  await store.syncQualityEvaluationState(courseId.value)
   ensureWrittenExams()
   normalizeProjectShares()
   syncProjectWeightLocksFromStore()
@@ -2307,6 +2311,14 @@ async function saveAddClass() {
   let createdCount = 0
   const course = store.courses.find((c: any) => c.id === courseId.value)
 
+  // 持久化班级记录（无论有无成员）
+  try {
+    await createCourseClass(courseId.value, className)
+    if (!courseClassNames.value.includes(className)) {
+      courseClassNames.value.push(className)
+    }
+  } catch {}
+
   for (const m of addClassMembers.value) {
     // 查找已有学生（按学号/ID 或姓名）
     let student = m.studentId
@@ -2474,6 +2486,9 @@ function handleDeleteClass(className: string) {
       store.updateStudent(stu.id, { className: '' })
     }
   }
+  // 同步删除课程班级记录
+  try { void deleteCourseClass(courseId.value, className) } catch {}
+  courseClassNames.value = courseClassNames.value.filter(n => n !== className)
 }
 // 一键分组
 const showOneClickGroup = ref(false)
@@ -2535,6 +2550,7 @@ function normalizeGradeConfigForTemplate() {
 
 watch(activeTab, (tab) => {
   if (tab === 'grade-config') normalizeGradeConfigForTemplate()
+  if (tab === 'students') void loadCourseClasses()
 })
 /** 素质评价加成上限（0-20分） */
 const updateQualityMaxBonus = (val: number) => {
@@ -3654,7 +3670,19 @@ const courseGroups = computed(() => {
 
 // ====== 新版学生管理：班级板块 computed ======
 
-/** 班级板块：按学生 className 分组 */
+/** 课程独立班级列表（从 course_classes 表拉取，含空班级） */
+const courseClassNames = ref<string[]>([])
+
+/** 加载课程相关班级列表 */
+async function loadCourseClasses() {
+  if (!courseId.value) return
+  try {
+    const data = await fetchCourseClasses(courseId.value)
+    courseClassNames.value = data.classes || []
+  } catch { courseClassNames.value = [] }
+}
+
+/** 班级板块：按学生 className 分组 + 合并独立班级列表 */
 const classBlocks = computed(() => {
   if (!courseId.value) return []
   const classMap = new Map<string, typeof enrolledStudents.value>()
@@ -3663,6 +3691,10 @@ const classBlocks = computed(() => {
     const cn = item.student.className || ''
     if (!classMap.has(cn)) classMap.set(cn, [])
     classMap.get(cn)!.push(item)
+  }
+  // 补入独立班级列表中的空班级
+  for (const cn of courseClassNames.value) {
+    if (!classMap.has(cn)) classMap.set(cn, [])
   }
   return Array.from(classMap.entries())
     .map(([className, items]) => ({

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div id="d3-sidebar-root" class="flex-shrink-0"></div>
 </template>
 <script setup lang="ts">

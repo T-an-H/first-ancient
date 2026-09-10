@@ -243,4 +243,83 @@ router.post('/groups/bulk', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
+/** GET /api/teaching/students-pool?keyword=xxx - 教师搜索总库学生（不返回敏感字段） */
+router.get('/students-pool', async (req, res) => {
+  try {
+    const keyword = String(req.query.keyword || '').trim();
+    if (!keyword) return res.json({ success: true, students: [] });
+
+    const like = `%${keyword}%`;
+    const [rows] = await pool.execute(
+      `SELECT id, user_no, name, ref_id
+       FROM users
+       WHERE ref_type = 'student' AND status = 'active'
+         AND (name LIKE ? OR user_no LIKE ?)
+       ORDER BY name ASC
+       LIMIT 20`,
+      [like, like]
+    );
+    res.json({ success: true, students: rows });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+// ==================== 课程班级 (Course Classes) ====================
+
+const COURSE_CLASSES_DDL = `CREATE TABLE IF NOT EXISTS course_classes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  course_id VARCHAR(64) NOT NULL,
+  class_name VARCHAR(100) NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_course_class (course_id, class_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`;
+
+/** GET /api/teaching/course-classes?courseId=xxx */
+router.get('/course-classes', async (req, res) => {
+  try {
+    const courseId = String(req.query.courseId || '').trim();
+    if (!courseId) return res.json({ success: true, classes: [] });
+    await pool.execute(COURSE_CLASSES_DDL);
+    const [rows] = await pool.execute(
+      'SELECT class_name FROM course_classes WHERE course_id = ? ORDER BY class_name',
+      [courseId]
+    );
+    res.json({ success: true, classes: rows.map(r => r.class_name) });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+/** POST /api/teaching/course-classes  body: { courseId, className } */
+router.post('/course-classes', async (req, res) => {
+  try {
+    const courseId = String(req.body?.courseId || '').trim();
+    const className = String(req.body?.className || '').trim();
+    if (!courseId || !className) return res.status(400).json({ success: false, message: 'courseId 和 className 必填' });
+    await pool.execute(COURSE_CLASSES_DDL);
+    const [exist] = await pool.execute(
+      'SELECT id FROM course_classes WHERE course_id = ? AND class_name = ?',
+      [courseId, className]
+    );
+    if (exist.length === 0) {
+      await pool.execute(
+        'INSERT INTO course_classes (course_id, class_name) VALUES (?, ?)',
+        [courseId, className]
+      );
+    }
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+/** DELETE /api/teaching/course-classes?courseId=xxx&className=xxx */
+router.delete('/course-classes', async (req, res) => {
+  try {
+    const courseId = String(req.query.courseId || '').trim();
+    const className = String(req.query.className || '').trim();
+    if (!courseId || !className) return res.status(400).json({ success: false, message: 'courseId 和 className 必填' });
+    await pool.execute(
+      'DELETE FROM course_classes WHERE course_id = ? AND class_name = ?',
+      [courseId, className]
+    );
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
 export default router;

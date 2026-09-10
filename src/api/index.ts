@@ -452,6 +452,25 @@ export async function fetchAccounts(params: Record<string, any> = {}) {
   return request(`/accounts${query ? `?${query}` : ''}`)
 }
 
+export async function fetchStudentsPool(keyword: string) {
+  const query = buildQuery({ keyword })
+  return request(`/teaching/students-pool${query ? `?${query}` : ''}`)
+}
+
+export async function fetchCourseClasses(courseId: string) {
+  const query = buildQuery({ courseId })
+  return request(`/teaching/course-classes${query ? `?${query}` : ''}`)
+}
+
+export async function createCourseClass(courseId: string, className: string) {
+  return request('/teaching/course-classes', { method: 'POST', body: JSON.stringify({ courseId, className }) })
+}
+
+export async function deleteCourseClass(courseId: string, className: string) {
+  const query = buildQuery({ courseId, className })
+  return request(`/teaching/course-classes${query ? `?${query}` : ''}`, { method: 'DELETE' })
+}
+
 export async function updateAccountStatus(id: string, status: 'active' | 'inactive') {
   return request(`/accounts/${id}/status`, {
     method: 'PUT',
