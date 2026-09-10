@@ -510,7 +510,7 @@ import {
 } from '@/types'
 import type { EvalTemplate, EvalType, Evaluation, EvalFrequency, OverdueRule, EvaluationConfig, Course } from '@/types'
 import { getNow } from '@/lib/date'
-import { fetchTeacherCourses, fetchAccounts } from '@/api'
+import { fetchTeacherCourses, fetchStudentsPool } from '@/api'
 
 
 const router = useRouter()
@@ -1324,9 +1324,9 @@ async function handleImportStudents() {
       if (!stu) {
         try {
           const keyword = studentId || name
-          const repoData = await fetchAccounts({ refType: 'student', keyword, pageSize: 5 })
-          const match = (repoData.accounts || []).find(
-            (a: any) => a.name === name || a.user_no === studentId || a.account === studentId,
+          const repoData = await fetchStudentsPool(keyword)
+          const match = (repoData.students || []).find(
+            (a: any) => a.name === name || a.user_no === studentId,
           )
           if (match) {
             // 总库命中，加入本地 store

@@ -2417,8 +2417,8 @@ async function searchRepoStudents() {
   repoSearchTimer = setTimeout(async () => {
     repoSearching.value = true
     try {
-      const data = await fetchAccounts({ refType: 'student', keyword: kw, pageSize: 20 })
-      repoSearchResults.value = data.accounts || []
+      const data = await fetchStudentsPool(kw)
+      repoSearchResults.value = data.students || []
     } catch {
       repoSearchResults.value = []
     } finally {

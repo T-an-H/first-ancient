@@ -254,10 +254,10 @@ router.get('/students-pool', async (req, res) => {
       `SELECT id, user_no, name, ref_id
        FROM users
        WHERE ref_type = 'student' AND status = 'active'
-         AND (name LIKE ? OR user_no LIKE ?)
+         AND (name LIKE ? OR user_no LIKE ? OR account LIKE ?)
        ORDER BY name ASC
        LIMIT 20`,
-      [like, like]
+      [like, like, like]
     );
     res.json({ success: true, students: rows });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
