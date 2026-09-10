@@ -5,9 +5,20 @@
         <h1 class="text-2xl font-bold text-gray-900">学生管理</h1>
         <p class="mt-1 text-sm text-gray-500">学生账号来自数据库，以下信息与数据库同步。</p>
       </div>
-      <button @click="showAddModal = true" class="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-600">
-        <Plus class="h-4 w-4" /> 添加学生入库
-      </button>
+      <div class="flex flex-wrap items-center gap-3">
+        <button @click="showAddModal = true" class="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-600">
+          <Plus class="h-4 w-4" /> 添加学生
+        </button>
+        <button @click="handleDownloadStudentTemplate"
+          class="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">
+          <FileSpreadsheet class="h-4 w-4" /> 模板下载
+        </button>
+        <button @click="triggerStudentImport"
+          class="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-600">
+          <Upload class="h-4 w-4" /> 批量添加
+        </button>
+        <input ref="studentImportInput" type="file" accept=".xlsx,.xls,.csv" class="hidden" @change="handleStudentImport" />
+      </div>
     </div>
 
     <div class="grid gap-4 md:grid-cols-3">
@@ -211,13 +222,29 @@
         </div>
       </div>
     </div>
+
+    <!-- 批量导入结果弹窗 -->
+    <div v-if="importResult" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="importResult = null">
+      <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        <h2 class="mb-4 text-lg font-bold text-gray-900">导入结果</h2>
+        <p class="text-sm text-gray-600">成功入库 {{ importResult.inserted }} 条，失败 {{ importResult.failed }} 条</p>
+        <div v-if="importResult.errors.length > 0" class="mt-3 max-h-60 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50 p-3">
+          <div v-for="(err, i) in importResult.errors" :key="i" class="text-xs text-red-500 py-0.5">
+            第 {{ err.row }} 行 {{ err.name }}：{{ err.message }}
+          </div>
+        </div>
+        <div class="mt-6 flex justify-end">
+          <button @click="importResult = null; loadPageData()" class="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600">确定</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { AlertTriangle, Building2, Pencil, Plus, Search, Trash2, UserCheck, Users, X } from 'lucide-vue-next'
-import { fetchStudents, updateAdminStudent, deleteAdminStudent, fetchDepartments, fetchClasses, createAccountStudent } from '@/api'
+import { AlertTriangle, Building2, Pencil, Plus, Search, Trash2, UserCheck, Users, X, Upload, FileSpreadsheet } from 'lucide-vue-next'
+import { fetchStudents, updateAdminStudent, deleteAdminStudent, fetchDepartments, fetchClasses, createAccountStudent, importAccounts } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Department } from '@/types'
 
@@ -345,6 +372,57 @@ async function handleAddStudent() {
     addError.value = err instanceof Error ? err.message : '入库失败'
   } finally {
     adding.value = false
+  }
+}
+
+// ====== 批量添加 + 模板下载 ======
+const studentImportInput = ref<HTMLInputElement | null>(null)
+const importResult = ref<{ inserted: number; failed: number; errors: any[] } | null>(null)
+
+function triggerStudentImport() {
+  studentImportInput.value?.click()
+}
+
+async function handleStudentImport(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  input.value = ''
+
+  try {
+    const XLSX = await import('xlsx')
+    const data = await file.arrayBuffer()
+    const workbook = XLSX.read(data, { type: 'array' })
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet)
+
+    const payload = rows.map((row) => ({
+      name: row['姓名'] || row['name'] || '',
+      phone: String(row['手机号'] || row['phone'] || ''),
+      idCard: String(row['身份证号'] || row['idCard'] || ''),
+      department: row['学院'] || row['department'] || '',
+      className: row['班级'] || row['className'] || '',
+      identity: '学生',
+    }))
+
+    const result = await importAccounts(payload)
+    importResult.value = result.results
+  } catch (err: any) {
+    alert(err instanceof Error ? err.message : '导入失败')
+  }
+}
+
+async function handleDownloadStudentTemplate() {
+  try {
+    const XLSX = await import('xlsx')
+    const header = [['姓名', '手机号', '身份证号', '学院', '班级']]
+    const example = [['张三', '13800138000', '110101200001011234', '计算机学院', '计科2101']]
+    const ws = XLSX.utils.aoa_to_sheet([...header, ...example])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '学生导入模板')
+    XLSX.writeFile(wb, '学生批量添加模板.xlsx')
+  } catch (err: any) {
+    alert(err instanceof Error ? err.message : '下载失败')
   }
 }
 </script>

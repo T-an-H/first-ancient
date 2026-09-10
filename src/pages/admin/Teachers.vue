@@ -7,6 +7,20 @@
           教师账号来自数据库，以下信息与数据库同步。
         </p>
       </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <button @click="showAddModal = true" class="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-600">
+          <Plus class="h-4 w-4" /> 添加教师
+        </button>
+        <button @click="handleDownloadTeacherTemplate"
+          class="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">
+          <FileSpreadsheet class="h-4 w-4" /> 模板下载
+        </button>
+        <button @click="triggerTeacherImport"
+          class="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-600">
+          <Upload class="h-4 w-4" /> 批量添加
+        </button>
+        <input ref="teacherImportInput" type="file" accept=".xlsx,.xls,.csv" class="hidden" @change="handleTeacherImport" />
+      </div>
     </div>
 
     <div class="grid gap-4 md:grid-cols-3">
@@ -266,6 +280,61 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- 添加教师入库弹窗 -->
+    <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showAddModal = false">
+      <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h2 class="mb-4 text-lg font-bold text-gray-900">添加教师</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">姓名 *</label>
+            <input v-model="addForm.name" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">手机号 *</label>
+            <input v-model="addForm.phone" type="text" maxlength="11" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">身份证号 *</label>
+            <input v-model="addForm.idCard" type="text" maxlength="18" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">身份</label>
+            <select v-model="addForm.subRole" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500">
+              <option value="teacher">教师</option>
+              <option value="mentor">企业导师</option>
+              <option value="leader">学院领导</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">学院</label>
+            <input v-model="addForm.department" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <p v-if="addError" class="text-sm text-red-500">{{ addError }}</p>
+          <p v-if="addSuccess" class="text-sm text-green-600">{{ addSuccess }}</p>
+        </div>
+        <div class="mt-6 flex justify-end gap-3">
+          <button @click="showAddModal = false" class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100">关闭</button>
+          <button @click="handleAddTeacher" :disabled="adding" class="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50">{{ adding ? '入库中...' : '入库' }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 批量导入结果弹窗 -->
+    <div v-if="importResult" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="importResult = null">
+      <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        <h2 class="mb-4 text-lg font-bold text-gray-900">导入结果</h2>
+        <p class="text-sm text-gray-600">成功入库 {{ importResult.inserted }} 条，失败 {{ importResult.failed }} 条</p>
+        <div v-if="importResult.errors.length > 0" class="mt-3 max-h-60 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50 p-3">
+          <div v-for="(err, i) in importResult.errors" :key="i" class="text-xs text-red-500 py-0.5">
+            第 {{ err.row }} 行 {{ err.name }}：{{ err.message }}
+          </div>
+        </div>
+        <div class="mt-6 flex justify-end">
+          <button @click="importResult = null; loadPageData()" class="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600">确定</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -276,12 +345,15 @@ import {
   BookOpen,
   Building2,
   Pencil,
+  Plus,
   Search,
   Trash2,
   UserCheck,
   X,
+  Upload,
+  FileSpreadsheet,
 } from 'lucide-vue-next'
-import { deleteTeacher as apiDeleteTeacher, fetchDepartments, fetchTeachers, updateTeacher as apiUpdateTeacher } from '@/api'
+import { deleteTeacher as apiDeleteTeacher, fetchDepartments, fetchTeachers, updateTeacher as apiUpdateTeacher, createAccountTeacher, importAccounts } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Department, Teacher } from '@/types'
 
@@ -480,6 +552,95 @@ async function confirmDeleteTeacher() {
     closeDeleteModal()
   } catch (error: any) {
     window.alert(error?.message || '删除教师失败')
+  }
+}
+
+// ====== 添加教师入库 ======
+const showAddModal = ref(false)
+const adding = ref(false)
+const addError = ref('')
+const addSuccess = ref('')
+const addForm = ref({ name: '', phone: '', idCard: '', department: '', subRole: 'teacher' })
+
+async function handleAddTeacher() {
+  addError.value = ''
+  addSuccess.value = ''
+  if (!addForm.value.name.trim() || !addForm.value.phone.trim() || !addForm.value.idCard.trim()) {
+    addError.value = '姓名、手机号、身份证号为必填'
+    return
+  }
+  adding.value = true
+  try {
+    const data = await createAccountTeacher({
+      name: addForm.value.name.trim(),
+      phone: addForm.value.phone.trim(),
+      idCard: addForm.value.idCard.trim(),
+      subRole: addForm.value.subRole,
+      department: addForm.value.department.trim(),
+    })
+    addSuccess.value = `入库成功！工号：${data.account.userNo}，初始密码：身份证后 6 位`
+    addForm.value = { name: '', phone: '', idCard: '', department: '', subRole: addForm.value.subRole }
+    await loadPageData()
+  } catch (err: any) {
+    addError.value = err instanceof Error ? err.message : '入库失败'
+  } finally {
+    adding.value = false
+  }
+}
+
+// ====== 批量添加 + 模板下载 ======
+const teacherImportInput = ref<HTMLInputElement | null>(null)
+const importResult = ref<{ inserted: number; failed: number; errors: any[] } | null>(null)
+
+function triggerTeacherImport() {
+  teacherImportInput.value?.click()
+}
+
+async function handleTeacherImport(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  input.value = ''
+
+  try {
+    const XLSX = await import('xlsx')
+    const data = await file.arrayBuffer()
+    const workbook = XLSX.read(data, { type: 'array' })
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet)
+
+    const payload = rows.map((row) => ({
+      name: row['姓名'] || row['name'] || '',
+      phone: String(row['手机号'] || row['phone'] || ''),
+      idCard: String(row['身份证号'] || row['idCard'] || ''),
+      department: row['学院'] || row['department'] || '',
+      identity: row['身份'] || '教师',
+    }))
+
+    const result = await importAccounts(payload)
+    importResult.value = result.results
+  } catch (err: any) {
+    alert(err instanceof Error ? err.message : '导入失败')
+  }
+}
+
+async function handleDownloadTeacherTemplate() {
+  try {
+    const XLSX = await import('xlsx')
+    const header = [['姓名', '手机号', '身份证号', '学院', '身份']]
+    const example = [['李老师', '13900139000', '110101198501011234', '计算机学院', '教师']]
+    const ws = XLSX.utils.aoa_to_sheet([...header, ...example])
+
+    const identities = '教师,企业导师,学院领导'
+    ws['!dataValidations'] = [
+      { sqref: 'E2:E1000', type: 'list', formulae: [`"${identities}"`] },
+    ]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '教师导入模板')
+    XLSX.writeFile(wb, '教师批量添加模板.xlsx')
+  } catch (err: any) {
+    alert(err instanceof Error ? err.message : '下载失败')
   }
 }
 </script>

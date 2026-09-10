@@ -285,6 +285,43 @@ router.put('/:id/status', async (req, res) => {
   }
 });
 
+// ====== 删除账号 ======
+
+router.delete('/:id', async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.query(
+      'SELECT id, role, ref_type, ref_id, user_no, name FROM users WHERE id = ? LIMIT 1',
+      [req.params.id]
+    );
+    if (rows.length === 0) {
+      throw httpError(404, '账号不存在', 'ACCOUNT_NOT_FOUND');
+    }
+    const user = rows[0];
+
+    // 删除关联的 students / teachers 记录
+    if (user.ref_type === 'student' && user.ref_id) {
+      await connection.query('DELETE FROM students WHERE id = ?', [user.ref_id]);
+    } else if (user.ref_type === 'teacher' && user.ref_id) {
+      await connection.query('DELETE FROM teachers WHERE id = ?', [user.ref_id]);
+    }
+
+    // 删除 users 记录
+    await connection.query('DELETE FROM users WHERE id = ?', [req.params.id]);
+
+    await writeAuditLog(connection, req.user, 'delete', req.params.id, {
+      userNo: user.user_no,
+      name: user.name,
+      role: user.role,
+    });
+    res.json({ success: true, message: `已删除账号 ${user.name}` });
+  } catch (error) {
+    handleRouteError(res, error);
+  } finally {
+    connection.release();
+  }
+});
+
 router.put('/:id/password', async (req, res) => {
   const connection = await pool.getConnection();
   try {

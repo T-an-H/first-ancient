@@ -461,6 +461,12 @@ export async function resetAccountPassword(id: string) {
   })
 }
 
+export async function deleteAccount(id: string) {
+  return request(`/accounts/${id}`, {
+    method: 'DELETE',
+  })
+}
+
 export async function assignAccount(id: string, data: { department?: string; className?: string }) {
   return request(`/accounts/${id}/assign`, {
     method: 'PUT',

@@ -24,7 +24,7 @@
         </button>
         <button @click="handleDownloadTemplate"
           class="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">
-          <FileSpreadsheet class="h-4 w-4" /> 导入模板
+          <FileSpreadsheet class="h-4 w-4" /> 下载批量添加模板
         </button>
         <button @click="triggerImport"
           class="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-600">
@@ -88,6 +88,7 @@
                   {{ a.status === 'active' ? '禁用' : '启用' }}
                 </button>
                 <button @click="resetPwd(a)" class="text-xs text-amber-500 hover:text-amber-700">重置密码</button>
+                <button @click="deleteAccount(a)" class="text-xs text-red-500 hover:text-red-700">删除</button>
               </div>
             </td>
           </tr>
@@ -166,7 +167,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Search, LoaderCircle, Download, Upload, FileSpreadsheet, Plus } from 'lucide-vue-next'
-import { fetchAccounts, updateAccountStatus, resetAccountPassword, importAccounts, exportAccounts, exportStudents, exportTeachers, createAccountStudent, createAccountTeacher } from '@/api'
+import { fetchAccounts, updateAccountStatus, resetAccountPassword, importAccounts, exportAccounts, exportStudents, exportTeachers, createAccountStudent, createAccountTeacher, deleteAccount as apiDeleteAccount } from '@/api'
 
 const accounts = ref<any[]>([])
 const loading = ref(false)
@@ -233,6 +234,17 @@ async function resetPwd(a: any) {
     showToast(`已重置 ${a.name} 的密码`)
   } catch (err: any) {
     showToast(err instanceof Error ? err.message : '重置失败')
+  }
+}
+
+async function deleteAccount(a: any) {
+  if (!confirm(`确定删除账号 ${a.name}（${a.user_no || a.account}）吗？此操作不可恢复。`)) return
+  try {
+    await apiDeleteAccount(a.id)
+    showToast(`已删除账号 ${a.name}`)
+    await loadAccounts()
+  } catch (err: any) {
+    showToast(err instanceof Error ? err.message : '删除失败')
   }
 }
 
