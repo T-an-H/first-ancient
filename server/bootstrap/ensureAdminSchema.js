@@ -207,6 +207,7 @@ async function ensureColumnsAndIndexes(connection) {
   await ensureColumn(connection, 'users', 'fail_count', 'fail_count INT DEFAULT 0 COMMENT "连续失败次数"');
   await ensureColumn(connection, 'users', 'lock_until', 'lock_until DATETIME DEFAULT NULL COMMENT "锁定截止时间"');
   await ensureColumn(connection, 'users', 'last_login_at', 'last_login_at DATETIME DEFAULT NULL COMMENT "最近登录时间"');
+  await ensureColumn(connection, 'users', 'avatar', 'avatar LONGTEXT NULL COMMENT "头像base64"');
 
   await ensureIndex(
     connection,

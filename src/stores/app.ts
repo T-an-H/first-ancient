@@ -87,6 +87,98 @@ const saveToStorage = (key: string, data: unknown) => {
   }
 }
 
+// ====== 多账号 / 多窗口会话存储 ======
+// sessionStorage.activeSession：每标签独立的当前会话（多窗口互不干扰）
+// localStorage.savedAccounts：跨标签共享的最多 5 个账号存档（切换账号保留数据可切回）
+export type SavedAccount = {
+  id: string
+  account: string
+  name: string
+  role: string
+  sub_role?: string
+  token: string
+  userInfo: any
+  secondaryRoles: UserRole[]
+  portal?: string
+  savedAt: number
+}
+
+type ActiveSession = {
+  token: string
+  userInfo: any
+  role: string
+  sub_role?: string
+  secondaryRoles: UserRole[]
+}
+
+const ACTIVE_SESSION_KEY = 'activeSession'
+const SAVED_ACCOUNTS_KEY = 'savedAccounts'
+const MAX_SAVED_ACCOUNTS = 5
+
+function getActiveSession(): ActiveSession | null {
+  try {
+    const raw = sessionStorage.getItem(ACTIVE_SESSION_KEY)
+    return raw ? (JSON.parse(raw) as ActiveSession) : null
+  } catch {
+    return null
+  }
+}
+
+function setActiveSession(session: ActiveSession) {
+  try {
+    sessionStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(session))
+  } catch (e) {
+    console.warn('[store] 写入 activeSession 失败:', e)
+  }
+}
+
+function clearActiveSessionStorage() {
+  try {
+    sessionStorage.removeItem(ACTIVE_SESSION_KEY)
+  } catch { /* ignore */ }
+}
+
+function getSavedAccountsList(): SavedAccount[] {
+  try {
+    const raw = localStorage.getItem(SAVED_ACCOUNTS_KEY)
+    return raw ? (JSON.parse(raw) as SavedAccount[]) : []
+  } catch {
+    return []
+  }
+}
+
+function saveSavedAccountsList(list: SavedAccount[]) {
+  try {
+    localStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(list))
+  } catch (e) {
+    console.warn('[store] 写入 savedAccounts 失败:', e)
+  }
+}
+
+function upsertSavedAccount(account: SavedAccount): SavedAccount[] {
+  let list = getSavedAccountsList()
+  // 按 account 去重，更新已有项
+  list = list.filter((item) => item.account !== account.account)
+  list.unshift(account)
+  // 超过上限踢掉最旧（末尾）
+  if (list.length > MAX_SAVED_ACCOUNTS) {
+    list = list.slice(0, MAX_SAVED_ACCOUNTS)
+  }
+  saveSavedAccountsList(list)
+  return list
+}
+
+function removeSavedAccountById(id: string): SavedAccount[] {
+  const list = getSavedAccountsList().filter((item) => item.id !== id)
+  saveSavedAccountsList(list)
+  return list
+}
+
+// 读取当前激活会话的 token（供 api 层注入 Bearer）
+export function getActiveToken(): string | null {
+  return getActiveSession()?.token ?? null
+}
+
 type StudentHomeworkSummary = {
   id: string
   courseId: string
@@ -202,9 +294,10 @@ export const useAppStore = defineStore('app', () => {
   const homeworkSubmissions = ref<HomeworkSubmission[]>(loadFromStorage<HomeworkSubmission[]>('homeworkSubmissions', [...mockHomeworkSubmissions, ...supplementaryAll.supplementaryHomeworkSubmissions]))
   const studentHomeworkSummaries = ref<Record<string, StudentHomeworkSummary[]>>({})
   const syncedStudentHomeworkCourses = ref<Record<string, boolean>>({})
-  const isLoggedIn = ref<boolean>(loadFromStorage<boolean>('isLoggedIn', false))
-  const currentUser = ref<string | null>(loadFromStorage<string | null>('currentUser', null))
-  const currentRole = ref<UserRole>(loadFromStorage<UserRole>('currentRole', null))
+  const __initialSession = getActiveSession()
+  const isLoggedIn = ref<boolean>(!!__initialSession)
+  const currentUser = ref<string | null>(__initialSession?.userInfo?.name ?? null)
+  const currentRole = ref<UserRole>((__initialSession?.role as UserRole) ?? null)
 
   // 临时预览解锁：测试评价填写/查看流程时忽略锁定、时间与已提交限制
   const EVAL_PREVIEW_UNLOCKED = true
@@ -215,7 +308,7 @@ export const useAppStore = defineStore('app', () => {
   // 学院领导数据（只读演示数据，不从 localStorage 缓存，确保新数据及时生效）
   const leaders = ref<Leader[]>([...mockLeaders])
   // 次要角色（用于 leader+teacher/mentor 双重身份）
-  const secondaryRoles = ref<UserRole[]>(loadFromStorage<UserRole[]>('secondaryRoles', []))
+  const secondaryRoles = ref<UserRole[]>(__initialSession?.secondaryRoles ?? [])
 
   // ====== 学院系统 ======
   const departments = ref<Department[]>(loadFromStorage<Department[]>('departments', mockDepartments))
@@ -270,10 +363,13 @@ export const useAppStore = defineStore('app', () => {
 
   // ====== Actions ======
 
-  function login(username: string, role: UserRole, isTeacherFromDb?: boolean, isMentorFromDb?: boolean) {
-    localStorage.setItem('isLoggedIn', JSON.stringify(true))
-    localStorage.setItem('currentUser', JSON.stringify(username))
-    localStorage.setItem('currentRole', JSON.stringify(role))
+  function login(
+    username: string,
+    role: UserRole,
+    isTeacherFromDb?: boolean,
+    isMentorFromDb?: boolean,
+    session?: { token?: string; userInfo?: any; sub_role?: string; account?: string; portal?: string },
+  ) {
     isLoggedIn.value = true
     currentUser.value = username
     currentRole.value = role
@@ -291,20 +387,71 @@ export const useAppStore = defineStore('app', () => {
       detected.push('mentor')
     }
     secondaryRoles.value = detected
-    localStorage.setItem('secondaryRoles', JSON.stringify(detected))
+
+    // 写入每标签独立的激活会话 + 跨标签共享的账号存档
+    if (session?.token) {
+      const userInfo = session.userInfo ?? {}
+      setActiveSession({
+        token: session.token,
+        userInfo,
+        role: role as string,
+        sub_role: session.sub_role,
+        secondaryRoles: detected,
+      })
+      upsertSavedAccount({
+        id: String(userInfo?.id ?? session.account ?? username),
+        account: session.account ?? userInfo?.account ?? username,
+        name: username,
+        role: role as string,
+        sub_role: session.sub_role,
+        token: session.token,
+        userInfo,
+        secondaryRoles: detected,
+        portal: session.portal,
+        savedAt: Date.now(),
+      })
+    }
+
     // 登录后立即生成自动待办
     generateAutoTodos()
   }
 
   function logout() {
-    localStorage.setItem('isLoggedIn', JSON.stringify(false))
-    localStorage.setItem('currentUser', JSON.stringify(null))
-    localStorage.setItem('currentRole', JSON.stringify(null))
-    localStorage.setItem('secondaryRoles', JSON.stringify([]))
+    // 仅结束当前标签会话，保留 savedAccounts 以便切换账号切回
+    clearActiveSessionStorage()
     isLoggedIn.value = false
     currentUser.value = null
     currentRole.value = null
     secondaryRoles.value = []
+  }
+
+  // 切换账号：从存档恢复某账号到当前标签会话，返回其 portal 供跳转
+  function switchAccount(id: string): string | null {
+    const list = getSavedAccountsList()
+    const target = list.find((item) => item.id === id)
+    if (!target) return null
+    const role = target.role as UserRole
+    setActiveSession({
+      token: target.token,
+      userInfo: target.userInfo,
+      role: target.role,
+      sub_role: target.sub_role,
+      secondaryRoles: target.secondaryRoles,
+    })
+    isLoggedIn.value = true
+    currentUser.value = target.name
+    currentRole.value = role
+    secondaryRoles.value = target.secondaryRoles
+    generateAutoTodos()
+    return target.portal ?? '/'
+  }
+
+  function getSavedAccounts(): SavedAccount[] {
+    return getSavedAccountsList()
+  }
+
+  function removeSavedAccount(id: string) {
+    removeSavedAccountById(id)
   }
 
   // ====== 学院操作 ======
@@ -2660,7 +2807,7 @@ export const useAppStore = defineStore('app', () => {
     lockedSessions,
     studentTiers,
     // actions
-    login, logout,
+    login, logout, switchAccount, getSavedAccounts, removeSavedAccount,
     addCourse, updateCourse, deleteCourse, assignMentorToCourse,
     addCategory, updateCategory, deleteCategory,
     addSchedule, updateSchedule, deleteSchedule,

@@ -140,7 +140,7 @@ const router = createRouter({
         {
           path: 'profile',
           name: 'StudentProfile',
-          component: () => import('@/pages/student/Profile.vue'),
+          component: () => import('@/pages/Profile.vue'),
         },
         {
           path: 'grades',

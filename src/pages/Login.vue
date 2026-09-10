@@ -159,19 +159,18 @@ function completeLogin(user: { name: string; role: string; sub_role?: string }, 
 }) {
   const { isTeacherFromDb, isMentorFromDb } = getExtraRoleFlags(user.name, user.sub_role)
 
-  if (options?.token) {
-    localStorage.setItem('token', options.token)
-  }
-
-  if (options?.userInfo) {
-    localStorage.setItem('userInfo', JSON.stringify(options.userInfo))
-  }
-
   store.login(
     user.name,
     resolveStoreRole(user.role, user.sub_role),
     isTeacherFromDb,
     isMentorFromDb,
+    {
+      token: options?.token,
+      userInfo: options?.userInfo,
+      sub_role: user.sub_role,
+      account: (options?.userInfo as any)?.account,
+      portal,
+    },
   )
 
   loading.value = false

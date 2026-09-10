@@ -216,7 +216,7 @@ router.get('/profile', async (req, res) => {
 
     const [rows] = await pool.query(
       `SELECT u.id, u.account, u.name, u.user_no, u.department, u.role, u.sub_role,
-              u.status, u.ref_type, u.ref_id
+              u.status, u.ref_type, u.ref_id, u.avatar
        FROM users u
        WHERE u.id = ?
        LIMIT 1`,
@@ -269,6 +269,7 @@ router.get('/profile', async (req, res) => {
         className,
         email,
         status: user.status,
+        avatar: user.avatar || '',
       },
     });
   } catch (error) {
@@ -336,6 +337,35 @@ router.post('/change-phone', async (req, res) => {
     res.json({ success: true, message: '手机号修改成功' });
   } catch (error) {
     console.error('修改手机号错误:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+});
+
+/**
+ * POST /api/user/avatar - 上传/更新头像
+ * 需 JWT，接收: { avatar: <base64字符串> }
+ */
+router.post('/avatar', async (req, res) => {
+  try {
+    const userId = extractUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: '未登录或登录已过期' });
+    }
+
+    const avatar = String(req.body?.avatar || '');
+    if (!avatar) {
+      return res.status(400).json({ success: false, message: '头像数据不能为空' });
+    }
+    // 限制大小（base64 约 270KB 上限，对应原图压缩后 ≤200KB）
+    if (avatar.length > 400 * 1024) {
+      return res.status(400).json({ success: false, message: '头像过大，请压缩后再上传' });
+    }
+
+    await pool.query('UPDATE users SET avatar = ? WHERE id = ?', [avatar, userId]);
+
+    res.json({ success: true, message: '头像更新成功' });
+  } catch (error) {
+    console.error('更新头像错误:', error);
     res.status(500).json({ success: false, message: '服务器内部错误' });
   }
 });

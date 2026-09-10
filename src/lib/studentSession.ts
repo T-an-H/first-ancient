@@ -14,12 +14,21 @@ function readText(value: unknown) {
 
 export function getStoredStudentSession(): StoredStudentSession {
   try {
-    const raw = localStorage.getItem('userInfo')
-    if (!raw) {
+    let user: any = null
+    // 优先从每标签独立的 sessionStorage 读取（多窗口隔离）
+    const rawSession = sessionStorage.getItem('activeSession')
+    if (rawSession) {
+      user = JSON.parse(rawSession)?.userInfo ?? null
+    }
+    // 兼容首登临时中转（localStorage.userInfo）
+    if (!user) {
+      const raw = localStorage.getItem('userInfo')
+      if (raw) user = JSON.parse(raw) ?? {}
+    }
+    if (!user) {
       return { id: '', studentId: '', name: '', className: '', account: '' }
     }
 
-    const user = JSON.parse(raw) ?? {}
     const account = readText(user.account)
     return {
       id: readText(user.id),

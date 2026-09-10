@@ -20,7 +20,11 @@ async function javaRequest(url: string, options: RequestOptions = {}) {
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs)
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  const token = localStorage.getItem('token')
+  let token: string | null = null
+  try {
+    const raw = sessionStorage.getItem('activeSession')
+    if (raw) token = (JSON.parse(raw)?.token ?? null) as string | null
+  } catch { /* ignore */ }
   if (token) headers.Authorization = `Bearer ${token}`
 
   const config: RequestInit = {

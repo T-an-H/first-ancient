@@ -31,8 +31,12 @@ async function request(url: string, options: RequestOptions = {}) {
     ...fetchOptions,
   }
 
-  // 自动注入 JWT token（登录等公开接口无 token 时跳过）
-  const token = localStorage.getItem('token')
+  // 自动注入 JWT token（从每标签独立的 sessionStorage 读取，支持多窗口互不干扰）
+  let token: string | null = null
+  try {
+    const raw = sessionStorage.getItem('activeSession')
+    if (raw) token = (JSON.parse(raw)?.token ?? null) as string | null
+  } catch { /* ignore */ }
   if (token) {
     const headers = new Headers(config.headers)
     headers.set('Authorization', `Bearer ${token}`)
@@ -491,6 +495,14 @@ export async function changePhone(newPhone: string, password: string) {
   return request('/user/change-phone', {
     method: 'POST',
     body: JSON.stringify({ newPhone, password }),
+  })
+}
+
+export async function uploadAvatar(avatar: string) {
+  return request('/user/avatar', {
+    method: 'POST',
+    body: JSON.stringify({ avatar }),
+    timeoutMs: 15000,
   })
 }
 

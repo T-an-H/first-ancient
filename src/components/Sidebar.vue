@@ -29,7 +29,7 @@ const teacherNavItems = [
 ]
 
 const studentNavItems = [
-  { to: '/student/profile', icon: 'user' as const, label: '个人画像' },
+  { to: '/student/profile', icon: 'user' as const, label: '个人中心' },
   { to: '/student/schedule', icon: 'calendar' as const, label: '我的课表' },
   { to: '/student/courses', icon: 'bookOpen' as const, label: '我的课程' },
   { to: '/student/grades', icon: 'award' as const, label: '成绩查询' },
@@ -184,25 +184,6 @@ function renderSidebar() {
 
   const footer = aside.append('div')
     .attr('class', 'p-4 border-t border-white/10')
-
-  footer.append('button')
-    .attr('class', 'flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-black/10 transition-all duration-200 w-full mb-1')
-    .on('click', () => router.push('/change-password-inapp'))
-    .call((sel) => {
-      renderIcon(sel, 'key', 'w-5 h-5 flex-shrink-0')
-      sel.append('span').text('修改密码')
-    })
-
-  footer.append('button')
-    .attr('class', 'flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-black/10 transition-all duration-200 w-full')
-    .on('click', () => {
-      store.logout()
-      router.replace('/login')
-    })
-    .call((sel) => {
-      renderIcon(sel, 'logOut', 'w-5 h-5 flex-shrink-0')
-      sel.append('span').text('退出登录')
-    })
 }
 
 onMounted(() => {
