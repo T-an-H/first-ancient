@@ -1070,6 +1070,28 @@
             <Plus class="w-3.5 h-3.5" />
             新建班级
           </button>
+          <button @click="handleDownloadBulkClassTemplate"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors">
+            <Download class="w-3.5 h-3.5" />
+            班级模板
+          </button>
+          <button @click="bulkClassExcelInput?.click()"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-sm">
+            <Upload class="w-3.5 h-3.5" />
+            批量导入班级
+          </button>
+          <input ref="bulkClassExcelInput" type="file" accept=".xlsx,.xls,.csv" class="hidden" @change="handleBulkImportClasses" />
+          <button @click="handleDownloadGroupTemplate"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors">
+            <Download class="w-3.5 h-3.5" />
+            分组模板
+          </button>
+          <button @click="bulkGroupExcelInput?.click()"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-sm">
+            <Upload class="w-3.5 h-3.5" />
+            批量导入分组
+          </button>
+          <input ref="bulkGroupExcelInput" type="file" accept=".xlsx,.xls,.csv" class="hidden" @change="handleBulkImportGroupsExcel" />
         </div>
       </div>
 
@@ -1175,6 +1197,9 @@
               <button @click.stop="handleImportGroupsForClass(classData.className)" class="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title="导入分组">
                 <Upload class="w-3.5 h-3.5" />
               </button>
+              <button @click.stop="handleDownloadGroupTemplateForClass(classData.className)" class="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title="下载本班分组模板">
+                <Download class="w-3.5 h-3.5" />
+              </button>
               <button @click.stop="openNewGroupForClass(classData.className)" class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="新建分组">
                 <Plus class="w-3.5 h-3.5" />
               </button>
@@ -1189,6 +1214,10 @@
             <div
               v-for="group in getGroupsForClassBlock(classData.className)" :key="group.id"
               class="p-3 rounded-lg border border-gray-100 hover:border-gray-200 group/grp transition-all"
+              :class="{ 'border-indigo-300 bg-indigo-50/30 ring-2 ring-indigo-200': dragOverGroupId === group.id }"
+              @dragover="onDragOverGroup($event, group.id)"
+              @dragleave="onDragLeave"
+              @drop="onDropToGroup($event, group.id)"
             >
               <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center gap-2">
@@ -1214,12 +1243,39 @@
               </div>
               <div class="flex flex-wrap gap-1">
                 <template v-for="sid in group.memberIds" :key="sid">
-                  <span class="group/tag relative inline-flex items-center gap-1 text-[11px] pl-2 pr-1 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  <span
+                    class="group/tag relative inline-flex items-center gap-1 text-[11px] pl-2 pr-1 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 transition-opacity"
+                    :class="{ 'opacity-40 cursor-move': draggingStudentId === sid }"
+                    :draggable="!isViewOnly"
+                    @dragstart="onDragStart($event, sid, group.id)"
+                    @dragend="resetDragState"
+                  >
                     {{ getStudentName(sid) }}
+                    <button v-if="!isViewOnly" @click.stop="toggleMoveMenu(group.id, sid)"
+                      class="w-3.5 h-3.5 rounded-full flex items-center justify-center text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors" title="调整分组">
+                      <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    </button>
                     <button v-if="!isViewOnly" @click.stop="openRemoveMemberModal(group.id, sid)"
                       class="w-3.5 h-3.5 rounded-full flex items-center justify-center text-indigo-400 hover:text-white hover:bg-red-500 transition-colors" title="移除学员">
                       <X class="w-2.5 h-2.5" />
                     </button>
+                    <!-- 调整分组下拉菜单 -->
+                    <div v-if="!isViewOnly && moveMenuOpen === `${group.id}-${sid}`"
+                      class="absolute top-full left-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[120px] max-h-48 overflow-y-auto"
+                      @click.stop>
+                      <button v-for="tg in getGroupsForClassBlock(classData.className).filter(g => g.id !== group.id)"
+                        :key="tg.id" @click.stop="handleMoveStudent(sid, group.id, tg.id)"
+                        class="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors">
+                        移至 {{ tg.name }}
+                      </button>
+                      <div v-if="getGroupsForClassBlock(classData.className).filter(g => g.id !== group.id).length === 0"
+                        class="px-3 py-1.5 text-xs text-gray-400">暂无其他分组</div>
+                      <div class="border-t border-gray-100 my-1"></div>
+                      <button @click.stop="handleMoveStudent(sid, group.id, '')"
+                        class="w-full text-left px-3 py-1.5 text-xs text-amber-600 hover:bg-amber-50 transition-colors">
+                        移出分组
+                      </button>
+                    </div>
                   </span>
                 </template>
                 <span v-if="group.memberIds.length === 0" class="text-[11px] text-gray-400 italic">暂无成员</span>
@@ -1233,6 +1289,43 @@
               class="mt-3 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
               <Plus class="w-3 h-3" />新建分组
             </button>
+          </div>
+
+          <!-- 未分组学生板块 -->
+          <div v-if="getUngroupedStudentsForClass(classData.className).length > 0"
+            class="mt-3 pt-3 border-t border-gray-100 transition-all"
+            :class="{ 'border-amber-300 bg-amber-50/50 ring-2 ring-amber-200': dragOverUngrouped }"
+            @dragover="onDragOverUngrouped($event)"
+            @dragleave="onDragLeave"
+            @drop="onDropToUngrouped($event)"
+          >
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-xs text-amber-600 font-medium">未分组（{{ getUngroupedStudentsForClass(classData.className).length }}人）</span>
+              <span v-if="!isViewOnly" class="text-[10px] text-amber-400">可拖拽学生到此处移出分组</span>
+            </div>
+            <div class="flex flex-wrap gap-1">
+              <span v-for="s in getUngroupedStudentsForClass(classData.className)" :key="s.id"
+                class="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 transition-opacity cursor-move"
+                :class="{ 'opacity-40': draggingStudentId === s.id }"
+                :draggable="!isViewOnly"
+                @dragstart="onDragStart($event, s.id, '')"
+                @dragend="resetDragState"
+              >
+                {{ s.name }}
+              </span>
+            </div>
+          </div>
+          <div v-else-if="classData.students.length > 0 && getGroupsForClassBlock(classData.className).length > 0"
+            class="mt-3 pt-3 border-t border-gray-100 transition-all"
+            :class="{ 'border-amber-300 bg-amber-50/50 ring-2 ring-amber-200': dragOverUngrouped }"
+            @dragover="onDragOverUngrouped($event)"
+            @dragleave="onDragLeave"
+            @drop="onDropToUngrouped($event)"
+          >
+            <span class="text-xs text-emerald-500 flex items-center gap-1">
+              <CheckCircle class="w-3 h-3" />已全部分组
+            </span>
+            <span v-if="!isViewOnly && dragOverUngrouped" class="ml-2 text-[10px] text-amber-500">松开将学生移出分组</span>
           </div>
 
           <!-- 一键分组按钮（每个班级内部） -->
@@ -1428,11 +1521,18 @@
                   </div>
                 </div>
                 <input ref="addClassExcelInput" type="file" accept=".xlsx,.xls,.csv" class="hidden" @change="handleAddClassExcel" />
-                <button type="button" @click="addClassExcelInput?.click()"
-                  class="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm text-teal-700 bg-teal-50 hover:bg-teal-100 border border-dashed border-teal-300 rounded-lg transition-colors">
-                  <Upload class="w-4 h-4" />
-                  {{ addClassMembers.length > 0 ? `已解析 ${addClassMembers.length} 名成员，点击重新选择` : '一键导入班级成员信息（Excel）' }}
-                </button>
+                <div class="flex gap-2">
+                  <button type="button" @click="addClassExcelInput?.click()"
+                    class="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-sm text-teal-700 bg-teal-50 hover:bg-teal-100 border border-dashed border-teal-300 rounded-lg transition-colors">
+                    <Upload class="w-4 h-4" />
+                    {{ addClassMembers.length > 0 ? `已解析 ${addClassMembers.length} 名成员，点击重新选择` : '一键导入班级成员信息（Excel）' }}
+                  </button>
+                  <button type="button" @click="handleDownloadClassTemplate"
+                    class="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors whitespace-nowrap">
+                    <Download class="w-4 h-4" />
+                    下载模板
+                  </button>
+                </div>
                 <p class="text-[11px] text-gray-400 mt-1.5">支持列：学生姓名 / 学生学号；已存在的学生会自动匹配，不存在将自动新建并加入本课程</p>
 
                 <!-- 解析出的成员预览 -->
@@ -1955,6 +2055,30 @@
   />
 
   <!-- 下载模板弹窗（已移除：模板下载固定按当前班级直接下载） -->
+
+  <!-- 调整分组菜单的点击外部关闭遮罩 -->
+  <div v-if="moveMenuOpen" class="fixed inset-0 z-10" @click="moveMenuOpen = ''"></div>
+
+  <!-- ====== 导入结果反馈弹窗 ====== -->
+  <Teleport to="body">
+    <div v-if="importResult" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40" @click.self="importResult = null">
+      <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl mx-4">
+        <h2 class="mb-4 text-lg font-bold text-gray-900">导入结果</h2>
+        <p v-if="importResult.summary" class="text-sm text-gray-700 mb-2">{{ importResult.summary }}</p>
+        <p class="text-sm text-gray-600">
+          成功 {{ importResult.inserted }} 条<span v-if="importResult.updated">，更新 {{ importResult.updated }} 条</span>，失败 {{ importResult.failed }} 条
+        </p>
+        <div v-if="importResult.errors.length > 0" class="mt-3 max-h-60 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50 p-3">
+          <div v-for="(err, i) in importResult.errors" :key="i" class="text-xs text-red-500 py-0.5">
+            第 {{ err.row }} 行 <span v-if="err.name">{{ err.name }}</span>：{{ err.message }}
+          </div>
+        </div>
+        <div class="mt-6 flex justify-end">
+          <button @click="importResult = null" class="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600">确定</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -1971,7 +2095,7 @@ import {
   EvalFrequencyDescs, getDefaultGradeConfig
 } from '@/types'
 import type { EvalTemplate, EvalType, Evaluation, EvalFrequency, Schedule, GradeWeightConfig, EvaluationConfig } from '@/types'
-import { AlertTriangle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, LogOut, Network } from 'lucide-vue-next'
+import { AlertTriangle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, Download, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, LogOut, Network } from 'lucide-vue-next'
 import { getNow } from '@/lib/date'
 import {
   createEmptyEvalDraft,
@@ -1989,6 +2113,7 @@ import {
   fetchAccounts,
   fetchCourseStudents,
   fetchSchedules,
+  saveCourseGroups,
   updateStudent as syncStudent,
 } from '@/api'
 import * as echarts from 'echarts'
@@ -2251,6 +2376,302 @@ const addClassExcelInput = ref<HTMLInputElement | null>(null)
 const addClassFileName = ref('')
 const addClassMembers = ref<{ name: string; studentId: string; existing: boolean }[]>([])
 
+// ====== 导入结果反馈弹窗 ======
+const importResult = ref<{
+  inserted: number
+  updated?: number
+  failed: number
+  errors: { row: number; name: string; message: string }[]
+  summary?: string
+} | null>(null)
+
+// ====== 批量导入班级 ======
+const bulkClassExcelInput = ref<HTMLInputElement | null>(null)
+// ====== 批量导入分组（顶部入口） ======
+const bulkGroupExcelInput = ref<HTMLInputElement | null>(null)
+
+/** 下载班级成员导入模板（新增班级弹窗内使用，两列：学生姓名 | 学生学号） */
+async function handleDownloadClassTemplate() {
+  try {
+    const XLSX = await import('xlsx')
+    const header = [['学生姓名', '学生学号']]
+    const example = [['张三', '2024001'], ['李四', '2024002']]
+    const ws = XLSX.utils.aoa_to_sheet([...header, ...example])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '班级成员')
+    XLSX.writeFile(wb, '班级成员导入模板.xlsx')
+  } catch (err) {
+    console.error('下载模板失败:', err)
+    alert('下载模板失败')
+  }
+}
+
+/** 下载批量导入班级模板（顶部入口，三列：班级名称 | 姓名 | 学号） */
+async function handleDownloadBulkClassTemplate() {
+  try {
+    const XLSX = await import('xlsx')
+    const header = [['班级名称', '姓名', '学号']]
+    const example = [['软件一班', '张三', '2024001'], ['软件一班', '李四', '2024002'], ['软件二班', '王五', '2024003']]
+    const ws = XLSX.utils.aoa_to_sheet([...header, ...example])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '班级导入')
+    XLSX.writeFile(wb, '批量导入班级模板.xlsx')
+  } catch (err) {
+    console.error('下载模板失败:', err)
+    alert('下载模板失败')
+  }
+}
+
+/** 下载分组导入模板（顶部入口，四列：班级名称 | 组名 | 姓名 | 学号） */
+async function handleDownloadGroupTemplate() {
+  try {
+    const XLSX = await import('xlsx')
+    const header = [['班级名称', '组名', '姓名', '学号']]
+    const example = [
+      ['软件一班', '第1组', '张三', '2024001'],
+      ['软件一班', '第1组', '李四', '2024002'],
+      ['软件一班', '第2组', '王五', '2024003'],
+    ]
+    const ws = XLSX.utils.aoa_to_sheet([...header, ...example])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '分组导入')
+    XLSX.writeFile(wb, '分组导入模板.xlsx')
+  } catch (err) {
+    console.error('下载模板失败:', err)
+    alert('下载模板失败')
+  }
+}
+
+/** 下载本班分组导入模板（每班级卡片内使用，两列：组名 | 姓名/学号） */
+async function handleDownloadGroupTemplateForClass(className: string) {
+  try {
+    const XLSX = await import('xlsx')
+    const header = [['组名', '姓名/学号']]
+    const example = [['第1组', '张三'], ['第1组', '李四'], ['第2组', '王五']]
+    const ws = XLSX.utils.aoa_to_sheet([...header, ...example])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '分组')
+    XLSX.writeFile(wb, `${className}-分组导入模板.xlsx`)
+  } catch (err) {
+    console.error('下载模板失败:', err)
+    alert('下载模板失败')
+  }
+}
+
+/** 批量导入班级（顶部入口，解析 班级名称|姓名|学号 三列格式） */
+async function handleBulkImportClasses(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files?.length) return
+  const file = input.files[0]
+  input.value = ''
+  if (!courseId.value) return
+
+  try {
+    const XLSX = await import('xlsx')
+    const buf = await file.arrayBuffer()
+    const wb = XLSX.read(buf, { type: 'array' })
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(ws)
+
+    const errors: { row: number; name: string; message: string }[] = []
+    let inserted = 0
+    let createdCount = 0
+    let assignedCount = 0
+    const course = store.courses.find((c: any) => c.id === courseId.value)
+
+    // 按班级名称分组
+    const classMap = new Map<string, { name: string; studentId: string }[]>()
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      const className = (row['班级名称'] || row['班级'] || '').toString().trim()
+      const stuName = (row['姓名'] || row['学生姓名'] || row['name'] || '').toString().trim()
+      const stuId = (row['学号'] || row['学生学号'] || row['studentId'] || '').toString().trim()
+      if (!className) {
+        errors.push({ row: i + 2, name: stuName || stuId, message: '缺少班级名称' })
+        continue
+      }
+      if (!stuName && !stuId) {
+        errors.push({ row: i + 2, name: '', message: '姓名和学号均为空' })
+        continue
+      }
+      if (!classMap.has(className)) classMap.set(className, [])
+      classMap.get(className)!.push({ name: stuName, studentId: stuId })
+    }
+
+    // 逐班级处理
+    for (const [className, members] of classMap) {
+      for (const m of members) {
+        let student = m.studentId
+          ? store.students.find(s => s.id === m.studentId || s.studentId === m.studentId || (m.name && s.name === m.name))
+          : (m.name ? store.students.find(s => s.name === m.name) : undefined)
+        if (!student) {
+          const id = m.studentId || `stu-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+          store.addStudent({
+            id,
+            name: m.name || m.studentId,
+            phone: '',
+            email: '',
+            avatar: '',
+            joinDate: getNow().toISOString().split('T')[0],
+            status: 'active',
+            studentId: m.studentId || undefined,
+            className,
+          })
+          student = store.students.find(s => s.id === id)!
+          createdCount++
+        } else {
+          store.updateStudent(student.id, { className })
+          assignedCount++
+        }
+        const enrolled = store.enrollments.some(
+          e => e.courseId === courseId.value && e.studentId === student!.id && e.status !== 'dropped'
+        )
+        if (!enrolled) {
+          const enrId = `enr-${courseId.value}-${student!.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+          store.addEnrollment({
+            id: enrId,
+            courseId: courseId.value,
+            studentId: student!.id,
+            scheduleId: '',
+            status: 'enrolled',
+            progress: 0,
+            enrollDate: getNow().toISOString().split('T')[0],
+          })
+          try {
+            await bulkImportEnrollments([{ id: enrId, studentId: student!.id, courseId: courseId.value }])
+          } catch {}
+        }
+        try {
+          await syncStudent(student!.id, { className })
+        } catch {}
+        inserted++
+      }
+      // 同步排课
+      if (course && members.length > 0) {
+        try {
+          await bulkImportSchedules([{
+            courseId: courseId.value,
+            title: course.title,
+            teacher: course.teacher || '',
+            className,
+            room: '待定',
+            startDate: new Date().toISOString().split('T')[0],
+            timeSlot: '09:00-11:00',
+          }])
+        } catch {}
+      }
+    }
+
+    importResult.value = {
+      inserted,
+      updated: 0,
+      failed: errors.length,
+      errors,
+      summary: `批量导入完成：共处理 ${inserted} 名成员（匹配已有 ${assignedCount} 人，新建 ${createdCount} 人），涉及 ${classMap.size} 个班级`,
+    }
+  } catch (err) {
+    console.error('批量导入班级失败:', err)
+    alert('Excel 导入失败，请检查文件格式')
+  }
+}
+
+/** 批量导入分组（顶部入口，解析 班级名称|组名|姓名|学号 四列格式） */
+async function handleBulkImportGroupsExcel(event: Event) {
+  if (!courseId.value) return
+  const input = event.target as HTMLInputElement
+  if (!input.files?.length) return
+  const file = input.files[0]
+  input.value = ''
+
+  try {
+    const buf = await file.arrayBuffer()
+    const XLSX = await import('xlsx')
+    const wb = XLSX.read(buf, { type: 'array' })
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(ws)
+
+    const errors: { row: number; name: string; message: string }[] = []
+    // key: `${className}||${groupName}` -> studentIds
+    const groupMap = new Map<string, { className: string; groupName: string; memberIds: string[] }>()
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      const className = (row['班级名称'] || row['班级'] || '').toString().trim()
+      const groupName = (row['组名'] || row['分组名称'] || '').toString().trim()
+      const stuName = (row['姓名'] || row['学生姓名'] || row['name'] || '').toString().trim()
+      const stuId = (row['学号'] || row['学生学号'] || row['studentId'] || '').toString().trim()
+
+      if (!groupName) {
+        errors.push({ row: i + 2, name: stuName || stuId, message: '缺少组名' })
+        continue
+      }
+      if (!stuName && !stuId) {
+        errors.push({ row: i + 2, name: '', message: '姓名和学号均为空' })
+        continue
+      }
+
+      const student = store.students.find(
+        s => (stuId && (s.id === stuId || s.studentId === stuId)) || (stuName && s.name === stuName)
+      )
+      if (!student) {
+        errors.push({ row: i + 2, name: stuName || stuId, message: '未找到匹配学生' })
+        continue
+      }
+      // 如果指定了班级，校验学生是否属于该班级
+      if (className && (student.className || '') !== className) {
+        errors.push({ row: i + 2, name: student.name, message: `学生不在班级"${className}"中（当前班级：${student.className || '未分班'}）` })
+        continue
+      }
+
+      const key = `${className}||${groupName}`
+      if (!groupMap.has(key)) groupMap.set(key, { className, groupName, memberIds: [] })
+      if (!groupMap.get(key)!.memberIds.includes(student.id)) {
+        groupMap.get(key)!.memberIds.push(student.id)
+      }
+    }
+
+    let inserted = 0
+    let updated = 0
+    const groupsToSync: any[] = []
+    for (const [, { groupName, memberIds }] of groupMap) {
+      const existing = store.studentGroups.find(
+        g => g.courseId === courseId.value && g.name === groupName
+      )
+      if (existing) {
+        const merged = Array.from(new Set([...existing.memberIds, ...memberIds]))
+        store.updateStudentGroup(existing.id, { memberIds: merged })
+        updated++
+      } else {
+        const gid = `group-${courseId.value}-${Date.now()}-${inserted}`
+        store.addStudentGroup({
+          id: gid,
+          courseId: courseId.value,
+          name: groupName,
+          memberIds: Array.from(new Set(memberIds)),
+        })
+        groupsToSync.push({ id: gid, courseId: courseId.value, name: groupName, memberIds: Array.from(new Set(memberIds)) })
+        inserted++
+      }
+    }
+
+    // 同步到 MySQL
+    if (groupsToSync.length > 0) {
+      try { await bulkImportGroups(groupsToSync) } catch {}
+    }
+
+    importResult.value = {
+      inserted,
+      updated,
+      failed: errors.length,
+      errors,
+      summary: `分组导入完成：新增 ${inserted} 个分组，更新 ${updated} 个分组`,
+    }
+  } catch (err) {
+    console.error('Excel 导入失败:', err)
+    alert('Excel 导入失败，请检查文件格式')
+  }
+}
+
 /** 打开新增班级弹窗，重置表单与导入数据 */
 function openAddClassModal() {
   addClassForm.value = { className: '', studentIds: [] }
@@ -2377,7 +2798,7 @@ async function saveAddClass() {
   addClassFileName.value = ''
   addClassMembers.value = []
   showAddClass.value = false
-  alert(msg)
+  importResult.value = { inserted: assignedCount + createdCount, updated: 0, failed: 0, errors: [], summary: msg }
 }
 // 从总库选择学生加入本课程
 const showAddStudentModal = ref(false)
@@ -3734,6 +4155,15 @@ function getClassStudents(className: string) {
   return store.students.filter((s) => (s.className || '') === className && store.enrollments.some((e) => e.courseId === courseId.value && e.studentId === s.id && e.status !== 'dropped'))
 }
 
+/** 获取某班级中未分组的学员（在班级中但不在任何分组里） */
+function getUngroupedStudentsForClass(className: string) {
+  const classStudents = getClassStudents(className)
+  const groupedIds = new Set(
+    getGroupsForClassBlock(className).flatMap(g => g.memberIds)
+  )
+  return classStudents.filter(s => !groupedIds.has(s.id))
+}
+
 /** 点击班级内的"新建分组" */
 function openNewGroupForClass(className: string) {
   groupFormClassName.value = className
@@ -4525,6 +4955,111 @@ const addMemberClassName = ref('')
 const addMemberSearch = ref('')
 const addMemberSelected = ref<string[]>([])
 
+// ====== 调整学生分组（下拉菜单 + 拖拽） ======
+const moveMenuOpen = ref('')
+
+// 拖拽状态
+const draggingStudentId = ref('')    // 正在拖拽的学生 ID
+const draggingFromGroupId = ref('')  // 拖拽来源分组 ID（空字符串表示来自未分组区域）
+const dragOverGroupId = ref('')      // 当前拖拽悬停的目标分组 ID
+const dragOverUngrouped = ref(false) // 是否悬停在未分组区域
+
+/** 切换调整分组下拉菜单的显示状态 */
+function toggleMoveMenu(groupId: string, studentId: string) {
+  const key = `${groupId}-${studentId}`
+  moveMenuOpen.value = moveMenuOpen.value === key ? '' : key
+}
+
+/** 将学生从当前分组移至目标分组（fromGroupId 为空表示来自未分组区域，toGroupId 为空则移出分组） */
+function handleMoveStudent(studentId: string, fromGroupId: string, toGroupId: string) {
+  moveMenuOpen.value = ''
+
+  // 从原分组移除（如果来源是分组而非未分组区域）
+  if (fromGroupId) {
+    const fromGroup = store.studentGroups.find(g => g.id === fromGroupId)
+    if (!fromGroup) return
+    const newFromMembers = fromGroup.memberIds.filter(id => id !== studentId)
+    store.updateStudentGroup(fromGroupId, { memberIds: newFromMembers })
+  }
+
+  // 加入目标分组
+  if (toGroupId) {
+    const toGroup = store.studentGroups.find(g => g.id === toGroupId)
+    if (toGroup) {
+      const newToMembers = Array.from(new Set([...toGroup.memberIds, studentId]))
+      store.updateStudentGroup(toGroupId, { memberIds: newToMembers })
+    }
+  }
+
+  // 同步到 MySQL（整体同步该课程分组）
+  const allGroups = store.studentGroups
+    .filter(g => g.courseId === courseId.value)
+    .map(g => ({ id: g.id, name: g.name, memberIds: g.memberIds }))
+  try { void saveCourseGroups(courseId.value, allGroups) } catch {}
+}
+
+// ====== 拖拽事件处理 ======
+
+/** 开始拖拽学生 */
+function onDragStart(event: DragEvent, studentId: string, fromGroupId: string) {
+  draggingStudentId.value = studentId
+  draggingFromGroupId.value = fromGroupId
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', studentId)
+  }
+}
+
+/** 拖拽悬停在分组上 */
+function onDragOverGroup(event: DragEvent, groupId: string) {
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+  dragOverGroupId.value = groupId
+}
+
+/** 拖拽悬停在未分组区域 */
+function onDragOverUngrouped(event: DragEvent) {
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+  dragOverUngrouped.value = true
+}
+
+/** 拖拽离开 */
+function onDragLeave() {
+  dragOverGroupId.value = ''
+  dragOverUngrouped.value = false
+}
+
+/** 放下学生到目标分组 */
+function onDropToGroup(event: DragEvent, toGroupId: string) {
+  event.preventDefault()
+  const sid = draggingStudentId.value
+  const fromId = draggingFromGroupId.value
+  if (sid && toGroupId !== fromId) {
+    handleMoveStudent(sid, fromId, toGroupId)
+  }
+  resetDragState()
+}
+
+/** 放下学生到未分组区域（移出分组） */
+function onDropToUngrouped(event: DragEvent) {
+  event.preventDefault()
+  const sid = draggingStudentId.value
+  const fromId = draggingFromGroupId.value
+  if (sid && fromId) {
+    handleMoveStudent(sid, fromId, '')
+  }
+  resetDragState()
+}
+
+/** 重置拖拽状态 */
+function resetDragState() {
+  draggingStudentId.value = ''
+  draggingFromGroupId.value = ''
+  dragOverGroupId.value = ''
+  dragOverUngrouped.value = false
+}
+
 /** 候选添加到分组的学员：本班级内未分组成员 */
 const candidateAddMembers = computed(() => {
   if (!addMemberClassName.value) return []
@@ -4818,10 +5353,13 @@ async function handleImportGroupsExcel(event: Event) {
     const keys = Object.keys(data[0] || {})
     if (keys.length < 2) {
       alert('Excel 格式不正确，请确保第一列为组名，第二列及之后为学生姓名/学号')
+      input.value = ''
       return
     }
     const groupNameKey = keys[0]
     const groupMap = new Map<string, string[]>()
+    const errors: { row: number; name: string; message: string }[] = []
+    let notFoundCount = 0
 
     // 如果是从班级内导入，只允许该班级的学生入组
     const targetClassName = classNameForImport.value
@@ -4831,7 +5369,8 @@ async function handleImportGroupsExcel(event: Event) {
         .map(e => e.student!.id)
     ) : null
 
-    for (const row of data) {
+    for (let rowIdx = 0; rowIdx < data.length; rowIdx++) {
+      const row = data[rowIdx]
       const groupName = String(row[groupNameKey] || '').trim()
       if (!groupName) continue
       for (let i = 1; i < keys.length; i++) {
@@ -4843,12 +5382,19 @@ async function handleImportGroupsExcel(event: Event) {
         )
         if (student) {
           // 如果指定了目标班级，只导入该班级的学生
-          if (classStudentIds && !classStudentIds.has(student.id)) continue
+          if (classStudentIds && !classStudentIds.has(student.id)) {
+            errors.push({ row: rowIdx + 2, name: studentRef, message: `学生不在班级"${targetClassName}"中` })
+            continue
+          }
           groupMap.get(groupName)!.push(student.id)
+        } else {
+          errors.push({ row: rowIdx + 2, name: studentRef, message: '未找到匹配学生' })
+          notFoundCount++
         }
       }
     }
-    let imported = 0
+    let inserted = 0
+    let updated = 0
     const groups: any[] = []
     for (const [name, memberIds] of groupMap) {
       const existing = store.studentGroups.find(
@@ -4857,8 +5403,9 @@ async function handleImportGroupsExcel(event: Event) {
       if (existing) {
         const merged = Array.from(new Set([...existing.memberIds, ...memberIds]))
         store.updateStudentGroup(existing.id, { memberIds: merged })
+        updated++
       } else {
-        const gid = `group-${courseId.value}-${Date.now()}-${imported}`
+        const gid = `group-${courseId.value}-${Date.now()}-${inserted}`
         store.addStudentGroup({
           id: gid,
           courseId: courseId.value,
@@ -4866,14 +5413,20 @@ async function handleImportGroupsExcel(event: Event) {
           memberIds: Array.from(new Set(memberIds)),
         })
         groups.push({ id: gid, courseId: courseId.value, name, memberIds: Array.from(new Set(memberIds)) })
+        inserted++
       }
-      imported++
     }
     // 同步到 MySQL
     if (groups.length > 0) {
       try { await bulkImportGroups(groups) } catch {}
     }
-    alert(`导入成功！共导入 ${imported} 个分组`)
+    importResult.value = {
+      inserted,
+      updated,
+      failed: errors.length,
+      errors,
+      summary: `分组导入完成：新增 ${inserted} 个分组，更新 ${updated} 个分组${targetClassName ? `（班级：${targetClassName}）` : ''}`,
+    }
   } catch (err) {
     console.error('Excel 导入失败:', err)
     alert('Excel 导入失败，请检查文件格式')
