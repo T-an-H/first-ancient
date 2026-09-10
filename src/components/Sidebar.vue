@@ -15,7 +15,7 @@ const router = useRouter()
 
 const adminNavItems = [
   { to: '/admin/categories', icon: 'calendar' as const, label: '课程管理' },
-  { to: '/admin/students', icon: 'users' as const, label: '班级管理' },
+  { to: '/admin/students', icon: 'users' as const, label: '学生管理' },
   { to: '/admin/teachers', icon: 'userCheck' as const, label: '教师管理' },
   { to: '/admin/accounts', icon: 'userCheck' as const, label: '账号管理' },
 ]

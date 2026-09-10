@@ -1,217 +1,319 @@
-<template>
+﻿<template>
   <div class="space-y-6">
-    <template v-if="!selectedClass">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-gray-900">班级管理</h1>
-          <p class="mt-1 text-gray-500">
-            {{ selectedDepartment ? `${selectedDepartment.name} 下的班级，点击班级查看学生名单` : '请先选择学院，再查看该学院的班级' }}
-          </p>
-        </div>
-        <div class="flex items-center gap-3">
-          <button
-            @click="showAddModal = true"
-            class="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-600"
-          >
-            <Plus class="h-4 w-4" /> 添加学生入库
-          </button>
-          <div
-            class="flex items-center gap-2 text-xs"
-            :class="loading ? 'text-amber-500' : !selectedDepartment ? 'text-gray-400' : 'text-green-500'"
-          >
-            <span
-              class="h-2 w-2 rounded-full"
-              :class="loading ? 'animate-pulse bg-amber-500' : !selectedDepartment ? 'bg-gray-400' : 'bg-green-500'"
-            />
-            {{ loading ? '加载中...' : !selectedDepartment ? '请先选择学院' : `已连接 · ${classes.length} 个班级` }}
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">学生管理</h1>
+        <p class="mt-1 text-sm text-gray-500">学生账号来自数据库，以下信息与数据库同步。</p>
+      </div>
+      <button @click="showAddModal = true" class="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-600">
+        <Plus class="h-4 w-4" /> 添加学生入库
+      </button>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-3">
+      <div class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">学生总数</p>
+            <p class="mt-2 text-2xl font-semibold text-gray-900">{{ studentRows.length }}</p>
+          </div>
+          <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+            <Users class="h-5 w-5" />
           </div>
         </div>
       </div>
-
-      <div
-        v-if="!selectedDepartment"
-        class="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"
-      >
-        <span>请先选择学院，再查看该学院的班级。</span>
-        <button @click="router.push('/admin')" class="font-medium text-amber-700 hover:text-amber-900">去选择学院</button>
-      </div>
-
-      <template v-else>
-        <div class="relative max-w-md">
-          <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            v-model="classSearch"
-            type="text"
-            placeholder="搜索班级名称..."
-            class="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-          />
-        </div>
-
-        <div v-if="loading" class="py-12 text-center text-gray-400">
-          <LoaderCircle class="mx-auto mb-2 h-8 w-8 animate-spin text-blue-500" />
-          <span>正在从数据库加载...</span>
-        </div>
-        <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <div
-            v-for="item in filteredClasses"
-            :key="item.id"
-            @click="selectClass(item.id)"
-            class="group cursor-pointer rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:shadow-md"
-          >
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600">
-                  <Users class="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <h3 class="font-semibold text-gray-900 transition-colors group-hover:text-blue-600">{{ item.name }}</h3>
-                  <p class="mt-0.5 text-xs text-gray-400">{{ item.count }} 名学生</p>
-                </div>
-              </div>
-              <ArrowRight class="h-5 w-5 text-gray-300 transition-colors group-hover:text-blue-500" />
-            </div>
+      <div class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">已标注学院</p>
+            <p class="mt-2 text-2xl font-semibold text-gray-900">{{ assignedDepartmentCount }}</p>
           </div>
-          <div v-if="filteredClasses.length === 0" class="col-span-full py-20 text-center text-gray-400">
-            <Users class="mx-auto mb-3 h-12 w-12 opacity-30" />
-            <p>{{ classSearch ? '没有匹配的班级' : '暂无班级数据' }}</p>
+          <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+            <Building2 class="h-5 w-5" />
           </div>
         </div>
-      </template>
-    </template>
-
-    <template v-else>
-      <div class="mb-1 flex items-center gap-3">
-        <button
-          @click="selectedClassId = ''"
-          class="flex items-center gap-1 text-sm text-gray-500 transition-colors hover:text-gray-800"
-        >
-          <ArrowLeft class="h-4 w-4" /> 返回班级列表
-        </button>
       </div>
-
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-gray-900">{{ selectedClass.name }}</h1>
-          <p class="mt-1 text-gray-500">{{ filteredStudents.length }} 名学生</p>
+      <div class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">正常状态</p>
+            <p class="mt-2 text-2xl font-semibold text-gray-900">{{ activeCount }}</p>
+          </div>
+          <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+            <UserCheck class="h-5 w-5" />
+          </div>
         </div>
       </div>
+    </div>
 
-      <div class="relative max-w-md">
-        <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-        <input
-          v-model="studentSearch"
-          type="text"
-          placeholder="搜索学生姓名或学号..."
-          class="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-        />
+    <div class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex flex-1 flex-col gap-3 sm:flex-row">
+          <div class="relative flex-1">
+            <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input v-model="keyword" type="text" placeholder="搜索学生姓名、学号或手机号"
+              class="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+          </div>
+          <select v-model="departmentFilter" class="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none sm:w-48">
+            <option value="all">全部学院</option>
+            <option v-for="d in departmentOptions" :key="d.id" :value="d.id">{{ d.name }}</option>
+          </select>
+          <select v-model="classFilter" class="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none sm:w-48">
+            <option value="all">全部班级</option>
+            <option v-for="c in classOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+        </div>
+        <div class="text-sm text-gray-500">共 {{ filteredStudents.length }} 名学生</div>
       </div>
 
-      <div v-if="loadingStudents" class="py-12 text-center text-gray-400">
-        <LoaderCircle class="mx-auto mb-2 h-8 w-8 animate-spin text-blue-500" />
-        <span>加载中...</span>
-      </div>
-      <div v-else class="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-        <table class="w-full">
+      <div class="mt-4 overflow-x-auto">
+        <table class="min-w-full">
           <thead>
             <tr class="border-b border-gray-100 bg-gray-50">
               <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">姓名</th>
               <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">学号</th>
-              <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">电话</th>
+              <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">手机号</th>
+              <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">学院</th>
+              <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">班级</th>
               <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">状态</th>
+              <th class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="student in filteredStudents" :key="student.id" class="border-b border-gray-50 transition-colors hover:bg-gray-50">
+            <tr v-for="s in filteredStudents" :key="s.id" class="border-b border-gray-50 transition-colors hover:bg-gray-50">
               <td class="px-4 py-3">
                 <div class="flex items-center gap-3">
-                  <div class="flex h-8 w-8 items-center justify-center rounded-full" :class="student.status === 'active' ? 'bg-blue-100' : 'bg-gray-100'">
-                    <span class="text-xs font-bold" :class="student.status === 'active' ? 'text-blue-600' : 'text-gray-400'">
-                      {{ student.name[0] }}
-                    </span>
-                  </div>
-                  <span class="text-sm font-medium text-gray-900">{{ student.name }}</span>
+                  <div class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-600">{{ (s.name || '?').slice(0, 1) }}</div>
+                  <span class="text-sm font-medium text-gray-900">{{ s.name }}</span>
                 </div>
               </td>
-              <td class="px-4 py-3 text-sm text-gray-600">{{ student.studentId || '-' }}</td>
-              <td class="px-4 py-3 text-sm text-gray-600">{{ student.phone || '-' }}</td>
+              <td class="px-4 py-3 text-sm text-gray-600">{{ s.studentId || s.id || '-' }}</td>
+              <td class="px-4 py-3 text-sm text-gray-600">{{ s.phone || '-' }}</td>
+              <td class="px-4 py-3 text-sm text-gray-600">{{ s.department || '-' }}</td>
+              <td class="px-4 py-3 text-sm text-gray-600">{{ s.className || '-' }}</td>
               <td class="px-4 py-3">
-                <span class="rounded-full px-2 py-0.5 text-xs" :class="student.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'">
-                  {{ student.status === 'active' ? '正常' : '禁用' }}
-                </span>
+                <span class="rounded-full px-2 py-0.5 text-xs" :class="s.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'">{{ s.status === 'active' ? '正常' : '禁用' }}</span>
+              </td>
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-end gap-2">
+                  <button @click="openEditStudent(s)" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600" title="编辑学生">
+                    <Pencil class="h-4 w-4" />
+                  </button>
+                  <button @click="promptDeleteStudent(s)" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600" title="删除学生">
+                    <Trash2 class="h-4 w-4" />
+                  </button>
+                </div>
               </td>
             </tr>
             <tr v-if="filteredStudents.length === 0">
-              <td colspan="4" class="px-4 py-12 text-center text-gray-400">{{ studentSearch ? '没有匹配的学生' : '该班级暂无学生' }}</td>
+              <td colspan="7" class="px-4 py-14 text-center text-sm text-gray-400">暂无符合条件的学生</td>
             </tr>
           </tbody>
         </table>
       </div>
-    </template>
-  </div>
+    </div>
 
-  <!-- 添加学生入库弹窗 -->
-  <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showAddModal = false">
-    <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-      <h2 class="mb-4 text-lg font-bold text-gray-900">添加学生入库</h2>
-      <div class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">姓名 *</label>
-          <input v-model="addForm.name" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+    <!-- 编辑弹窗 -->
+    <Teleport to="body">
+      <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/50" @click="closeEditModal" />
+        <div class="relative mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+          <div class="mb-5 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-gray-900">编辑学生</h3>
+            <button @click="closeEditModal" class="text-gray-400 transition-colors hover:text-gray-600"><X class="h-5 w-5" /></button>
+          </div>
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-gray-500">姓名 <span class="text-red-500">*</span></label>
+              <input v-model="editForm.name" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-gray-500">学院</label>
+              <select v-model="editForm.department" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500">
+                <option value="">未设置</option>
+                <option v-for="d in departmentOptions" :key="d.id" :value="d.name">{{ d.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-gray-500">班级</label>
+              <input v-model="editForm.className" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-gray-500">手机号</label>
+              <input v-model="editForm.phone" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-gray-500">状态</label>
+              <select v-model="editForm.status" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500">
+                <option value="active">正常</option>
+                <option value="inactive">禁用</option>
+              </select>
+            </div>
+            <p v-if="formError" class="text-sm text-red-500">{{ formError }}</p>
+            <div class="flex gap-3 pt-2">
+              <button @click="closeEditModal" class="flex-1 rounded-lg bg-gray-100 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-200">取消</button>
+              <button @click="saveStudent" class="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm text-white hover:bg-blue-700">保存</button>
+            </div>
+          </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">手机号 *</label>
-          <input v-model="addForm.phone" type="text" maxlength="11" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">身份证号 *</label>
-          <input v-model="addForm.idCard" type="text" maxlength="18" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">学院</label>
-          <input v-model="addForm.department" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">班级</label>
-          <input v-model="addForm.className" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
-        </div>
-        <p v-if="addError" class="text-sm text-red-500">{{ addError }}</p>
-        <p v-if="addSuccess" class="text-sm text-green-600">{{ addSuccess }}</p>
       </div>
-      <div class="mt-6 flex justify-end gap-3">
-        <button @click="showAddModal = false" class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100">关闭</button>
-        <button @click="handleAddStudent" :disabled="adding" class="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50">
-          {{ adding ? '入库中...' : '入库' }}
-        </button>
+    </Teleport>
+
+    <!-- 删除确认弹窗 -->
+    <Teleport to="body">
+      <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/50" @click="closeDeleteModal" />
+        <div class="relative mx-4 w-full max-w-sm rounded-xl bg-white p-6 text-center shadow-2xl">
+          <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+            <AlertTriangle class="h-6 w-6 text-red-600" />
+          </div>
+          <h3 class="text-base font-semibold text-gray-800">确认删除</h3>
+          <p class="mt-2 text-sm text-gray-500">确定要删除学生 <span class="font-medium text-gray-800">{{ deletingStudent?.name }}</span> 吗？此操作不可恢复。</p>
+          <div class="mt-5 flex gap-3">
+            <button @click="closeDeleteModal" class="flex-1 rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-600 hover:bg-gray-200">取消</button>
+            <button @click="confirmDeleteStudent" class="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700">确认删除</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 添加学生入库弹窗 -->
+    <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showAddModal = false">
+      <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h2 class="mb-4 text-lg font-bold text-gray-900">添加学生入库</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">姓名 *</label>
+            <input v-model="addForm.name" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">手机号 *</label>
+            <input v-model="addForm.phone" type="text" maxlength="11" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">身份证号 *</label>
+            <input v-model="addForm.idCard" type="text" maxlength="18" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">学院</label>
+            <input v-model="addForm.department" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">班级</label>
+            <input v-model="addForm.className" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <p v-if="addError" class="text-sm text-red-500">{{ addError }}</p>
+          <p v-if="addSuccess" class="text-sm text-green-600">{{ addSuccess }}</p>
+        </div>
+        <div class="mt-6 flex justify-end gap-3">
+          <button @click="showAddModal = false" class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100">关闭</button>
+          <button @click="handleAddStudent" :disabled="adding" class="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50">{{ adding ? '入库中...' : '入库' }}</button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, ArrowRight, LoaderCircle, Search, Users, Plus } from 'lucide-vue-next'
-import { fetchClasses, fetchDepartments, fetchStudents, createAccountStudent } from '@/api'
+import { computed, onMounted, ref } from 'vue'
+import { AlertTriangle, Building2, Pencil, Plus, Search, Trash2, UserCheck, Users, X } from 'lucide-vue-next'
+import { fetchStudents, updateAdminStudent, deleteAdminStudent, fetchDepartments, fetchClasses, createAccountStudent } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Department, Student } from '@/types'
+import type { Department } from '@/types'
 
-type ClassItem = {
-  id: string
-  name: string
-  count: number
+const store = useAppStore()
+const departments = ref<Department[]>([])
+const classes = ref<any[]>([])
+const students = ref<any[]>([])
+
+const keyword = ref('')
+const departmentFilter = ref('all')
+const classFilter = ref('all')
+const showEditModal = ref(false)
+const showDeleteModal = ref(false)
+const editingStudentId = ref('')
+const deletingStudent = ref<any | null>(null)
+const formError = ref('')
+
+const editForm = ref({ name: '', department: '', className: '', phone: '', status: 'active' })
+
+onMounted(() => { void loadPageData() })
+
+async function loadPageData() {
+  try {
+    const [deptRes, classRes, stuRes] = await Promise.all([
+      fetchDepartments(),
+      fetchClasses(),
+      fetchStudents({ pageSize: '500' }),
+    ])
+    if (deptRes.success) { departments.value = deptRes.departments; store.departments = deptRes.departments }
+    if (classRes.success) classes.value = classRes.classes || []
+    if (stuRes.success) students.value = stuRes.students || []
+  } catch (e) { console.error('加载数据失败:', e) }
 }
 
-const route = useRoute()
-const router = useRouter()
-const store = useAppStore()
+const departmentOptions = computed(() => [...departments.value].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN')))
+const classOptions = computed(() => {
+  if (departmentFilter.value === 'all') return classes.value
+  const dept = departments.value.find((d) => d.id === departmentFilter.value)
+  return classes.value.filter((c: any) => c.departmentId === departmentFilter.value || c.departmentName === dept?.name)
+})
 
-const classes = ref<ClassItem[]>([])
-const students = ref<Student[]>([])
-const loading = ref(false)
-const loadingStudents = ref(false)
-const classSearch = ref('')
-const studentSearch = ref('')
-const selectedClassId = ref('')
+const studentRows = computed(() => students.value.map((s: any) => ({
+  ...s,
+  studentId: s.studentId || s.student_id || '',
+  className: s.className || s.class_name || '',
+  department: s.department || '',
+  status: s.status || 'active',
+})))
+
+const filteredStudents = computed(() => {
+  const search = keyword.value.trim().toLowerCase()
+  return studentRows.value.filter((s) => {
+    if (departmentFilter.value !== 'all' && s.department !== departmentOptions.value.find((d) => d.id === departmentFilter.value)?.name) return false
+    if (classFilter.value !== 'all' && s.className !== classOptions.value.find((c) => c.id === classFilter.value)?.name) return false
+    if (!search) return true
+    return [s.name, s.studentId, s.phone].filter(Boolean).some((v) => v.toLowerCase().includes(search))
+  })
+})
+
+const assignedDepartmentCount = computed(() => studentRows.value.filter((s) => s.department).length)
+const activeCount = computed(() => studentRows.value.filter((s) => s.status === 'active').length)
+
+function openEditStudent(s: any) {
+  editingStudentId.value = s.id
+  editForm.value = { name: s.name, department: s.department || '', className: s.className || '', phone: s.phone || '', status: s.status || 'active' }
+  formError.value = ''
+  showEditModal.value = true
+}
+function closeEditModal() { showEditModal.value = false; formError.value = '' }
+
+async function saveStudent() {
+  if (!editForm.value.name.trim()) { formError.value = '请填写姓名'; return }
+  try {
+    await updateAdminStudent(editingStudentId.value, {
+      name: editForm.value.name.trim(),
+      department: editForm.value.department,
+      className: editForm.value.className,
+      phone: editForm.value.phone,
+      status: editForm.value.status,
+    })
+    await loadPageData()
+    closeEditModal()
+  } catch (e: any) { formError.value = e?.message || '保存失败' }
+}
+
+function promptDeleteStudent(s: any) { deletingStudent.value = s; showDeleteModal.value = true }
+function closeDeleteModal() { showDeleteModal.value = false; deletingStudent.value = null }
+
+async function confirmDeleteStudent() {
+  if (!deletingStudent.value) return
+  try {
+    await deleteAdminStudent(deletingStudent.value.id)
+    await loadPageData()
+    closeDeleteModal()
+  } catch (e: any) { alert(e?.message || '删除失败') }
+}
 
 // 添加学生入库
 const showAddModal = ref(false)
@@ -238,153 +340,11 @@ async function handleAddStudent() {
     })
     addSuccess.value = `入库成功！学号：${data.account.userNo}，初始密码：身份证后 6 位`
     addForm.value = { name: '', phone: '', idCard: '', department: '', className: '' }
+    await loadPageData()
   } catch (err: any) {
     addError.value = err instanceof Error ? err.message : '入库失败'
   } finally {
     adding.value = false
   }
 }
-
-const selectedDepartment = computed<Department | null>(() => store.getSelectedDepartment())
-const selectedClass = computed(() => classes.value.find((item) => item.id === selectedClassId.value) || null)
-
-const filteredClasses = computed(() => {
-  const keyword = classSearch.value.trim().toLowerCase()
-  if (!keyword) return classes.value
-  return classes.value.filter((item) => item.name.toLowerCase().includes(keyword))
-})
-
-const filteredStudents = computed(() => {
-  const keyword = studentSearch.value.trim().toLowerCase()
-  if (!keyword) return students.value
-  return students.value.filter((student) => {
-    return student.name.toLowerCase().includes(keyword) || (student.studentId || '').toLowerCase().includes(keyword)
-  })
-})
-
-onMounted(() => {
-  void ensureDepartmentsLoaded()
-})
-
-async function ensureDepartmentsLoaded() {
-  if (store.departments.length > 0) return
-
-  try {
-    const result = await fetchDepartments()
-    if (result.success) {
-      store.departments = result.departments
-    }
-  } catch (error) {
-    console.error('加载学院列表失败:', error)
-  }
-}
-
-function applyRouteClassName() {
-  const routeClassName = typeof route.query.className === 'string' ? route.query.className : ''
-  if (!routeClassName) {
-    selectedClassId.value = ''
-    return
-  }
-
-  const matched = classes.value.find((item) => item.name === routeClassName)
-  selectedClassId.value = matched?.id || ''
-}
-
-async function loadClasses() {
-  const department = selectedDepartment.value
-  if (!department) {
-    classes.value = []
-    selectedClassId.value = ''
-    loading.value = false
-    return
-  }
-
-  loading.value = true
-  try {
-    const result = await fetchClasses({ departmentId: department.id })
-    classes.value = result.success ? result.classes : []
-    applyRouteClassName()
-    if (selectedClassId.value && !classes.value.some((item) => item.id === selectedClassId.value)) {
-      selectedClassId.value = ''
-    }
-  } catch (error) {
-    classes.value = []
-    selectedClassId.value = ''
-    console.error('加载班级失败:', error)
-  } finally {
-    loading.value = false
-  }
-}
-
-function selectClass(classId: string) {
-  selectedClassId.value = classId
-}
-
-async function loadClassStudents() {
-  const department = selectedDepartment.value
-  if (!department || !selectedClass.value) {
-    students.value = []
-    return
-  }
-
-  loadingStudents.value = true
-  try {
-    const result = await fetchStudents({
-      classId: selectedClass.value.id,
-      departmentId: department.id,
-      pageSize: '200',
-    })
-    students.value = result.success ? result.students : []
-  } catch (error) {
-    students.value = []
-    console.error('加载学生失败:', error)
-  } finally {
-    loadingStudents.value = false
-  }
-}
-
-watch(
-  () => route.query.className,
-  () => {
-    applyRouteClassName()
-    studentSearch.value = ''
-  },
-)
-
-watch(selectedClassId, (classId, previousClassId) => {
-  const className = classes.value.find((item) => item.id === classId)?.name || ''
-  const currentQueryClassName = typeof route.query.className === 'string' ? route.query.className : ''
-
-  if (currentQueryClassName !== className) {
-    const nextQuery = { ...route.query }
-    if (className) {
-      nextQuery.className = className
-    } else {
-      delete nextQuery.className
-    }
-    void router.replace({ query: nextQuery })
-  }
-
-  if (!classId) {
-    students.value = []
-    return
-  }
-
-  if (classId !== previousClassId) {
-    studentSearch.value = ''
-    void loadClassStudents()
-  }
-})
-
-watch(
-  () => store.selectedDepartmentId,
-  () => {
-    classSearch.value = ''
-    studentSearch.value = ''
-    students.value = []
-    selectedClassId.value = ''
-    void loadClasses()
-  },
-  { immediate: true },
-)
 </script>
