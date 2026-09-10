@@ -28,6 +28,8 @@ export interface Course {
   credits: number;
   duration: number;
   status: 'active' | 'inactive' | 'draft';
+  /** 学期，如 2026秋季学期 */
+  semester?: string;
   createdAt: string;
   teacher: string;
   /** 企业导师名称 */
@@ -125,6 +127,8 @@ export interface Schedule {
   id: string;
   courseId: string;
   title: string;
+  /** 学期，如 2026秋季学期 */
+  semester?: string;
   /** 周几（如 周一），未设置时由 startDate 推导 */
   day?: string;
   /** 上课班级 */

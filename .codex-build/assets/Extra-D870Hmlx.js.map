@@ -1,0 +1,1 @@
+{"version":3,"file":"Extra-D870Hmlx.js","sources":["../../src/pages/student/Extra.vue"],"sourcesContent":["<template>\r\n  <ExtraFeatures />\r\n</template>\r\n<script setup lang=\"ts\">\r\nimport ExtraFeatures from '@/components/ExtraFeatures.vue'\r\n</script>"],"names":["_createBlock","ExtraFeatures"],"mappings":"sZACEA,EAAiBC,CAAA"}

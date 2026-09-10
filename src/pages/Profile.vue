@@ -171,28 +171,40 @@
     <div v-if="view === 'switch'" class="space-y-4">
       <button @click="view = 'main'" class="text-sm text-brand-600 hover:text-brand-700">&larr; 返回个人中心</button>
       <div class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
-        <h2 class="mb-4 text-lg font-semibold text-gray-900">切换账号</h2>
-        <p class="mb-4 text-sm text-gray-500">保留数据，可随时切回。最多保存 5 个账号。</p>
-        <div v-if="switchableAccounts.length === 0" class="py-6 text-center text-sm text-gray-400">
-          暂无其他可切换的账号
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-gray-900">账号管理</h2>
+          <button @click="handleAddAccount"
+            class="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            添加账号
+          </button>
+        </div>
+        <p class="mb-4 text-sm text-gray-500">管理已登录的账号，保留数据可随时切回。最多保存 5 个账号（当前 {{ savedAccounts.length }}/5）。</p>
+        <div v-if="savedAccounts.length === 0" class="py-6 text-center text-sm text-gray-400">
+          暂无已登录账号
         </div>
         <div v-else class="space-y-3">
-          <div v-for="acc in switchableAccounts" :key="acc.id"
-            class="flex items-center justify-between rounded-lg border border-gray-100 p-4 hover:border-brand-300 transition">
+          <div v-for="acc in savedAccounts" :key="acc.id"
+            class="flex items-center justify-between rounded-lg border p-4 transition"
+            :class="acc.account === currentAccount ? 'border-brand-300 bg-brand-50/40' : 'border-gray-100 hover:border-brand-300'">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-brand-400/10 text-brand-700 flex items-center justify-center text-sm font-bold">
-                {{ (acc.name || '?').slice(0, 1) }}
+              <div class="w-10 h-10 rounded-full overflow-hidden bg-brand-400/10 text-brand-700 flex items-center justify-center text-sm font-bold">
+                <img v-if="acc.userInfo?.avatar" :src="acc.userInfo.avatar" alt="" class="w-full h-full object-cover" />
+                <span v-else>{{ (acc.name || '?').slice(0, 1) }}</span>
               </div>
               <div>
-                <div class="text-sm font-medium text-gray-900">{{ acc.name }}</div>
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-medium text-gray-900">{{ acc.name }}</span>
+                  <span v-if="acc.account === currentAccount" class="rounded-full bg-brand-100 text-brand-700 px-2 py-0.5 text-[10px] font-medium">当前</span>
+                </div>
                 <div class="text-xs text-gray-500">{{ acc.account }} · {{ roleLabel(acc.role, acc.sub_role) }}</div>
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <button @click="handleSwitch(acc.id)"
+              <button v-if="acc.account !== currentAccount" @click="handleSwitch(acc.id)"
                 class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700">切换</button>
               <button @click="handleRemoveSaved(acc.id)"
-                class="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:text-red-600 hover:border-red-300">移除</button>
+                class="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:text-red-600 hover:border-red-300">删除</button>
             </div>
           </div>
         </div>
@@ -287,9 +299,6 @@ const currentAccount = computed(() => {
     return raw ? (JSON.parse(raw)?.userInfo?.account ?? null) : null
   } catch { return null }
 })
-const switchableAccounts = computed(() =>
-  savedAccounts.value.filter((a) => a.account !== currentAccount.value),
-)
 
 function refreshSavedAccounts() {
   savedAccounts.value = store.getSavedAccounts()
@@ -308,6 +317,12 @@ function openSwitch() {
   view.value = 'switch'
 }
 
+// 添加账号：新开一个标签页到登录界面，当前窗口会话不受影响（多窗口隔离）
+function handleAddAccount() {
+  const loginUrl = window.location.origin + window.location.pathname + '#/login'
+  window.open(loginUrl, '_blank')
+}
+
 function handleSwitch(id: string) {
   const portal = store.switchAccount(id)
   if (portal) {
@@ -316,6 +331,9 @@ function handleSwitch(id: string) {
 }
 
 function handleRemoveSaved(id: string) {
+  const acc = savedAccounts.value.find((a) => a.id === id)
+  const name = acc?.name || '该账号'
+  if (!window.confirm('确定删除已登录账号「' + name + '」吗？删除后需重新输入密码登录。')) return
   store.removeSavedAccount(id)
   refreshSavedAccounts()
 }
