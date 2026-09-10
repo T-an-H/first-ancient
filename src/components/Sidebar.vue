@@ -18,12 +18,14 @@ const adminNavItems = [
   { to: '/admin/students', icon: 'users' as const, label: '学生管理' },
   { to: '/admin/teachers', icon: 'userCheck' as const, label: '教师管理' },
   { to: '/admin/accounts', icon: 'userCheck' as const, label: '账号管理' },
+  { to: '/admin/profile', icon: 'user' as const, label: '个人中心' },
 ]
 
 const teacherNavItems = [
   { to: '/teacher/courses', icon: 'bookOpen' as const, label: '我的课程' },
   { to: '/teacher/schedule', icon: 'calendar' as const, label: '课程表' },
   { to: '/teacher/extra', icon: 'lightbulb' as const, label: '待办' },
+  { to: '/teacher/profile', icon: 'user' as const, label: '个人中心' },
 ]
 
 const studentNavItems = [
@@ -38,11 +40,13 @@ const mentorNavItems = [
   { to: '/mentor/courses', icon: 'bookOpen' as const, label: '我的课程' },
   { to: '/mentor/schedule', icon: 'calendar' as const, label: '课程表' },
   { to: '/mentor/extra', icon: 'lightbulb' as const, label: '待办' },
+  { to: '/mentor/profile', icon: 'user' as const, label: '个人中心' },
 ]
 
 const leaderNavItems = [
   { to: '/leader/courses', icon: 'eye' as const, label: '课程总览' },
   { to: '/leader/students', icon: 'users' as const, label: '学员总览' },
+  { to: '/leader/profile', icon: 'user' as const, label: '个人中心' },
 ]
 
 const roleConfig: Record<string, { items: { to: string; icon: string; label: string }[]; color: string; label: string }> = {

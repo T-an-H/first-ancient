@@ -191,4 +191,153 @@ router.post('/change-password', async (req, res) => {
   }
 });
 
+// ====== 从 JWT 提取用户 ID 的工具函数 ======
+function extractUserId(req) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return decoded.id;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /api/user/profile - 获取当前登录用户完整信息
+ */
+router.get('/profile', async (req, res) => {
+  try {
+    const userId = extractUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: '未登录或登录已过期' });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT u.id, u.account, u.name, u.user_no, u.department, u.role, u.sub_role,
+              u.status, u.ref_type, u.ref_id
+       FROM users u
+       WHERE u.id = ?
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '用户不存在' });
+    }
+
+    const user = rows[0];
+    let className = '';
+    let email = '';
+
+    if (user.ref_type === 'student' && user.ref_id) {
+      const [studentRows] = await pool.query(
+        'SELECT class_name, email FROM students WHERE id = ? LIMIT 1',
+        [user.ref_id]
+      );
+      if (studentRows.length > 0) {
+        className = studentRows[0].class_name || '';
+        email = studentRows[0].email || '';
+      }
+    } else if (user.ref_type === 'teacher' && user.ref_id) {
+      const [teacherRows] = await pool.query(
+        'SELECT email FROM teachers WHERE id = ? LIMIT 1',
+        [user.ref_id]
+      );
+      if (teacherRows.length > 0) {
+        email = teacherRows[0].email || '';
+      }
+    }
+
+    const roleLabel = user.role === 'admin' ? '管理员'
+      : user.role === 'student' ? '学生'
+      : user.sub_role === 'mentor' ? '企业导师'
+      : user.sub_role === 'leader' ? '学院领导'
+      : '教师';
+
+    res.json({
+      success: true,
+      profile: {
+        name: user.name,
+        userNo: user.user_no || '',
+        phone: user.account,
+        department: user.department || '',
+        role: user.role,
+        subRole: user.sub_role || '',
+        roleLabel,
+        className,
+        email,
+        status: user.status,
+      },
+    });
+  } catch (error) {
+    console.error('获取个人信息错误:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+});
+
+/**
+ * POST /api/user/change-phone - 修改绑定手机号
+ * 接收: { newPhone, password }
+ */
+router.post('/change-phone', async (req, res) => {
+  try {
+    const userId = extractUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: '未登录或登录已过期' });
+    }
+
+    const newPhone = String(req.body?.newPhone || '').trim();
+    const password = String(req.body?.password || '');
+
+    if (!/^1\d{10}$/.test(newPhone)) {
+      return res.status(400).json({ success: false, message: '手机号格式不正确（需 11 位）' });
+    }
+
+    // 查当前用户
+    const [userRows] = await pool.query(
+      'SELECT id, account, password, ref_type, ref_id FROM users WHERE id = ? LIMIT 1',
+      [userId]
+    );
+    if (userRows.length === 0) {
+      return res.status(404).json({ success: false, message: '用户不存在' });
+    }
+    const user = userRows[0];
+
+    // 验密码
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, message: '当前密码不正确' });
+    }
+
+    // 查重
+    if (newPhone === user.account) {
+      return res.status(400).json({ success: false, message: '新手机号与当前相同' });
+    }
+    const [dupRows] = await pool.query(
+      'SELECT id FROM users WHERE account = ? AND id <> ? LIMIT 1',
+      [newPhone, userId]
+    );
+    if (dupRows.length > 0) {
+      return res.status(409).json({ success: false, message: '该手机号已被其他账号使用' });
+    }
+
+    // 更新 users.account
+    await pool.query('UPDATE users SET account = ? WHERE id = ?', [newPhone, userId]);
+
+    // 同步到 students / teachers
+    if (user.ref_type === 'student' && user.ref_id) {
+      await pool.query('UPDATE students SET phone = ? WHERE id = ?', [newPhone, user.ref_id]);
+    } else if (user.ref_type === 'teacher' && user.ref_id) {
+      await pool.query('UPDATE teachers SET phone = ? WHERE id = ?', [newPhone, user.ref_id]);
+    }
+
+    res.json({ success: true, message: '手机号修改成功' });
+  } catch (error) {
+    console.error('修改手机号错误:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+});
+
 export default router;

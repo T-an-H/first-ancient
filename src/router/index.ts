@@ -58,6 +58,11 @@ const router = createRouter({
           name: 'AdminStudentDetail',
           component: () => import('@/pages/admin/StudentDetail.vue'),
         },
+        {
+          path: 'profile',
+          name: 'AdminProfile',
+          component: () => import('@/pages/Profile.vue'),
+        },
       ],
     },
     {
@@ -94,6 +99,11 @@ const router = createRouter({
           path: 'evaluation',
           name: 'TeacherEvaluation',
           component: () => import('@/pages/teacher/Evaluation.vue'),
+        },
+        {
+          path: 'profile',
+          name: 'TeacherProfile',
+          component: () => import('@/pages/Profile.vue'),
         },
       ],
     },
@@ -169,6 +179,11 @@ const router = createRouter({
           name: 'MentorExtra',
           component: () => import('@/pages/teacher/Extra.vue'),
         },
+        {
+          path: 'profile',
+          name: 'MentorProfile',
+          component: () => import('@/pages/Profile.vue'),
+        },
       ],
     },
     {
@@ -190,6 +205,11 @@ const router = createRouter({
           path: 'students',
           name: 'LeaderStudents',
           component: () => import('@/pages/leader/Students.vue'),
+        },
+        {
+          path: 'profile',
+          name: 'LeaderProfile',
+          component: () => import('@/pages/Profile.vue'),
         },
       ],
     },

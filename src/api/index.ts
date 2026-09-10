@@ -481,6 +481,19 @@ export async function changePassword(newPassword: string, oldPassword?: string) 
   })
 }
 
+export async function fetchUserProfile() {
+  return request('/user/profile', {
+    timeoutMs: 10000,
+  })
+}
+
+export async function changePhone(newPhone: string, password: string) {
+  return request('/user/change-phone', {
+    method: 'POST',
+    body: JSON.stringify({ newPhone, password }),
+  })
+}
+
 export async function importAccounts(rows: any[]) {
   return request('/accounts/import', {
     method: 'POST',
