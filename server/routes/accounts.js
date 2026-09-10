@@ -473,11 +473,19 @@ router.get('/export', async (req, res) => {
 router.get('/export-students', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT student_id AS 学号, name AS 姓名, phone AS 手机号,
-              department AS 学院, class_name AS 班级, status AS 状态
-       FROM students ORDER BY student_id ASC`
+      `SELECT s.student_id AS 学号, s.name AS 姓名, s.phone AS 手机号,
+              s.department AS 学院, s.class_name AS 班级, s.status AS 状态,
+              u.need_change_password AS 需改密
+       FROM students s
+       LEFT JOIN users u ON u.ref_id = s.id AND u.ref_type = 'student'
+       ORDER BY s.student_id ASC`
     );
-    res.json({ success: true, students: rows });
+    const students = rows.map((r) => ({
+      ...r,
+      初始密码: r.需改密 === 1 ? '666666' : '已修改',
+      需改密: undefined,
+    }));
+    res.json({ success: true, students });
   } catch (error) {
     handleRouteError(res, error);
   }
@@ -490,12 +498,22 @@ router.get('/export-teachers', async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT t.name AS 姓名, t.phone AS 手机号, t.email AS 邮箱,
-              d.name AS 学院
+              d.name AS 学院,
+              u.user_no AS 工号,
+              u.sub_role AS 身份,
+              u.need_change_password AS 需改密
        FROM teachers t
        LEFT JOIN departments d ON d.id = t.department_id
+       LEFT JOIN users u ON u.ref_id = CONCAT(t.id) AND u.ref_type = 'teacher'
        ORDER BY t.name ASC`
     );
-    res.json({ success: true, teachers: rows });
+    const teachers = rows.map((r) => ({
+      ...r,
+      身份: r.身份 === 'mentor' ? '企业导师' : r.身份 === 'leader' ? '学院领导' : '教师',
+      初始密码: r.需改密 === 1 ? '666666' : '已修改',
+      需改密: undefined,
+    }));
+    res.json({ success: true, teachers });
   } catch (error) {
     handleRouteError(res, error);
   }
