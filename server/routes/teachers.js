@@ -17,14 +17,16 @@ function buildTeacherListQuery(whereClause = '') {
   return `SELECT
     teacher.id,
     teacher.name,
-    COALESCE(teacher.phone, usr.account) AS phone,
+    teacher.phone,
     teacher.email,
     teacher.department_id,
-    COALESCE(dept.name, usr.department) AS department_name,
+    dept.name AS department_name,
+    usr.account AS user_phone,
+    usr.department AS user_department,
     teacher.created_at
   FROM teachers AS teacher
   LEFT JOIN departments AS dept ON dept.id = teacher.department_id
-  LEFT JOIN users AS usr ON usr.ref_id = CAST(teacher.id AS CHAR) AND usr.ref_type = 'teacher'
+  LEFT JOIN users AS usr ON usr.ref_id = CONCAT(teacher.id) AND usr.ref_type = 'teacher'
   ${whereClause}
   ORDER BY dept.name, teacher.name`;
 }
@@ -58,7 +60,15 @@ router.get('/', async (req, res) => {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const [rows] = await pool.query(buildTeacherListQuery(whereClause), params);
-    const teachers = await attachTeacherStats(pool, rows);
+
+    // JS 层兜底：teachers 表没 phone/department 时从 users 表取
+    const fixedRows = rows.map((row) => ({
+      ...row,
+      phone: row.phone || row.user_phone || '',
+      department_name: row.department_name || row.user_department || '',
+    }));
+
+    const teachers = await attachTeacherStats(pool, fixedRows);
 
     res.json({
       success: true,

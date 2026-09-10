@@ -262,18 +262,26 @@ export async function getTeacherById(connection, teacherId) {
     `SELECT
        teacher.id,
        teacher.name,
-       COALESCE(teacher.phone, usr.account) AS phone,
+       teacher.phone,
        teacher.email,
        teacher.department_id,
        teacher.created_at,
-       COALESCE(dept.name, usr.department) AS department_name
+       dept.name AS department_name,
+       usr.account AS user_phone,
+       usr.department AS user_department
      FROM teachers AS teacher
      LEFT JOIN departments AS dept ON dept.id = teacher.department_id
-     LEFT JOIN users AS usr ON usr.ref_id = CAST(teacher.id AS CHAR) AND usr.ref_type = 'teacher'
+     LEFT JOIN users AS usr ON usr.ref_id = CONCAT(teacher.id) AND usr.ref_type = 'teacher'
      WHERE teacher.id = ?
      LIMIT 1`,
     [normalizedId]
   );
+
+  const [fixedRow] = rows;
+  if (fixedRow) {
+    fixedRow.phone = fixedRow.phone || fixedRow.user_phone || '';
+    fixedRow.department_name = fixedRow.department_name || fixedRow.user_department || '';
+  }
 
   const [teacher] = await attachTeacherStats(connection, rows);
   return teacher || null;
