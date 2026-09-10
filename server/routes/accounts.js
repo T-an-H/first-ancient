@@ -481,12 +481,12 @@ router.get('/export-students', async (req, res) => {
        ORDER BY s.student_id ASC`
     );
     const students = rows.map((r) => {
-      let initialPassword = '已修改';
-      if (r.需改密 === 1 && r.id_card_enc) {
+      let initialPassword = '666666';
+      if (r.id_card_enc) {
         try {
           const idCard = decryptIdCard(r.id_card_enc);
           initialPassword = initialPasswordFromIdCard(idCard);
-        } catch { initialPassword = '666666'; }
+        } catch { /* keep 666666 */ }
       }
       const { id_card_enc, 需改密, ...rest } = r;
       return { ...rest, 初始密码: initialPassword };
@@ -515,12 +515,12 @@ router.get('/export-teachers', async (req, res) => {
        ORDER BY t.name ASC`
     );
     const teachers = rows.map((r) => {
-      let initialPassword = '已修改';
-      if (r.需改密 === 1 && r.id_card_enc) {
+      let initialPassword = '666666';
+      if (r.id_card_enc) {
         try {
           const idCard = decryptIdCard(r.id_card_enc);
           initialPassword = initialPasswordFromIdCard(idCard);
-        } catch { initialPassword = '666666'; }
+        } catch { /* keep 666666 */ }
       }
       const { id_card_enc, 需改密, ...rest } = r;
       return {
