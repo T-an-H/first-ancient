@@ -51,8 +51,17 @@ export function requireTeacher(req, res, next) {
 }
 
 export function requireAdmin(req, res, next) {
+  // authMiddleware 跳过了 GET 请求的 JWT 校验，这里补验
   if (!req.user) {
-    return res.status(401).json({ success: false, message: '未登录或登录已过期' });
+    const token = extractToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, message: '未登录或登录已过期' });
+    }
+    try {
+      req.user = jwt.verify(token, JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ success: false, message: '登录凭证无效，请重新登录' });
+    }
   }
   if (req.user.role === 'admin') {
     return next();
