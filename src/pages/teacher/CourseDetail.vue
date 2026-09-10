@@ -2431,6 +2431,20 @@ async function addRepoStudentToCourse(s: any) {
   if (!courseId.value) return
   repoAddMsg.value = ''
   const studentId = s.ref_id || s.user_no || s.id
+  // 补写学生到 store，否则未分班面板因 store.students.find 落空而不显示
+  if (!store.students.some((st) => st.id === studentId)) {
+    store.addStudent({
+      id: studentId,
+      name: s.name,
+      phone: '',
+      email: '',
+      avatar: '',
+      joinDate: getNow().toISOString().split('T')[0],
+      status: 'active',
+      studentId: s.user_no || studentId,
+      className: '',
+    })
+  }
   // 检查是否已选本课程
   const exists = store.enrollments.some(
     (e) => e.courseId === courseId.value && e.studentId === studentId && e.status !== 'dropped'
