@@ -202,10 +202,10 @@
               <input
                 v-model="courseForm.title"
                 type="text"
-                readonly
-                class="w-full rounded-xl border border-gray-200 bg-gray-50 px-5 py-4 text-lg text-gray-500 outline-none"
+                placeholder="请输入课程名称"
+                class="w-full rounded-xl border border-gray-200 px-5 py-4 text-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               />
-              <p class="mt-2 text-sm text-gray-400">自动使用所选课程名称</p>
+              <p class="mt-2 text-sm text-gray-400">默认使用分类名称，也可以在此修改课程名称</p>
             </div>
 
             <div>
@@ -232,19 +232,6 @@
                 class="w-full rounded-xl border border-gray-200 px-5 py-4 text-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               />
               <p class="mt-2 text-sm text-gray-400">选填，将同步到课程的导师分配</p>
-            </div>
-
-            <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700">上课班级</label>
-              <select
-                v-model="courseForm.className"
-                class="w-full rounded-xl border border-gray-200 bg-white px-5 py-4 text-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              >
-                <option value="">{{ courseClassOptions.length ? '请选择班级' : '请先在班级管理中创建班级' }}</option>
-                <option v-for="classItem in courseClassOptions" :key="classItem.id" :value="classItem.name">
-                  {{ classItem.name }}
-                </option>
-              </select>
             </div>
 
             <div>
@@ -441,7 +428,6 @@ type CourseFormState = {
   categoryId: string
   teacher: string
   mentor: string
-  className: string
   semester: string
   startDate: string
   endDate: string
@@ -547,14 +533,6 @@ const courseTeacherOptions = computed(() => {
     .sort((left, right) => left.name.localeCompare(right.name, 'zh-Hans-CN'))
 })
 
-const courseClassOptions = computed(() => {
-  const departmentId = selectedCategory.value?.departmentId || activeDepartmentId.value
-  if (!departmentId) return []
-  return apiClasses.value
-    .filter((classItem) => classItem.departmentId === departmentId)
-    .sort((left, right) => left.name.localeCompare(right.name, 'zh-Hans-CN'))
-})
-
 const dateRangeWarning = computed(() => {
   if (!courseForm.value.startDate || !courseForm.value.endDate) return ''
   return courseForm.value.endDate < courseForm.value.startDate ? '结束时间不能早于开始时间' : ''
@@ -593,7 +571,6 @@ function onSemesterChange() {
 
 const conflictWarning = computed(() => {
   const teacherName = normalizeOptionalValue(courseForm.value.teacher)
-  const className = normalizeOptionalValue(courseForm.value.className)
 
   if (!selectedSlots.value.length) return ''
 
@@ -609,20 +586,15 @@ const conflictWarning = computed(() => {
       if (!timesOverlap(schedule.timeSlot, timeSlot)) return false
 
       const sameTeacher = teacherName && normalizeOptionalValue(schedule.teacher) === teacherName
-      const sameClass = className && normalizeOptionalValue(schedule.className) === className
       const sameRoom = roomName && normalizeOptionalValue(schedule.room) === roomName
 
-      return Boolean(sameTeacher || sameClass || sameRoom)
+      return Boolean(sameTeacher || sameRoom)
     })
 
     if (!conflict) continue
 
     if (teacherName && normalizeOptionalValue(conflict.teacher) === teacherName) {
       return `授课教师「${teacherName}」在 ${slot.dayLabel} ${timeSlot} 已有排课`
-    }
-
-    if (className && normalizeOptionalValue(conflict.className) === className) {
-      return `班级「${className}」在 ${slot.dayLabel} ${timeSlot} 已有排课`
     }
 
     if (roomName && normalizeOptionalValue(conflict.room) === roomName) {
@@ -639,7 +611,6 @@ const canSaveCourse = computed(() => {
     courseForm.value.title.trim() &&
     courseForm.value.categoryId &&
     courseForm.value.teacher.trim() &&
-    courseForm.value.className &&
     courseForm.value.startDate &&
     courseForm.value.endDate &&
     !dateRangeWarning.value &&
@@ -919,7 +890,6 @@ function createCourseFormState(course: Course | null = null, schedule: Schedule 
     categoryId: selectedCategory.value?.id || course?.categoryId || '',
     teacher: schedule?.teacher || course?.teacher || '',
     mentor: schedule?.mentor || course?.mentor || '',
-    className: schedule?.className || '',
     semester: derivedSemester || currentSemester,
     startDate: schedule?.startDate || '',
     endDate: schedule?.endDate || '',
@@ -957,7 +927,7 @@ function openCourseModal(course: Course | null) {
     courseTarget.value = course
     editingSchedule.value = schedules[0] || null
     courseForm.value = createCourseFormState(course, editingSchedule.value)
-    courseForm.value.title = selectedCategory.value.name
+    courseForm.value.title = course.title || selectedCategory.value.name
     courseForm.value.categoryId = selectedCategory.value.id
     selectedSlots.value = createSelectedSlots(editingSchedule.value)
   } else {
@@ -983,7 +953,6 @@ async function handleSaveCourse() {
 
   const teacher = courseForm.value.teacher.trim()
   const mentor = courseForm.value.mentor.trim()
-  const className = courseForm.value.className.trim()
   const duration = Number(courseForm.value.duration)
   const credits = Number(courseForm.value.credits)
 
@@ -1009,10 +978,9 @@ async function handleSaveCourse() {
 
     const buildPayload = (slot: SlotSelection) => ({
       courseId: targetCourse.id,
-      title: selectedCategory.value?.name || targetCourse.title,
+      title: courseForm.value.title.trim() || selectedCategory.value?.name || targetCourse.title,
       teacher,
       mentor,
-      className,
       day: slot.dayLabel,
       room: slot.room.trim(),
       startDate: courseForm.value.startDate,
@@ -1178,7 +1146,7 @@ async function ensureCourseRecord(payload: {
 }) {
   if (!courseTarget.value) {
     const result = await createCourse({
-      title: payload.category.name,
+      title: courseForm.value.title.trim() || payload.category.name,
       description: courseForm.value.description.trim(),
       categoryId: payload.category.id,
       departmentId: payload.category.departmentId,
@@ -1197,7 +1165,7 @@ async function ensureCourseRecord(payload: {
   const nextTeacher = editingCourse.value ? payload.teacher : normalizeOptionalValue(courseTarget.value.teacher) || payload.teacher
   const nextMentor = editingCourse.value ? payload.mentor : normalizeOptionalValue(courseTarget.value.mentor) || payload.mentor
   const result = await updateCourse(courseTarget.value.id, {
-    title: payload.category.name,
+    title: courseForm.value.title.trim() || payload.category.name,
     description: courseTarget.value.description || courseForm.value.description.trim(),
     categoryId: payload.category.id,
     departmentId: payload.category.departmentId,

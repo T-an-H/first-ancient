@@ -611,7 +611,7 @@ function buildSemesterOptions(now: Date) {
 const semesterOptions = computed(() => buildSemesterOptions(semesterNow.value))
 
 function defaultSemester() {
-  const now = semesterNow.value
+  const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth() + 1
   return month === 1 || month >= 8 ? `${year}秋季学期` : `${year}春季学期`

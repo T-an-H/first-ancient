@@ -14,7 +14,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import pool from '../db.js';
 import { hashIdCard, encryptIdCard, decryptIdCard, initialPasswordFromIdCard, maskIdCard } from '../lib/crypto.js';
-import { handleRouteError, httpError, normalizeText } from '../lib/admin.js';
+import { ensureClass, handleRouteError, httpError, normalizeText } from '../lib/admin.js';
 
 const router = Router();
 
@@ -123,10 +123,17 @@ async function createAccount(connection, { name, phone, idCard, role, subRole, d
   let refId;
   if (refType === 'student') {
     refId = userNo;
+    const klass = className
+      ? await ensureClass(connection, {
+          className,
+          departmentName: department,
+          createIfMissing: true,
+        })
+      : null;
     await connection.query(
-      `INSERT INTO students (id, student_id, name, phone, class_name, department, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'active')`,
-      [refId, refId, normalizedName, validatedPhone, className || '', department || '']
+      `INSERT INTO students (id, student_id, name, phone, class_name, department, class_id, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
+      [refId, refId, normalizedName, validatedPhone, klass?.name || className || '', klass?.department_name || department || '', klass?.id || null]
     );
   } else {
     // teacher — 查找 department_id 并写入 phone/department_id
