@@ -39,6 +39,18 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
+      - name: Debug SSH key
+        run: |
+          echo "Key file size: $(wc -c < ~/.ssh/id_ed25519) bytes"
+          echo "Key file lines: $(wc -l < ~/.ssh/id_ed25519)"
+          echo "First line: $(head -1 ~/.ssh/id_ed25519)"
+          echo "Last line: $(tail -1 ~/.ssh/id_ed25519)"
+          echo "Has CRLF: $(file ~/.ssh/id_ed25519)"
+          echo "Hexdump first 100 bytes:"
+          head -c 100 ~/.ssh/id_ed25519 | xxd
+          echo "Trying ssh-keygen -l:"
+          ssh-keygen -l -f ~/.ssh/id_ed25519 2>&1 || true
+
       - name: Rsync deploy
         env:
           DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
