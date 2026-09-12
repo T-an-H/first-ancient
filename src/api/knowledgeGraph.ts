@@ -3,12 +3,8 @@
  * 接口与 GitHub main 保持一致，独立放在这里，避免改动本地 src/api/index.ts。
  */
 
-const API_PROTOCOL = window.location.protocol === 'https:' ? 'https:' : 'http:'
-const API_HOST = window.location.hostname || '127.0.0.1'
-// The course platform's active backend is Express on port 3002. Keep the
-// Java override for deployments that still expose the standalone service.
-const API_PORT = (import.meta.env.VITE_API_PORT as string | undefined) ?? '3002'
-const JAVA_API_BASE = (import.meta.env.VITE_JAVA_API_BASE as string | undefined) ?? `${API_PROTOCOL}//${API_HOST}:${API_PORT}/api`
+// 与主 API（src/api/index.ts）一致：默认使用相对路径 /api，由 nginx 代理到后端；如需独立服务地址可用 VITE_JAVA_API_BASE 覆盖
+const JAVA_API_BASE = (import.meta.env.VITE_JAVA_API_BASE as string | undefined) ?? '/api'
 
 type RequestOptions = RequestInit & {
   timeoutMs?: number
