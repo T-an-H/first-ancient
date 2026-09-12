@@ -28,7 +28,7 @@
             <div class="flex-1 min-w-0">
               <h3 class="font-bold text-gray-900 text-lg group-hover:text-brand-600 transition-colors truncate">{{ dept.name }}</h3>
               <p class="text-sm text-gray-400 mt-0.5">
-                {{ store.getDepartmentCategories(dept.id).length }} 个课程分类
+                {{ store.getDepartmentCategories(dept.id).length }} 个专业
               </p>
             </div>
             <ArrowRight class="w-5 h-5 text-gray-300 group-hover:text-brand-500 transition-colors flex-shrink-0" />
@@ -111,7 +111,7 @@
         <div class="absolute inset-0 bg-black/50" @click="showDeleteConfirm = false" />
         <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6">
           <h3 class="text-lg font-semibold text-gray-900 mb-2">确认删除</h3>
-          <p class="text-sm text-gray-500 mb-5">确定要删除「{{ deleteTarget?.name }}」吗？如果该学院下已有课程分类、课程、班级或学生数据，将无法删除。</p>
+          <p class="text-sm text-gray-500 mb-5">确定要删除「{{ deleteTarget?.name }}」吗？如果该学院下已有专业、课程、班级或学生数据，将无法删除。</p>
           <div class="flex gap-3">
             <button @click="handleDelete" class="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors">确认删除</button>
             <button @click="showDeleteConfirm = false" class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-colors">取消</button>

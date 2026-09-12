@@ -18,7 +18,7 @@ export interface Course {
   title: string;
   description: string;
   categoryId: string;
-  /** 所属学院（学院即课程分类时使用） */
+  /** 所属学院（学院即专业时使用） */
   departmentId?: string;
   cover: string;
   /** 课程开始日期 */

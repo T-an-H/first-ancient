@@ -331,9 +331,9 @@ function buildAdminActions(args: BuildAssistantActionsArgs): AssistantPageAction
       createAction(
         'admin.categories',
         `打开${selectedDepartmentName || '当前学院'}课程管理`,
-        '进入管理员端课程分类与排课管理页',
+        '进入管理员端专业与排课管理页',
         { path: '/admin/categories' },
-        ['课程管理', '课程分类', '分类管理', '排课', '排课管理'],
+        ['课程管理', '专业管理', '专业', '课程分类', '分类管理', '排课', '排课管理'],
       ),
     )
   }

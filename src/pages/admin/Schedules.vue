@@ -115,7 +115,7 @@
         <div v-if="departmentCourses.length === 0" class="col-span-full py-20 text-center text-gray-400">
           <BookOpen class="mx-auto mb-3 h-12 w-12 opacity-30" />
           <p class="mb-3">该学院暂无课程</p>
-          <p class="text-xs text-gray-300">请先录入课程分类和课程信息</p>
+          <p class="text-xs text-gray-300">请先录入专业和课程信息</p>
         </div>
       </div>
     </template>
@@ -126,7 +126,7 @@
           @click="backToCourseList"
           class="flex items-center gap-1 text-sm text-gray-500 transition-colors hover:text-gray-800"
         >
-          <ArrowLeft class="h-4 w-4" /> 返回课程分类
+          <ArrowLeft class="h-4 w-4" /> 返回专业
         </button>
       </div>
 
@@ -993,7 +993,7 @@ async function handleSaveCourse() {
 
   const targetCategory = categories.value.find((category) => category.id === courseForm.value.categoryId)
   if (!targetCategory) {
-    courseImportMsg.value = { success: false, text: '请选择有效的课程分类' }
+    courseImportMsg.value = { success: false, text: '请选择有效的专业' }
     return
   }
 
@@ -1019,7 +1019,7 @@ function triggerCourseImport() {
 
 function resolveImportCourseCategory(row: Record<string, any>) {
   const rawCategoryId = String(row['分类ID'] || row['categoryId'] || '').trim()
-  const rawCategoryName = String(row['课程分类'] || row['分类'] || row['category'] || row['categoryName'] || '').trim()
+  const rawCategoryName = String(row['专业'] || row['课程分类'] || row['分类'] || row['category'] || row['categoryName'] || '').trim()
 
   if (rawCategoryId) {
     const matched = departmentCategoryOptions.value.find((category) => category.id === rawCategoryId)

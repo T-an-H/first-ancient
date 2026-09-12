@@ -905,7 +905,7 @@ function buildAdminStudentIntent(student: Student): NavigateIntent {
 
 function getRoleDescription(role: PageContext): string {
   const descriptions: Record<PageContext, string> = {
-    admin: '你可以切换学院、管理课程分类和班级，并查看学生详情。',
+    admin: '你可以切换学院、管理专业和班级，并查看学生详情。',
     teacher: '你可以查看我的课程、课程表、评价管理、成绩配置、成绩管理、作业管理和学生管理。',
     student: '你可以查看课程、课表、成绩、学习进度、个人画像和待办。',
     mentor: '你可以查看负责课程、参与学生评价，并查看相关协作内容。',
@@ -1265,7 +1265,7 @@ function resolveAdminIntent(rawText: string): AssistantIntent | null {
   const classResolution = findAdminClass(rawText)
   const studentResolution = findAdminStudent(rawText)
 
-  const isCourseManagementIntent = /(课程管理|课程分类|分类管理|排课|排课管理)/.test(rawText)
+  const isCourseManagementIntent = /(课程管理|专业管理|课程分类|分类管理|排课|排课管理)/.test(rawText)
   const isClassManagementIntent = /(班级管理|学生管理|班级列表|学生列表)/.test(rawText)
   const isDepartmentIntent = /(切换学院|选择学院|学院|部门)/.test(rawText)
   const hasOpenVerb = /(打开|查看|进入|带我去|去|找)/.test(rawText)

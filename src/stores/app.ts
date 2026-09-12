@@ -494,7 +494,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  /** 获取某学院的课程分类 */
+  /** 获取某学院的专业 */
   function getDepartmentCategories(deptId: string): Category[] {
     return categories.value.filter((c) => c.departmentId === deptId)
   }

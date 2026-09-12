@@ -3,10 +3,10 @@
     <template v-if="!selectedCategory">
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-2xl font-bold text-gray-900">课程分类管理</h1>
+          <h1 class="text-2xl font-bold text-gray-900">专业管理</h1>
           <p class="mt-1 text-gray-500">
             当前学院：<span class="font-medium text-gray-700">{{ currentDepartmentName || '未选择学院' }}</span>
-            · 点击课程分类查看该分类下课程
+            · 点击专业查看该专业下课程
           </p>
         </div>
         <div class="flex items-center gap-2">
@@ -14,7 +14,7 @@
             @click="openCategoryModal(null)"
             class="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-600"
           >
-            <Plus class="h-4 w-4" /> 新建分类
+            <Plus class="h-4 w-4" /> 新建专业
           </button>
           <button
             @click="switchDepartment"
@@ -47,7 +47,7 @@
         </div>
         <div v-if="visibleCategories.length === 0" class="col-span-full py-20 text-center text-gray-400">
           <BookOpen class="mx-auto mb-3 h-12 w-12 opacity-30" />
-          <p>当前学院暂无课程分类，点击上方按钮新建</p>
+          <p>当前学院暂无专业，点击上方按钮新建</p>
         </div>
       </div>
     </template>
@@ -58,7 +58,7 @@
           @click="backToCategoryList"
           class="flex items-center gap-1 text-sm text-gray-500 transition-colors hover:text-gray-800"
         >
-          <ArrowLeft class="h-4 w-4" /> 返回分类列表
+          <ArrowLeft class="h-4 w-4" /> 返回专业列表
         </button>
       </div>
 
@@ -79,13 +79,13 @@
             @click="openCategoryModal(selectedCategory)"
             class="flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-blue-500 transition-colors hover:bg-blue-50"
           >
-            <PenLine class="h-4 w-4" /> 编辑分类
+            <PenLine class="h-4 w-4" /> 编辑专业
           </button>
           <button
             @click="handleDeleteCategory(selectedCategory)"
             class="flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-red-400 transition-colors hover:bg-red-50"
           >
-            <Trash2 class="h-4 w-4" /> 删除分类
+            <Trash2 class="h-4 w-4" /> 删除专业
           </button>
           <button
             @click="openCourseModal(null)"
@@ -159,10 +159,10 @@
       <div v-if="showCategoryModal" class="fixed inset-0 z-50 flex items-center justify-center">
         <div class="absolute inset-0 bg-black/50" @click="showCategoryModal = false" />
         <div class="relative mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
-          <h3 class="mb-4 text-lg font-semibold text-gray-900">{{ editingCategory ? '编辑分类' : '新建分类' }}</h3>
+          <h3 class="mb-4 text-lg font-semibold text-gray-900">{{ editingCategory ? '编辑专业' : '新建专业' }}</h3>
           <div class="space-y-4">
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700">分类名称</label>
+              <label class="mb-1 block text-sm font-medium text-gray-700">专业名称</label>
               <input v-model="categoryForm.name" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
             </div>
             <div>
@@ -205,7 +205,7 @@
                 placeholder="请输入课程名称"
                 class="w-full rounded-xl border border-gray-200 px-5 py-4 text-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               />
-              <p class="mt-2 text-sm text-gray-400">默认使用分类名称，也可以在此修改课程名称</p>
+              <p class="mt-2 text-sm text-gray-400">默认使用专业名称，也可以在此修改课程名称</p>
             </div>
 
             <div>
@@ -821,7 +821,7 @@ async function handleSaveCategory() {
   }
 
   if (!payload.name) {
-    window.alert('请先填写分类名称')
+    window.alert('请先填写专业名称')
     return
   }
 
@@ -846,7 +846,7 @@ async function handleSaveCategory() {
 }
 
 async function handleDeleteCategory(category: CategoryRow) {
-  if (!window.confirm(`确定要删除分类“${category.name}”吗？如果该分类下还有课程，将无法删除。`)) {
+  if (!window.confirm(`确定要删除专业“${category.name}”吗？如果该专业下还有课程，将无法删除。`)) {
     return
   }
 
@@ -863,7 +863,7 @@ async function handleDeleteCategory(category: CategoryRow) {
 
     await loadData()
   } catch (error: any) {
-    window.alert(error?.message || '删除分类失败')
+    window.alert(error?.message || '删除专业失败')
   }
 }
 
@@ -909,7 +909,7 @@ function closeCourseModal() {
 
 function openCourseModal(course: Course | null) {
   if (!selectedCategory.value) {
-    window.alert('请先选择课程分类')
+    window.alert('请先选择专业')
     return
   }
 
