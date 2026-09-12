@@ -146,7 +146,7 @@ function renderSidebar() {
 
   const headerText = headerFlex.append('div')
   headerText.append('h1').attr('class', 'font-bold text-lg').text('课程平台')
-  headerText.append('p').attr('class', 'text-xs text-white/50').text(cfg.label)
+  headerText.append('p').attr('class', 'font-semibold text-base text-white').text(cfg.label)
 
   const nav = aside.append('nav')
     .attr('class', 'flex-1 p-4 space-y-1')

@@ -32,6 +32,23 @@
 
     <!-- 主视图：基本信息 + 入口 -->
     <div v-if="view === 'main'" class="space-y-6">
+      <!-- 学生能力雷达（按成绩） -->
+      <div v-if="isStudentView" class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-lg font-semibold text-gray-900">能力雷达</h2>
+          <span class="text-xs text-gray-400">按各课程成绩计算</span>
+        </div>
+        <RadarChart
+          :labels="gradeRadar.labels"
+          :values="gradeRadar.values"
+          :count="gradeRadar.count"
+          empty-text="暂无成绩数据，成绩录入后自动生成能力雷达图"
+        />
+        <p class="mt-2 text-xs text-gray-400">
+          五个维度（编程 / 数据 / 设计 / 管理 / 语言）取对应类别课程总评成绩的平均分（满分 100）；无法归类到具体维度的课程计入全部维度。
+        </p>
+      </div>
+
       <!-- 详细基本信息 -->
       <div class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
         <h2 class="mb-4 text-lg font-semibold text-gray-900">基本信息</h2>
@@ -216,8 +233,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchUserProfile, changePassword, changePhone, uploadAvatar } from '@/api'
+import { fetchUserProfile, changePassword, changePhone, uploadAvatar, fetchStudents, fetchCourses, fetchStudentScores } from '@/api'
+import { getStoredStudentSession, getStudentLookupKeyword, matchStudentFromSession } from '@/lib/studentSession'
 import { useAppStore } from '@/stores/app'
+import RadarChart from '@/components/RadarChart.vue'
 
 const router = useRouter()
 const store = useAppStore()
@@ -423,5 +442,109 @@ async function handleChangePhone() {
   }
 }
 
-onMounted(loadProfile)
+// ====== 学生能力雷达（按成绩） ======
+const isStudentView = computed(() => store.currentRole === 'student')
+const radarStudentId = ref('')
+
+/** 五维能力 → 分类/课程名关键词（与旧「个人画像」页的编程/数据/设计/管理/语言保持一致） */
+const ABILITY_DIMS = [
+  { label: '编程', keywords: ['编程', '计算机', '软件', '程序'] },
+  { label: '数据', keywords: ['数据', '统计'] },
+  { label: '设计', keywords: ['设计', '创意', '艺术'] },
+  { label: '管理', keywords: ['管理', '商务'] },
+  { label: '语言', keywords: ['语言', '外语', '英语'] },
+]
+
+const gradeRadar = computed(() => {
+  const myGrades = radarStudentId.value
+    ? store.grades.filter((g) => g.studentId === radarStudentId.value)
+    : []
+  const buckets: number[][] = ABILITY_DIMS.map(() => [])
+  for (const g of myGrades) {
+    const score = Math.round(Number(g.totalScore ?? g.score ?? 0))
+    if (!Number.isFinite(score) || score <= 0) continue
+    const course = store.courses.find((c) => String(c.id) === String(g.courseId))
+    const catName = store.categories.find((cat) => String(cat.id) === String(course?.categoryId))?.name || ''
+    const matched = ABILITY_DIMS
+      .map((dim, i) => ({ dim, i }))
+      .filter(({ dim }) =>
+        dim.keywords.some((k) => (catName || '').includes(k) || (course?.title || '').includes(k)),
+      )
+      .map(({ i }) => i)
+    // 分类无法识别的课程按综合能力计入全部维度
+    const targets = matched.length > 0 ? matched : ABILITY_DIMS.map((_, i) => i)
+    targets.forEach((i) => buckets[i].push(score))
+  }
+  return {
+    labels: ABILITY_DIMS.map((d) => d.label),
+    values: buckets.map((arr) => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0)),
+    count: myGrades.length,
+  }
+})
+
+/** 学生登录时拉取自己的成绩，供雷达图计算（与成绩查询页同源） */
+async function loadStudentGradesForRadar() {
+  if (!isStudentView.value) return
+  try {
+    const session = getStoredStudentSession()
+    const search = getStudentLookupKeyword(store.currentUser, session)
+    let student = matchStudentFromSession(store.students, store.currentUser, session)
+    if (!student && search) {
+      try {
+        const res = await fetchStudents({ search, pageSize: 10 })
+        student = matchStudentFromSession(res.students ?? [], store.currentUser, session)
+      } catch { /* 本地匹配失败则忽略 */ }
+    }
+    const studentId = student?.id || session.id || ''
+    if (!studentId) return
+    radarStudentId.value = studentId
+
+    try {
+      const courseRes = await fetchCourses()
+      const remote = (courseRes as any)?.courses
+      if (Array.isArray(remote) && remote.length > 0) {
+        const map = new Map(store.courses.map((c) => [String(c.id), c]))
+        remote.forEach((c: any) => map.set(String(c.id), c))
+        store.courses = Array.from(map.values()) as typeof store.courses
+      }
+    } catch { /* 课程拉取失败不影响雷达 */ }
+
+    try {
+      const scoreRes = await fetchStudentScores(studentId)
+      const scores: any[] = (scoreRes as any)?.scores ?? []
+      const grouped = new Map<string, any[]>()
+      scores.forEach((s) => {
+        const courseId = String(s.courseId || '').trim()
+        if (!courseId) return
+        if (!grouped.has(courseId)) grouped.set(courseId, [])
+        grouped.get(courseId)!.push(s)
+      })
+      const grades = Array.from(grouped.entries()).map(([courseId, items]) => {
+        const totalWeight = items.reduce((sum, i) => sum + Number(i.weight || 0), 0)
+        const total = totalWeight > 0
+          ? items.reduce((sum, i) => sum + Number(i.score || 0) * Number(i.weight || 0), 0) / totalWeight
+          : items.reduce((sum, i) => sum + Number(i.score || 0), 0) / Math.max(items.length, 1)
+        return {
+          id: `db-grade-${studentId}-${courseId}`,
+          studentId,
+          courseId,
+          score: Math.round(total),
+          semester: '',
+          comment: '',
+          gradedAt: String(items[items.length - 1]?.gradedAt || ''),
+          totalScore: Math.round(total),
+        }
+      })
+      store.grades = [
+        ...store.grades.filter((g) => g.studentId !== studentId),
+        ...grades,
+      ]
+    } catch { /* 成绩拉取失败则用已有数据 */ }
+  } catch { /* 整体失败静默，雷达显示空态 */ }
+}
+
+onMounted(() => {
+  loadProfile()
+  loadStudentGradesForRadar()
+})
 </script>
