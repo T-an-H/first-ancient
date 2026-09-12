@@ -31,11 +31,11 @@ jobs:
 
       - name: Setup SSH key
         env:
-          SSH_KEY: ${{ secrets.ALIYUN_SSH_KEY }}
+          SSH_KEY_B64: ${{ secrets.ALIYUN_SSH_KEY }}
           DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/id_ed25519
+          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
@@ -57,12 +57,12 @@ jobs:
             server/ root@${DEPLOY_HOST}:/var/www/first-ancient/server/
 
       - name: Restart pm2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.ALIYUN_HOST }}
-          username: ${{ secrets.ALIYUN_USER }}
-          key: ${{ secrets.ALIYUN_SSH_KEY }}
-          script: |
+        env:
+          DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
+          DEPLOY_USER: ${{ secrets.ALIYUN_USER }}
+        run: |
+          set -e
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << 'REMOTE'
             set -e
             cd /var/www/first-ancient/server
             # pm2 全局 bin 可能不在非交互 shell 的 PATH，用绝对路径兜底
@@ -70,3 +70,4 @@ jobs:
             [ -x "$PM2_BIN" ] || PM2_BIN="pm2"
             "$PM2_BIN" restart course-api || "$PM2_BIN" start index.js --name course-api
             "$PM2_BIN" save
+          REMOTE
