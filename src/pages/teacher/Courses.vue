@@ -16,23 +16,31 @@
       />
     </div>
 
-    <!-- 课程卡片网格：放大版，任何版面仅左右 2 张 -->
-    <div class="grid grid-cols-2 gap-6">
-      <div
-        v-for="course in sortedAndFilteredCourses" :key="course.id"
-        @click="goDetail(course.id)"
-        :class="[
-          'group bg-white rounded-xl border shadow-sm transition-all duration-200 overflow-hidden cursor-pointer',
-          course.status === 'active'
-            ? 'border-brand-400/20 hover:shadow-lg'
-            : 'border-brand-400/30 opacity-60 hover:opacity-70'
-        ]"
-      >
+    <!-- 课程按分类分板块展示；卡片同步缩小 -->
+    <div class="space-y-8">
+      <section v-for="group in groupedCourses" :key="group.categoryName">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="w-1 h-4 rounded-full bg-brand-600"></span>
+          <h2 class="text-base font-semibold text-gray-800">{{ group.categoryName }}</h2>
+          <span class="text-xs text-gray-400">{{ group.courses.length }} 门</span>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <div
+            v-for="course in group.courses" :key="course.id"
+            @click="goDetail(course.id)"
+            :class="[
+              'group bg-white rounded-xl border shadow-sm transition-all duration-200 overflow-hidden cursor-pointer',
+              course.status === 'active'
+                ? 'border-brand-400/20 hover:shadow-lg'
+                : 'border-brand-400/30 opacity-60 hover:opacity-70'
+            ]"
+          >
         <!-- 渐变顶栏（无封面图，只做颜色区分） -->
-        <div class="relative h-[160px]" :style="{ background: getCourseGradient(course.id) }">
+        <div class="relative h-[100px]" :style="{ background: getCourseGradient(course.id) }">
           <!-- 已结束水印 -->
           <div v-if="course.status !== 'active'" class="absolute inset-0 flex items-center justify-center">
-            <span class="text-white/50 text-lg font-bold tracking-widest -rotate-12 select-none">已结束</span>
+            <span class="text-white/50 text-base font-bold tracking-widest -rotate-12 select-none">已结束</span>
           </div>
 
           <!-- 待评价红点标记（点击可溯源到评论管理） -->
@@ -40,7 +48,7 @@
             v-if="hasPendingEval(course.id)"
             @click.stop="goEval(course.id)"
             title="有未完成的评价，点击前往评论管理"
-            class="absolute top-3 left-3 z-20 flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full bg-red-500 text-white font-medium shadow cursor-pointer hover:bg-red-600 transition-colors">
+            class="absolute top-2 left-2 z-20 flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-500 text-white font-medium shadow cursor-pointer hover:bg-red-600 transition-colors">
             <span class="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
             待评价
           </button>
@@ -50,7 +58,7 @@
             v-if="isConfigPending(course.id)"
             @click.stop="goConfig(course.id)"
             title="成绩权重/评价方案尚未配置完成，点击前往成绩配置"
-            class="absolute top-12 left-3 z-20 flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full bg-amber-500 text-white font-medium shadow cursor-pointer hover:bg-amber-600 transition-colors">
+            class="absolute top-8 left-2 z-20 flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-500 text-white font-medium shadow cursor-pointer hover:bg-amber-600 transition-colors">
             <span class="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
             待配置
           </button>
@@ -60,13 +68,13 @@
             v-if="pendingQualityCount(course.id) > 0"
             @click.stop="goQualityEval(course.id)"
             :title="`有 ${pendingQualityCount(course.id)} 名学生提交的素质评价待批改，点击前往素质评价管理`"
-            class="absolute top-[84px] left-3 z-20 flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full bg-orange-500 text-white font-medium shadow cursor-pointer hover:bg-orange-600 transition-colors">
+            class="absolute top-14 left-2 z-20 flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-orange-500 text-white font-medium shadow cursor-pointer hover:bg-orange-600 transition-colors">
             <span class="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
             素质评价待批改
           </button>
 
           <!-- 状态标签 - 右上角 -->
-          <span :class="`absolute top-3 right-3 z-10 text-xs px-2.5 py-1 rounded-full font-medium ${
+          <span :class="`absolute top-2 right-2 z-10 text-[11px] px-2 py-0.5 rounded-full font-medium ${
             course.status === 'active'
               ? 'bg-white/20 text-white backdrop-blur-sm'
               : 'bg-white/10 text-white/60 backdrop-blur-sm'
@@ -76,38 +84,30 @@
           </span>
 
           <!-- 课程标题 -->
-          <div class="absolute bottom-3 left-4 right-4">
-            <h3 class="text-white font-bold text-2xl leading-tight truncate">{{ course.title }}</h3>
+          <div class="absolute bottom-2 left-3 right-3">
+            <h3 class="text-white font-bold text-base leading-tight truncate">{{ course.title }}</h3>
           </div>
         </div>
 
         <!-- 卡片内容区域 -->
-        <div class="p-7 space-y-5">
+        <div class="p-4 space-y-3">
           <!-- 老师名字 -->
-          <div class="flex items-center gap-2 text-sm text-gray-600">
-            <User class="w-4 h-4 text-gray-400" />
+          <div class="flex items-center gap-1.5 text-xs text-gray-600">
+            <User class="w-3.5 h-3.5 text-gray-400" />
             <span>授课老师：<strong>{{ course.teacher }}</strong></span>
-            <span class="ml-auto text-xs text-gray-400">
-              <Users class="w-3.5 h-3.5 inline mr-0.5 -mt-0.5" />
+            <span class="ml-auto text-[11px] text-gray-400">
+              <Users class="w-3 h-3 inline mr-0.5 -mt-0.5" />
               {{ studentCount(course.id) }} 名学生
             </span>
-          </div>
-
-          <!-- 课程介绍 -->
-          <div>
-            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">课程介绍</p>
-            <p class="text-sm text-gray-600 line-clamp-2 leading-relaxed">
-              {{ course.description || '暂无描述' }}
-            </p>
           </div>
 
           <!-- 课程进度 -->
           <div>
             <div class="flex items-center justify-between mb-1">
-              <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">课程进度</span>
-              <span class="text-sm font-semibold text-brand-600">{{ getCourseProgress(course.id) }}%</span>
+              <span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">课程进度</span>
+              <span class="text-xs font-semibold text-brand-600">{{ getCourseProgress(course.id) }}%</span>
             </div>
-            <div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div class="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
               <div class="h-full rounded-full bg-brand-400 transition-all duration-500"
                 :style="{ width: getCourseProgress(course.id) + '%' }">
               </div>
@@ -116,54 +116,56 @@
 
           <!-- AI 分层分布（与学生端 AI 分层测试结果关联） -->
           <div>
-            <div class="flex items-center justify-between mb-3">
-              <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">AI 分层分布</span>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">AI 分层分布</span>
               <span class="text-[10px] text-gray-400">{{ studentCount(course.id) }} 名学生</span>
             </div>
-            <div v-if="studentCount(course.id) > 0" class="flex items-center gap-6">
-              <div class="relative w-[140px] h-[140px] flex-shrink-0">
+            <div v-if="studentCount(course.id) > 0" class="flex items-center gap-3">
+              <div class="relative w-[84px] h-[84px] flex-shrink-0">
                 <svg viewBox="0 0 100 100" class="w-full h-full -rotate-90">
                   <circle v-for="seg in tierPieSegments(course.id)" :key="seg.key" cx="50" cy="50" r="40" fill="none"
                     stroke-width="18" :stroke="seg.color" :stroke-dasharray="seg.dash" :stroke-dashoffset="seg.offset" />
                 </svg>
                 <div class="absolute inset-0 flex flex-col items-center justify-center">
-                  <span class="text-3xl font-bold text-gray-800 leading-none">{{ studentCount(course.id) }}</span>
-                  <span class="text-xs text-gray-400 mt-1 leading-none">学生数</span>
+                  <span class="text-xl font-bold text-gray-800 leading-none">{{ studentCount(course.id) }}</span>
+                  <span class="text-[10px] text-gray-400 mt-0.5 leading-none">学生数</span>
                 </div>
               </div>
-              <div class="flex-1 grid grid-cols-1 gap-y-2.5">
-                <div v-for="item in tierLegend(course.id)" :key="item.label" class="flex items-center gap-2 text-sm text-gray-600">
-                  <span class="w-3.5 h-3.5 rounded-sm flex-shrink-0" :style="{ background: item.color }"></span>
+              <div class="flex-1 grid grid-cols-1 gap-y-1.5">
+                <div v-for="item in tierLegend(course.id)" :key="item.label" class="flex items-center gap-1.5 text-xs text-gray-600">
+                  <span class="w-2.5 h-2.5 rounded-sm flex-shrink-0" :style="{ background: item.color }"></span>
                   <span>{{ item.label }}</span>
                   <span class="ml-auto font-semibold text-gray-800">{{ item.count }}人</span>
                 </div>
               </div>
             </div>
-            <div v-else class="flex items-center justify-center py-6 rounded-lg bg-gray-50 text-sm text-gray-400">暂无学生</div>
+            <div v-else class="flex items-center justify-center py-4 rounded-lg bg-gray-50 text-xs text-gray-400">暂无学生</div>
           </div>
 
           <!-- 底部操作 -->
           <div class="flex items-center justify-between pt-1 border-t border-gray-100">
-            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border"
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border"
               :class="course.status === 'active' ? 'bg-brand-600/10 text-gray-600 border-brand-400' : 'bg-brand-400/10 text-gray-400 border-brand-400/30'">
-              <BookOpen class="w-3.5 h-3.5" />
+              <BookOpen class="w-3 h-3" />
               {{ course.status === 'active' ? '教学进行中' : '课程已结束' }}
             </span>
 
-            <span class="inline-flex items-center gap-1 text-xs font-medium transition-colors"
+            <span class="inline-flex items-center gap-1 text-[11px] font-medium transition-colors"
               :class="course.status === 'active' ? 'text-gray-600 group-hover:text-gray-800' : 'text-gray-400'">
               {{ course.status === 'active' ? '管理课程' : '查看详情' }}
-              <ArrowRight class="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+              <ArrowRight class="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
             </span>
           </div>
+          </div>
         </div>
-      </div>
+        </div>
+      </section>
 
-
-      <div v-if="myCourses.length === 0" class="col-span-2 text-center py-16 text-gray-400">
+      <div v-if="myCourses.length === 0" class="text-center py-16 text-gray-400">
         <BookOpen class="w-12 h-12 mx-auto mb-4 text-gray-200" />
         <p>暂无课程</p>
       </div>
+    </div>
 
 <!-- Tab 1: 学员管理（已移入课程详情页） -->
       <div v-if="false"></div>
@@ -490,7 +492,6 @@
 
       </div>
     </div>
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -587,6 +588,23 @@ const sortedAndFilteredCourses = computed(() => {
     if (a.status === 'active' && b.status !== 'active') return -1
     return a.title.localeCompare(b.title)
   })
+})
+
+/** 按课程分类分板块（分类名 → 该分类课程，保持 sortedAndFilteredCourses 的顺序） */
+const groupedCourses = computed(() => {
+  const groups = new Map<string, Course[]>()
+  for (const course of sortedAndFilteredCourses.value) {
+    const name = String((course as any).categoryName || '').trim() || '未分类'
+    if (!groups.has(name)) groups.set(name, [])
+    groups.get(name)!.push(course)
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => {
+      if (a === '未分类') return 1
+      if (b === '未分类') return -1
+      return a.localeCompare(b, 'zh-CN')
+    })
+    .map(([categoryName, courses]) => ({ categoryName, courses }))
 })
 
 const myCourses = computed(() => {

@@ -1987,6 +1987,7 @@ import {
   bulkImportSchedules,
   bulkImportScores,
   fetchStudentsPool,
+  resolveStudent,
   fetchCourseClasses,
   createCourseClass,
   deleteCourseClass,
@@ -2303,12 +2304,13 @@ async function handleAddClassExcel(e: Event) {
   target.value = ''
 }
 
-/** 保存新增班级：创建班级并处理导入的成员（匹配/新建学生、分配班级、选课） */
+/** 保存新增班级：创建班级并处理导入的成员（匹配总库学生、分配班级、选课） */
 async function saveAddClass() {
   const className = addClassForm.value.className.trim()
   if (!className || !courseId.value) return
   let assignedCount = 0
   let createdCount = 0
+  const notInRepo: string[] = []
   const course = store.courses.find((c: any) => c.id === courseId.value)
 
   // 持久化班级记录（无论有无成员）
@@ -2320,50 +2322,73 @@ async function saveAddClass() {
   } catch {}
 
   for (const m of addClassMembers.value) {
-    // 查找已有学生（按学号/ID 或姓名）
-    let student = m.studentId
-      ? store.students.find(s => s.id === m.studentId || s.studentId === m.studentId || (m.name && s.name === m.name))
+    // 学号优先解析「真实学生主键」：本地 store → 总库解析端点。
+    // 选课必须用真实主键，否则学生端按自己身份查不到该课。
+    let student: any = m.studentId
+      ? store.students.find(s => s.id === m.studentId || s.studentId === m.studentId)
       : (m.name ? store.students.find(s => s.name === m.name) : undefined)
+
     if (!student) {
-      const id = m.studentId || `stu-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-      store.addStudent({
-        id,
-        name: m.name || m.studentId,
-        phone: '',
-        email: '',
-        avatar: '',
-        joinDate: getNow().toISOString().split('T')[0],
-        status: 'active',
-        studentId: m.studentId || undefined,
-        className,
-      })
-      student = store.students.find(s => s.id === id)!
-      createdCount++
+      try {
+        const res = await resolveStudent(m.studentId || m.name)
+        const hit = res?.student
+        if (hit) {
+          const pk = String(hit.id)
+          const existing = store.students.find(s => s.id === pk)
+          if (existing) {
+            // 总库有、原本不在同班 → 归入本班级
+            store.updateStudent(pk, { className })
+            student = existing
+            assignedCount++
+          } else {
+            store.addStudent({
+              id: pk,
+              name: hit.name || m.name || pk,
+              studentId: hit.student_id || hit.id || m.studentId || undefined,
+              className,
+              phone: '',
+              email: '',
+              avatar: '',
+              joinDate: getNow().toISOString().split('T')[0],
+              status: 'active',
+            })
+            student = store.students.find(s => s.id === pk)
+            createdCount++
+          }
+        }
+      } catch { /* 解析失败按未入库处理 */ }
     } else {
       store.updateStudent(student.id, { className })
       assignedCount++
     }
+
+    // 总库查不到 → 不造孤儿学生（后端会拒绝，若仍本地造一个，教师会看到"成功"但学生端看不到）
+    if (!student) {
+      notInRepo.push(`${m.name || ''}${m.studentId ? `（${m.studentId}）` : ''}`.trim())
+      continue
+    }
+
     // 选课（避免重复）
     const enrolled = store.enrollments.some(
-      e => e.courseId === courseId.value && e.studentId === student!.id && e.status !== 'dropped'
+      e => e.courseId === courseId.value && e.studentId === student.id && e.status !== 'dropped'
     )
     if (!enrolled) {
-      const enrId = `enr-${courseId.value}-${student!.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+      const enrId = `enr-${courseId.value}-${student.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
       store.addEnrollment({
         id: enrId,
         courseId: courseId.value,
-        studentId: student!.id,
+        studentId: student.id,
         scheduleId: '',
         status: 'enrolled',
         progress: 0,
         enrollDate: getNow().toISOString().split('T')[0],
       })
       try {
-        await bulkImportEnrollments([{ id: enrId, studentId: student!.id, courseId: courseId.value }])
+        await bulkImportEnrollments([{ id: enrId, studentId: student.id, courseId: courseId.value }])
       } catch {}
     }
     try {
-      await syncStudent(student!.id, { className })
+      await syncStudent(student.id, { className })
     } catch {}
   }
 
@@ -2382,9 +2407,12 @@ async function saveAddClass() {
     } catch {}
   }
   const total = addClassMembers.value.length
-  const msg = total > 0
+  const baseMsg = total > 0
     ? `已创建班级"${className}"，共处理 ${total} 名成员（匹配已有 ${assignedCount} 人，新建 ${createdCount} 人）`
     : `已创建班级"${className}"`
+  const msg = notInRepo.length > 0
+    ? `${baseMsg}\n\n以下 ${notInRepo.length} 人不在系统总库，未加入（请先在管理员端-学生管理 添加入库）：\n${notInRepo.join('、')}`
+    : baseMsg
   addClassForm.value = { className: '', studentIds: [] }
   addClassFileName.value = ''
   addClassMembers.value = []
@@ -2430,7 +2458,13 @@ async function searchRepoStudents() {
 async function addRepoStudentToCourse(s: any) {
   if (!courseId.value) return
   repoAddMsg.value = ''
-  const studentId = s.ref_id || s.user_no || s.id
+  // 必须用「学生真实主键」写选课：students.id 才是学生端查询用的键，
+  // users.ref_id / user_no 可能与之不一致（旧代码取 ref_id||user_no 会写入错误 id 导致学生端看不到课）。
+  let studentId = String(s.student_pk || s.id || '')
+  try {
+    const resolved = await resolveStudent(s.student_no || s.user_no || s.ref_id || s.name)
+    if (resolved?.student?.id) studentId = String(resolved.student.id)
+  } catch { /* 解析失败退回原取值 */ }
   // 补写学生到 store，否则未分班面板因 store.students.find 落空而不显示
   if (!store.students.some((st) => st.id === studentId)) {
     store.addStudent({
@@ -2441,8 +2475,8 @@ async function addRepoStudentToCourse(s: any) {
       avatar: '',
       joinDate: getNow().toISOString().split('T')[0],
       status: 'active',
-      studentId: s.user_no || studentId,
-      className: '',
+      studentId: s.student_no || s.user_no || studentId,
+      className: s.class_name || '',
     })
   }
   // 检查是否已选本课程

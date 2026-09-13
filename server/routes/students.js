@@ -68,6 +68,14 @@ function buildStudentWhereClause(query) {
   };
 }
 
+/**
+ * 安全取数：非法/缺失时回退
+ */
+function numOr(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 async function getStudentRowById(connection, studentId) {
   const [rows] = await connection.query(
     `SELECT
@@ -448,160 +456,170 @@ router.get('/:id/courses', async (req, res) => {
       throw httpError(404, 'Student not found', 'STUDENT_NOT_FOUND');
     }
 
+    const studentId = String(student.id);
     const className = normalizeText(student.class_name);
-    if (!className) {
-      return res.json({
-        success: true,
-        student: mapStudentRow(student),
-        courses: [],
-        enrollments: [],
-      });
-    }
 
-    const [scheduleRows] = await connection.query(
-      `SELECT
-         id,
-         course_id,
-         title,
-         teacher,
-         mentor,
-         room,
-         class_name,
-         day,
-         start_date,
-         end_date,
-         time_slot
-       FROM schedules
-       WHERE TRIM(COALESCE(class_name, '')) = ?
-       ORDER BY start_date ASC, time_slot ASC, id ASC`,
-      [className]
+    const COURSE_SELECT = `
+      SELECT
+        course.id,
+        course.title,
+        course.description,
+        course.category_id,
+        course.category_name,
+        course.cover,
+        course.credits,
+        course.duration,
+        course.status,
+        course.teacher,
+        course.mentor,
+        course.department,
+        course.department_id,
+        course.created_at,
+        (SELECT MIN(schedule.start_date) FROM schedules AS schedule WHERE schedule.course_id = course.id) AS course_start_date,
+        (SELECT MAX(schedule.end_date) FROM schedules AS schedule WHERE schedule.course_id = course.id) AS course_end_date,
+        category.name AS joined_category_name,
+        dept.name AS department_name
+      FROM courses AS course
+      LEFT JOIN categories AS category ON category.id = CAST(course.category_id AS UNSIGNED)
+      LEFT JOIN departments AS dept ON dept.id = course.department_id
+    `;
+
+    // ---- 来源一（权威）：教师端在该课程内「导入学生」写入的选课记录 ----
+    // 学生在课程内被导入 → 学生端即应看到该课程（不再依赖班级与排课班级是否一致）。
+    const [enrollmentRows] = await connection.query(
+      `SELECT id, course_id, schedule_id, enroll_date, progress, status
+       FROM enrollments
+       WHERE student_id = ? AND COALESCE(status, '') <> 'dropped'`,
+      [studentId]
     );
+    const enrollmentByCourse = new Map();
+    for (const row of enrollmentRows) {
+      const cid = normalizeText(row.course_id);
+      if (cid && !enrollmentByCourse.has(cid)) enrollmentByCourse.set(cid, row);
+    }
+    const enrolledCourseIds = [...enrollmentByCourse.keys()];
 
-    if (scheduleRows.length === 0) {
-      return res.json({
-        success: true,
-        student: mapStudentRow(student),
-        courses: [],
-        enrollments: [],
-      });
+    // ---- 来源二（兜底）：学生所在班级的排课（保留原有行为，避免回归）----
+    let classScheduleRows = [];
+    if (className) {
+      const [rows] = await connection.query(
+        `SELECT id, course_id, title, teacher, mentor, room, class_name, day, start_date, end_date, time_slot
+         FROM schedules
+         WHERE TRIM(COALESCE(class_name, '')) = ?
+         ORDER BY start_date ASC, time_slot ASC, id ASC`,
+        [className]
+      );
+      classScheduleRows = rows;
     }
 
-    const courseIds = [...new Set(
-      scheduleRows
-        .map((row) => normalizeText(row.course_id))
-        .filter(Boolean)
-    )];
-    const courseTitles = [...new Set(
-      scheduleRows
-        .map((row) => normalizeText(row.title))
-        .filter(Boolean)
-    )];
-
-    const conditions = [];
-    const params = [];
-
-    if (courseIds.length > 0) {
-      conditions.push(`course.id IN (${courseIds.map(() => '?').join(', ')})`);
-      params.push(...courseIds);
+    // 已选课程的排课（不限班级，用于取教师/导师/日期与进度）
+    let enrolledScheduleRows = [];
+    if (enrolledCourseIds.length > 0) {
+      const [rows] = await connection.query(
+        `SELECT id, course_id, title, teacher, mentor, room, class_name, day, start_date, end_date, time_slot
+         FROM schedules
+         WHERE course_id IN (${enrolledCourseIds.map(() => '?').join(', ')})
+         ORDER BY start_date ASC, time_slot ASC, id ASC`,
+        enrolledCourseIds
+      );
+      enrolledScheduleRows = rows;
     }
 
-    if (courseTitles.length > 0) {
-      conditions.push(`course.title IN (${courseTitles.map(() => '?').join(', ')})`);
-      params.push(...courseTitles);
+    // 排课按课程分组（course_id 优先，退化为 title）
+    const schedulesByCourse = new Map();
+    const addSchedule = (key, row) => {
+      if (!key) return;
+      if (!schedulesByCourse.has(key)) schedulesByCourse.set(key, []);
+      schedulesByCourse.get(key).push(row);
+    };
+    for (const row of [...enrolledScheduleRows, ...classScheduleRows]) {
+      addSchedule(normalizeText(row.course_id) || normalizeText(row.title), row);
     }
+
+    // 课程集合 = 已选课（权威） ∪ 班级排课（兜底）
+    const candidateCourseIds = [...new Set([
+      ...enrolledCourseIds,
+      ...classScheduleRows.map((row) => normalizeText(row.course_id)).filter(Boolean),
+    ])];
 
     let courseRows = [];
-    if (conditions.length > 0) {
+    if (candidateCourseIds.length > 0) {
       const [rows] = await connection.query(
-        `SELECT
-           course.id,
-           course.title,
-           course.description,
-           course.category_id,
-           course.category_name,
-           course.cover,
-           course.credits,
-           course.duration,
-           course.status,
-           course.teacher,
-           course.mentor,
-           course.department,
-           course.department_id,
-           course.created_at,
-           (SELECT MIN(schedule.start_date) FROM schedules AS schedule WHERE schedule.course_id = course.id) AS course_start_date,
-           (SELECT MAX(schedule.end_date) FROM schedules AS schedule WHERE schedule.course_id = course.id) AS course_end_date,
-           category.name AS joined_category_name,
-           dept.name AS department_name
-         FROM courses AS course
-         LEFT JOIN categories AS category ON category.id = CAST(course.category_id AS UNSIGNED)
-         LEFT JOIN departments AS dept ON dept.id = course.department_id
-         WHERE ${conditions.join(' OR ')}`,
-        params
+        `${COURSE_SELECT} WHERE course.id IN (${candidateCourseIds.map(() => '?').join(', ')})`,
+        candidateCourseIds
       );
       courseRows = rows;
     }
-
     const courseById = new Map(courseRows.map((row) => [String(row.id), row]));
     const courseByTitle = new Map(courseRows.map((row) => [normalizeText(row.title), row]));
-    const groupedSchedules = new Map();
-
-    for (const row of scheduleRows) {
-      const key = normalizeText(row.course_id) || normalizeText(row.title) || `schedule-${row.id}`;
-      if (!groupedSchedules.has(key)) {
-        groupedSchedules.set(key, []);
-      }
-      groupedSchedules.get(key).push(row);
-    }
 
     const courses = [];
     const enrollments = [];
+    const seenCourseIds = new Set();
 
-    for (const [groupKey, rows] of groupedSchedules.entries()) {
-      const firstRow = rows[0];
-      const matchedCourse =
-        courseById.get(normalizeText(firstRow.course_id)) ||
-        courseByTitle.get(normalizeText(firstRow.title)) ||
-        null;
+    const emitCourse = (courseRow, fallbackGroupKey) => {
+      const courseId = String(courseRow.id);
+      if (seenCourseIds.has(courseId)) return;
+      seenCourseIds.add(courseId);
 
-      const uniqueTeachers = [...new Set(rows.map((row) => normalizeText(row.teacher)).filter(Boolean))];
-      const uniqueMentors = [...new Set(rows.map((row) => normalizeText(row.mentor)).filter(Boolean))];
-      const courseId = matchedCourse ? String(matchedCourse.id) : groupKey;
-      const { progress, status, firstStart, lastEnd } = buildEnrollmentProgress(rows);
-      const mappedCourse = matchedCourse
-        ? mapCourseRow(matchedCourse)
-        : mapCourseRow({
-            id: courseId,
-            title: firstRow.title,
-            description: '',
-            category_id: '',
-            cover: '',
-            credits: 0,
-            duration: 0,
-            status: 'active',
-            created_at: firstRow.start_date,
-            teacher: '',
-            mentor: '',
-            department: student.department_name || '',
-            department_id: student.department_id || '',
-          });
+      const allRows = [
+        ...(schedulesByCourse.get(normalizeText(courseRow.id)) || []),
+        ...(schedulesByCourse.get(normalizeText(courseRow.title)) || []),
+      ];
+      // 进度按「学生所在班级」的排课算（与旧行为一致）。学生无班级、或该课没排到他班上时，
+      // 不借用别班排课（会虚高），改由下方按课程起止日期兜底。
+      const timingRows = className
+        ? allRows.filter((row) => normalizeText(row.class_name) === className)
+        : [];
+
+      const uniqueTeachers = [...new Set(allRows.map((row) => normalizeText(row.teacher)).filter(Boolean))];
+      const uniqueMentors = [...new Set(allRows.map((row) => normalizeText(row.mentor)).filter(Boolean))];
+
+      // 进度/状态：优先按本班排课算，无则按课程起止日期算
+      const progressInfo = timingRows.length > 0
+        ? buildEnrollmentProgress(timingRows)
+        : buildDateRangeProgress(courseRow.course_start_date, courseRow.course_end_date);
+
+      const mappedCourse = mapCourseRow(courseRow);
+      const enrollmentRow = enrollmentByCourse.get(courseId)
+        || enrollmentByCourse.get(normalizeText(courseRow.id));
 
       courses.push({
         ...mappedCourse,
-        startDate: formatDate(firstStart || mappedCourse.startDate || firstRow.start_date),
-        endDate: formatDate(lastEnd || mappedCourse.endDate || firstRow.end_date || firstRow.start_date),
+        startDate: formatDate(progressInfo.firstStart || mappedCourse.startDate || courseRow.course_start_date),
+        endDate: formatDate(progressInfo.lastEnd || mappedCourse.endDate || courseRow.course_end_date),
         teacher: mappedCourse.teacher || uniqueTeachers.join(' / '),
         mentor: mappedCourse.mentor || uniqueMentors.join(' / '),
       });
 
+      // 进度恒按排课/课程起止实时计算（服务端从不写 enrollments.progress，该列恒为初始 0）；
+      // 仅在完全无排课且无起止日期时，才退回列值。
+      const hasScheduleTiming = Boolean(
+        progressInfo.firstStart || progressInfo.lastEnd || courseRow.course_start_date || courseRow.course_end_date
+      );
+
       enrollments.push({
-        id: `db-enrollment-${student.id}-${courseId}`,
-        studentId: String(student.id),
+        id: enrollmentRow?.id || `db-enrollment-${studentId}-${courseId}`,
+        studentId,
         courseId,
-        scheduleId: String(firstRow.id),
-        enrollDate: formatDate(firstStart || firstRow.start_date),
-        progress,
-        status,
+        scheduleId: String(enrollmentRow?.schedule_id || timingRows[0]?.id || ''),
+        enrollDate: formatDate(enrollmentRow?.enroll_date || progressInfo.firstStart || courseRow.course_start_date),
+        progress: hasScheduleTiming ? progressInfo.progress : numOr(enrollmentRow?.progress, progressInfo.progress),
+        status: hasScheduleTiming ? progressInfo.status : 'enrolled',
       });
+    };
+
+    // 1) 已导入的课程（权威）
+    for (const courseId of enrolledCourseIds) {
+      const courseRow = courseById.get(courseId);
+      if (courseRow) emitCourse(courseRow, courseId);
+    }
+    // 2) 班级排课兜底（按 id，其次按 title）
+    for (const row of classScheduleRows) {
+      const courseRow =
+        courseById.get(normalizeText(row.course_id)) ||
+        courseByTitle.get(normalizeText(row.title));
+      if (courseRow) emitCourse(courseRow, normalizeText(row.course_id) || normalizeText(row.title));
     }
 
     res.json({

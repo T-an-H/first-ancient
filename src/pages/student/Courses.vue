@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchCourses, fetchSchedules, fetchStudentCourses, fetchStudents } from '@/api'
+import { fetchCategories, fetchCourses, fetchSchedules, fetchStudentCourses, fetchStudents } from '@/api'
 import { getStoredStudentSession, getStudentLookupKeyword, matchStudentFromSession } from '@/lib/studentSession'
 import { getTodayStart, parseLocalDate } from '@/lib/date'
 import { useAppStore } from '@/stores/app'
@@ -226,6 +226,15 @@ async function loadRemoteCourses() {
   loading.value = true
   remoteLoaded.value = false
 
+  // 同步分类（板块分组用）；失败不阻塞主流程
+  try {
+    const catRes = await fetchCategories()
+    const cats = catRes?.categories
+    if (Array.isArray(cats) && cats.length > 0) {
+      store.categories = cats
+    }
+  } catch { /* 分类拉取失败，分组退回课程自带 categoryName */ }
+
   try {
     const { id, student: resolvedStudent, session } = await resolveRemoteStudent()
     const className = String(session.className || resolvedStudent?.className || '').trim()
@@ -294,6 +303,20 @@ const enrolledCourses = computed(() => {
 const getCourse = (courseId: string) =>
   remoteCourses.value.find((course) => course.id === courseId) ||
   store.courses.find((course) => course.id === courseId)
+
+/** 分类名：优先课程对象自带 categoryName，再查 store.categories，最后「未分类」 */
+function getCategoryLabel(courseId: string): string {
+  const course = getCourse(courseId) as any
+  const direct = String(course?.categoryName || '').trim()
+  if (direct) return direct
+  const catId = String(course?.categoryId || '').trim()
+  if (catId) {
+    const cat = (store.categories as any[]).find((c) => String(c.id) === catId)
+    const name = String(cat?.name || '').trim()
+    if (name) return name
+  }
+  return '未分类'
+}
 
 const getTeacherInfo = (teacherName: string) => store.teachers.find((teacher) => teacher.name === teacherName)
 
@@ -396,25 +419,67 @@ function renderCourses(root: HTMLElement) {
 
   const header = container.append('div')
   header.append('h1').attr('class', 'text-2xl font-bold text-gray-900').text('我的课程')
-  header.append('p').attr('class', 'text-gray-500 mt-1').text('查看已选课程的学习进度')
-
-  const grid = container.append('div').attr('class', 'grid grid-cols-1 md:grid-cols-2 gap-5')
+  header.append('p').attr('class', 'text-gray-500 mt-1').text('按课程分类查看已选课程的学习进度')
 
   if (loading.value) {
-    const loadingDiv = grid.append('div').attr('class', 'col-span-full text-center py-16 text-gray-400')
+    const loadingDiv = container.append('div').attr('class', 'text-center py-16 text-gray-400')
     loadingDiv.append('p').text('课程加载中...')
     return
   }
 
   const enrollments = enrolledCourses.value
   if (enrollments.length === 0) {
-    const emptyDiv = grid.append('div').attr('class', 'col-span-full text-center py-16 text-gray-400')
+    const emptyDiv = container.append('div').attr('class', 'text-center py-16 text-gray-400')
     renderIcon(emptyDiv, 'bookOpen', 'w-12 h-12 mx-auto mb-4 text-gray-400')
     emptyDiv.append('p').text('暂无已选课程')
     return
   }
 
-  enrollments.forEach((enrollment) => {
+  // 按课程分类（categoryName）分板块；缺失归入「未分类」
+  const categoryOf = (courseId: string) => {
+    const c = getCourse(courseId) as any
+    return String(c?.categoryName || '').trim() || '未分类'
+  }
+  const groups = new Map<string, typeof enrollments>()
+  for (const enrollment of enrollments) {
+    const key = categoryOf(enrollment.courseId)
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(enrollment)
+  }
+  // 分类板块按名称排序，「未分类」置末尾
+  const orderedGroups = [...groups.entries()].sort(([a], [b]) => {
+    if (a === '未分类') return 1
+    if (b === '未分类') return -1
+    return a.localeCompare(b, 'zh-CN')
+  })
+
+  const sectionsRoot = container.append('div').attr('class', 'space-y-8')
+
+  for (const [categoryName, items] of orderedGroups) {
+    const section = sectionsRoot.append('section')
+
+    const sectionHeader = section.append('div').attr('class', 'flex items-center gap-2 mb-3')
+    sectionHeader
+      .append('span')
+      .attr('class', 'w-1 h-4 rounded-full bg-brand-600')
+    sectionHeader
+      .append('h2')
+      .attr('class', 'text-base font-semibold text-gray-800')
+      .text(categoryName)
+    sectionHeader
+      .append('span')
+      .attr('class', 'text-xs text-gray-400')
+      .text(`${items.length} 门`)
+
+    // 卡片缩小：3 列、更矮的封面
+    const grid = section.append('div').attr('class', 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4')
+
+    items.forEach((enrollment) => renderCourseCard(grid as any, enrollment))
+  }
+}
+
+function renderCourseCard(grid: any, enrollment: any) {
+  {
     const course = getCourse(enrollment.courseId)
     const ended = isEnded(enrollment)
     const pendingEval = !ended && hasPendingEval(enrollment)
@@ -458,7 +523,7 @@ function renderCourses(root: HTMLElement) {
 
     const coverDiv = card
       .append('div')
-      .attr('class', 'relative h-36 bg-gradient-to-br from-brand-600 to-brand-600 overflow-hidden')
+      .attr('class', 'relative h-24 bg-gradient-to-br from-brand-600 to-brand-600 overflow-hidden')
 
     if (course?.cover) {
       const imgClasses = [
@@ -479,49 +544,38 @@ function renderCourses(root: HTMLElement) {
         .text('已结束')
     }
 
-    const bottomInfo = coverDiv.append('div').attr('class', 'absolute bottom-3 left-4 right-4')
-    bottomInfo.append('h3').attr('class', 'text-white font-bold text-lg leading-tight truncate').text(course?.title || '')
+    const bottomInfo = coverDiv.append('div').attr('class', 'absolute bottom-2 left-3 right-3')
+    bottomInfo.append('h3').attr('class', 'text-white font-bold text-sm leading-tight truncate').text(course?.title || '')
 
     const badgeRow = bottomInfo.append('div').attr('class', 'flex items-center gap-2 mt-1')
     badgeRow
       .append('span')
-      .attr('class', 'text-xs text-white/80 bg-white/20 px-2 py-0.5 rounded-full')
+      .attr('class', 'text-[11px] text-white/80 bg-white/20 px-1.5 py-0.5 rounded-full')
       .text(`${course?.credits || 0} 学分`)
     badgeRow
       .append('span')
-      .attr('class', 'text-xs text-white/80 bg-white/20 px-2 py-0.5 rounded-full')
+      .attr('class', 'text-[11px] text-white/80 bg-white/20 px-1.5 py-0.5 rounded-full')
       .text(`${course?.duration || 0} 课时`)
 
-    const contentDiv = card.append('div').attr('class', 'p-4 space-y-3')
-
-    const descSection = contentDiv.append('div')
-    descSection.append('p').attr('class', 'text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1').text('课程大纲')
-    descSection
-      .append('p')
-      .attr('class', 'text-sm text-gray-600 line-clamp-2 leading-relaxed')
-      .text(course?.description || '暂无描述')
+    const contentDiv = card.append('div').attr('class', 'p-3 space-y-2')
 
     const teacherName = course?.teacher || ''
-    const teacherDiv = contentDiv.append('div').attr('class', 'flex items-center gap-3 py-2 border-t border-gray-50')
+    const teacherDiv = contentDiv.append('div').attr('class', 'flex items-center gap-2')
     teacherDiv
       .append('img')
       .attr('src', getTeacherAvatar(teacherName))
       .attr('alt', teacherName)
-      .attr('class', 'w-8 h-8 rounded-full bg-gray-100 object-cover')
+      .attr('class', 'w-6 h-6 rounded-full bg-gray-100 object-cover')
 
     const teacherInfo = teacherDiv.append('div').attr('class', 'flex-1 min-w-0')
-    teacherInfo.append('p').attr('class', 'text-sm font-medium text-gray-900 truncate').text(teacherName)
-    const teacherContact = getTeacherInfo(teacherName)
-    if (teacherContact) {
-      teacherInfo.append('p').attr('class', 'text-xs text-gray-400 truncate').text(teacherContact.email || '')
-    }
+    teacherInfo.append('p').attr('class', 'text-xs font-medium text-gray-900 truncate').text(teacherName || '未设置教师')
 
     const progressSection = contentDiv.append('div')
-    const progressLabel = progressSection.append('div').attr('class', 'flex justify-between text-xs text-gray-500 mb-1')
+    const progressLabel = progressSection.append('div').attr('class', 'flex justify-between text-[11px] text-gray-500 mb-1')
     progressLabel.append('span').text('学习进度')
     progressLabel.append('span').text(`${enrollment.progress}%`)
 
-    const barOuter = progressSection.append('div').attr('class', 'w-full h-2 bg-gray-100 rounded-full overflow-hidden')
+    const barOuter = progressSection.append('div').attr('class', 'w-full h-1.5 bg-gray-100 rounded-full overflow-hidden')
     barOuter
       .append('div')
       .attr('class', `h-full rounded-full transition-all duration-300 ${progressBarColor(enrollment.progress)}`)
@@ -530,23 +584,23 @@ function renderCourses(root: HTMLElement) {
     const footerDiv = contentDiv.append('div').attr('class', 'flex items-center justify-between pt-1')
     const badgeSpan = footerDiv
       .append('span')
-      .attr('class', `inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${statusBadgeClass(enrollment.status)}`)
+      .attr('class', `inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusBadgeClass(enrollment.status)}`)
 
-    renderIcon(badgeSpan, statusIconName(enrollment.status) as never, 'w-3.5 h-3.5')
+    renderIcon(badgeSpan, statusIconName(enrollment.status) as never, 'w-3 h-3')
     badgeSpan.append('span').text(statusLabel(enrollment.status))
 
     const actionLink = footerDiv
       .append('span')
       .attr(
         'class',
-        `inline-flex items-center gap-1 text-xs font-medium transition-colors ${
+        `inline-flex items-center gap-1 text-[11px] font-medium transition-colors ${
           ended ? 'text-gray-400' : 'text-gray-600 group-hover:text-gray-800'
         }`,
       )
 
     actionLink.text(ended ? '查看记录' : '进入学习')
-    renderIcon(actionLink, 'arrowRight', 'w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5')
-  })
+    renderIcon(actionLink, 'arrowRight', 'w-3 h-3 transition-transform group-hover:translate-x-0.5')
+  }
 }
 
 function rerender() {

@@ -56,32 +56,40 @@
       <span>加载中...</span>
     </div>
 
-    <!-- 课程卡片列表 -->
-    <div v-else class="space-y-3">
-      <div v-for="course in filteredCourses" :key="course.id"
-        @click="goDetail(course.id)"
-        class="bg-white rounded-xl border border-brand-400/20 shadow-sm p-5 hover:shadow-md transition-all flex items-center justify-between cursor-pointer">
-        <div class="flex items-center gap-4">
-          <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
-            <BookOpen class="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h3 class="font-semibold text-gray-900">{{ course.title }}</h3>
-            <p class="text-xs text-gray-400 mt-0.5">
-              {{ course.teacher }} · {{ getCategoryName(course.categoryId) }} · {{ course.duration }}学时 · {{ course.credits }}学分
-            </p>
+    <!-- 课程按分类分板块展示（卡片式） -->
+    <div v-else class="space-y-8">
+      <section v-for="group in groupedCourses" :key="group.categoryName">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="w-1 h-4 rounded-full bg-blue-500"></span>
+          <h2 class="text-base font-semibold text-gray-800">{{ group.categoryName }}</h2>
+          <span class="text-xs text-gray-400">{{ group.courses.length }} 门</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div v-for="course in group.courses" :key="course.id"
+            @click="goDetail(course.id)"
+            class="bg-white rounded-xl border border-brand-400/20 shadow-sm p-4 hover:shadow-md transition-all cursor-pointer">
+            <div class="flex items-start gap-3">
+              <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
+                <BookOpen class="w-5 h-5 text-white" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <h3 class="font-semibold text-gray-900 truncate">{{ course.title }}</h3>
+                <p class="text-xs text-gray-400 mt-0.5 truncate">
+                  {{ course.teacher }} · {{ course.duration }}学时 · {{ course.credits }}学分
+                </p>
+              </div>
+            </div>
+            <div class="mt-3 flex items-center justify-between">
+              <span class="text-xs text-gray-400">{{ course.createdAt }}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full" :class="course.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'">
+                {{ course.status === 'active' ? '进行中' : course.status === 'draft' ? '草稿' : '已结束' }}
+              </span>
+            </div>
           </div>
         </div>
-        <div class="flex items-center gap-3">
-          <div class="text-right">
-            <p class="text-xs text-gray-400">创建时间</p>
-            <p class="text-xs font-medium text-gray-600">{{ course.createdAt }}</p>
-          </div>
-          <span class="text-xs px-3 py-1 rounded-full" :class="course.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'">
-            {{ course.status === 'active' ? '进行中' : course.status === 'draft' ? '草稿' : '已结束' }}
-          </span>
-        </div>
-      </div>
+      </section>
+
       <div v-if="filteredCourses.length === 0" class="text-center py-12 text-gray-400">
         暂无课程数据
       </div>
@@ -119,6 +127,25 @@ function getCategoryName(categoryId: string): string {
   const cat = store.categories.find((c: any) => c.id === categoryId)
   return cat?.name || '未分类'
 }
+
+/** 按课程分类分板块（优先课程自带 categoryName，退回按 categoryId 查分类表） */
+const groupedCourses = computed(() => {
+  const groups = new Map<string, any[]>()
+  for (const course of filteredCourses.value as any[]) {
+    const name =
+      String(course.categoryName || '').trim() ||
+      getCategoryName(course.categoryId)
+    if (!groups.has(name)) groups.set(name, [])
+    groups.get(name)!.push(course)
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => {
+      if (a === '未分类') return 1
+      if (b === '未分类') return -1
+      return a.localeCompare(b, 'zh-CN')
+    })
+    .map(([categoryName, courses]) => ({ categoryName, courses }))
+})
 
 /** 进入课程只读详情（领导端仅查看） */
 function goDetail(courseId: string) {

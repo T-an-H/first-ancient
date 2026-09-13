@@ -462,6 +462,15 @@ export async function fetchStudentsPool(keyword: string) {
   return request(`/teaching/students-pool${query ? `?${query}` : ''}`)
 }
 
+/**
+ * 把 学号/姓名/总库ID 解析为「学生真实主键」。
+ * 选课必须以真实主键写入，否则学生端按自己身份查不到该课。
+ */
+export async function resolveStudent(keyword: string) {
+  const query = buildQuery({ keyword })
+  return request(`/teaching/students-resolve${query ? `?${query}` : ''}`)
+}
+
 export async function fetchCourseClasses(courseId: string) {
   const query = buildQuery({ courseId })
   return request(`/teaching/course-classes${query ? `?${query}` : ''}`)

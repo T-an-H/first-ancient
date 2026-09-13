@@ -250,16 +250,40 @@ router.get('/students-pool', async (req, res) => {
     if (!keyword) return res.json({ success: true, students: [] });
 
     const like = `%${keyword}%`;
+    // students.id 才是选课/查询用的真实主键（users.ref_id/user_no 可能与之不一致）。
+    // 这里 LEFT JOIN students 取回真实学生主键，供前端选课时使用，避免导入后学生端看不到课。
     const [rows] = await pool.execute(
-      `SELECT id, user_no, name, ref_id
-       FROM users
-       WHERE ref_type = 'student' AND status = 'active'
-         AND (name LIKE ? OR user_no LIKE ? OR account LIKE ?)
-       ORDER BY name ASC
+      `SELECT u.id, u.user_no, u.name, u.ref_id,
+              s.id AS student_pk, s.student_id AS student_no, s.class_name
+       FROM users AS u
+       LEFT JOIN students AS s
+         ON s.student_id = u.user_no OR s.id = u.ref_id OR s.id = u.user_no
+       WHERE u.ref_type = 'student' AND u.status = 'active'
+         AND (u.name LIKE ? OR u.user_no LIKE ? OR u.account LIKE ?)
+       ORDER BY u.name ASC
        LIMIT 20`,
       [like, like, like]
     );
     res.json({ success: true, students: rows });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+/** GET /api/teaching/students-resolve?keyword=xxx - 把 学号/姓名/总库ID 解析为真实学生主键 */
+router.get('/students-resolve', async (req, res) => {
+  try {
+    const keyword = String(req.query.keyword || '').trim();
+    if (!keyword) return res.json({ success: true, student: null });
+
+    const exact = String(keyword);
+    const [rows] = await pool.query(
+      `SELECT id, student_id, name, class_name
+       FROM students
+       WHERE student_id = ? OR id = ? OR name = ?
+       ORDER BY (student_id = ?) DESC, (id = ?) DESC
+       LIMIT 5`,
+      [exact, exact, exact, exact, exact]
+    );
+    res.json({ success: true, student: rows[0] || null, matches: rows });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
