@@ -3,8 +3,93 @@
  */
 import { Router } from 'express';
 import pool from '../db.js';
+import { hashIdCard } from '../lib/crypto.js';
 
 const router = Router();
+
+/** 身份证号形态（18 位 / 15 位，末位可为 X） */
+function looksLikeIdCard(value) {
+  return /^\d{17}[\dXx]$/.test(value) || /^\d{15}$/.test(value);
+}
+
+/** 手机号形态 */
+function looksLikePhone(value) {
+  return /^1\d{10}$/.test(value);
+}
+
+/**
+ * 按「唯一标识」解析学生：只认 学号/工号、手机号、身份证号 —— **姓名不作判定依据**（会重名）。
+ * 返回 { student, matchedBy } 或 { student: null, reason }。
+ */
+async function resolveStudentByIdentities(connection, { studentNo, phone, idCard }) {
+  const clues = [];
+  if (studentNo) clues.push(`学号/工号 ${studentNo}`);
+  if (phone) clues.push(`手机号 ${phone}`);
+  if (idCard) clues.push('身份证号');
+
+  const tryFind = async (sql, params, matchedBy) => {
+    const [rows] = await connection.query(sql, params);
+    return rows.length === 1 ? { student: rows[0], matchedBy } : null;
+  };
+
+  // 1) 学号/工号：students.id 或 students.student_id，或 users.user_no → ref_id
+  if (studentNo) {
+    const hit = await tryFind(
+      `SELECT id, student_id, name, class_name, phone FROM students WHERE student_id = ? OR id = ? LIMIT 2`,
+      [studentNo, studentNo],
+      '学号'
+    );
+    if (hit) return hit;
+    const viaUsers = await tryFind(
+      `SELECT s.id, s.student_id, s.name, s.class_name, s.phone
+       FROM users u JOIN students s
+         ON s.id = u.ref_id OR s.student_id = u.user_no OR s.id = u.user_no
+       WHERE u.user_no = ? LIMIT 2`,
+      [studentNo],
+      '学号'
+    );
+    if (viaUsers) return viaUsers;
+  }
+
+  // 2) 手机号：users.account（登录账号即手机号）或 students.phone
+  if (phone) {
+    const hit = await tryFind(
+      `SELECT s.id, s.student_id, s.name, s.class_name, s.phone
+       FROM users u JOIN students s
+         ON s.id = u.ref_id OR s.student_id = u.user_no OR s.id = u.user_no
+       WHERE u.account = ? LIMIT 2`,
+      [phone],
+      '手机号'
+    );
+    if (hit) return hit;
+    const byPhone = await tryFind(
+      `SELECT id, student_id, name, class_name, phone FROM students WHERE phone = ? LIMIT 2`,
+      [phone],
+      '手机号'
+    );
+    if (byPhone) return byPhone;
+  }
+
+  // 3) 身份证号：users.id_card_hash（SHA-256）
+  if (idCard) {
+    const hash = hashIdCard(idCard);
+    const hit = await tryFind(
+      `SELECT s.id, s.student_id, s.name, s.class_name, s.phone
+       FROM users u JOIN students s
+         ON s.id = u.ref_id OR s.student_id = u.user_no OR s.id = u.user_no
+       WHERE u.id_card_hash = ? LIMIT 2`,
+      [hash],
+      '身份证号'
+    );
+    if (hit) return hit;
+  }
+
+  return {
+    student: null,
+    reason: clues.length === 0 ? 'no-identity' : 'not-found',
+    clues,
+  };
+}
 
 // ==================== 选课 (Enrollments) ====================
 
@@ -268,23 +353,53 @@ router.get('/students-pool', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-/** GET /api/teaching/students-resolve?keyword=xxx - 把 学号/姓名/总库ID 解析为真实学生主键 */
+/**
+ * GET /api/teaching/students-resolve
+ *   按「唯一标识」解析学生为真实主键：学号/工号、手机号、身份证号。
+ *   ⚠️ 姓名**不作**判定依据（会重名）——传姓名返回 no-identity，由调用方提示"请填学号"。
+ */
 router.get('/students-resolve', async (req, res) => {
   try {
-    const keyword = String(req.query.keyword || '').trim();
-    if (!keyword) return res.json({ success: true, student: null });
+    const studentNo = String(req.query.studentNo || req.query.student_no || '').trim();
+    let phone = String(req.query.phone || '').trim();
+    const idCard = String(req.query.idCard || req.query.id_card || '').trim();
 
-    const exact = String(keyword);
-    const [rows] = await pool.query(
-      `SELECT id, student_id, name, class_name
-       FROM students
-       WHERE student_id = ? OR id = ? OR name = ?
-       ORDER BY (student_id = ?) DESC, (id = ?) DESC
-       LIMIT 5`,
-      [exact, exact, exact, exact, exact]
-    );
-    res.json({ success: true, student: rows[0] || null, matches: rows });
-  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+    // 兼容旧的单一 keyword 入参：只按形态识别，绝不按姓名
+    const keyword = String(req.query.keyword || '').trim();
+    let kStudentNo = studentNo;
+    if (!kStudentNo && !phone && !idCard && keyword) {
+      if (looksLikeIdCard(keyword)) {
+        // 交给下方 idCard 分支
+      } else if (looksLikePhone(keyword)) {
+        phone = keyword;
+      } else if (/\d/.test(keyword)) {
+        kStudentNo = keyword;   // 含数字 → 视为学号/工号
+      }
+      // 纯文字（如姓名）→ 三类标识都不赋值，走 no-identity，由调用方提示"请填学号"
+    }
+    const effectiveIdCard = idCard || (looksLikeIdCard(keyword) ? keyword : '');
+
+    const result = await resolveStudentByIdentities(pool, {
+      studentNo: kStudentNo,
+      phone,
+      idCard: effectiveIdCard,
+    });
+
+    if (result.student) {
+      res.json({ success: true, student: result.student, matchedBy: result.matchedBy });
+      return;
+    }
+    res.json({
+      success: true,
+      student: null,
+      reason: result.reason,
+      message: result.reason === 'no-identity'
+        ? '请提供学号/工号、手机号或身份证号（姓名不能作为判定依据）'
+        : `总库中找不到该学生（${(result.clues || []).join('、')}）`,
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
 });
 
 // ==================== 课程班级 (Course Classes) ====================

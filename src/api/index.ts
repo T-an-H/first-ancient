@@ -463,11 +463,22 @@ export async function fetchStudentsPool(keyword: string) {
 }
 
 /**
- * 把 学号/姓名/总库ID 解析为「学生真实主键」。
+ * 把「唯一标识」解析为学生真实主键：学号/工号、手机号、身份证号。
+ * ⚠️ 姓名不作判定依据（会重名）——传姓名会返回 reason='no-identity'。
  * 选课必须以真实主键写入，否则学生端按自己身份查不到该课。
  */
-export async function resolveStudent(keyword: string) {
-  const query = buildQuery({ keyword })
+export async function resolveStudent(
+  identities: { studentNo?: string; phone?: string; idCard?: string } | string,
+) {
+  const params =
+    typeof identities === 'string'
+      ? { keyword: identities }
+      : {
+          studentNo: identities.studentNo || '',
+          phone: identities.phone || '',
+          idCard: identities.idCard || '',
+        }
+  const query = buildQuery(params)
   return request(`/teaching/students-resolve${query ? `?${query}` : ''}`)
 }
 

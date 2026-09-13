@@ -1433,7 +1433,7 @@
                   <Upload class="w-4 h-4" />
                   {{ addClassMembers.length > 0 ? `已解析 ${addClassMembers.length} 名成员，点击重新选择` : '一键导入班级成员信息（Excel）' }}
                 </button>
-                <p class="text-[11px] text-gray-400 mt-1.5">支持列：学生姓名 / 学生学号；已存在的学生会自动匹配，不存在将自动新建并加入本课程</p>
+                <p class="text-[11px] text-gray-400 mt-1.5">必填列：<b>学生学号 / 工号</b>、<b>手机号</b>、<b>身份证号</b>（三者至少有一列，用于精确匹配总库）；姓名可选填，不作为判定依据</p>
 
                 <!-- 解析出的成员预览 -->
                 <div v-if="addClassMembers.length > 0" class="mt-2 max-h-48 overflow-y-auto border border-gray-100 rounded-lg">
@@ -1441,8 +1441,9 @@
                     <thead class="sticky top-0 bg-gray-50">
                       <tr class="border-b border-gray-100">
                         <th class="text-left px-3 py-1.5 text-[11px] font-medium text-gray-500">#</th>
-                        <th class="text-left px-3 py-1.5 text-[11px] font-medium text-gray-500">学生姓名</th>
-                        <th class="text-left px-3 py-1.5 text-[11px] font-medium text-gray-500">学生学号</th>
+                        <th class="text-left px-3 py-1.5 text-[11px] font-medium text-gray-500">姓名</th>
+                        <th class="text-left px-3 py-1.5 text-[11px] font-medium text-gray-500">学号/工号</th>
+                        <th class="text-left px-3 py-1.5 text-[11px] font-medium text-gray-500">手机号 / 身份证</th>
                         <th class="text-left px-3 py-1.5 text-[11px] font-medium text-gray-500">状态</th>
                       </tr>
                     </thead>
@@ -1450,10 +1451,12 @@
                       <tr v-for="(m, i) in addClassMembers" :key="i" class="border-b border-gray-50">
                         <td class="px-3 py-1.5 text-xs text-gray-400">{{ i + 1 }}</td>
                         <td class="px-3 py-1.5 text-xs text-gray-700">{{ m.name || '-' }}</td>
-                        <td class="px-3 py-1.5 text-xs text-gray-700">{{ m.studentId || '-' }}</td>
+                        <td class="px-3 py-1.5 text-xs text-gray-700">{{ m.studentNo || '-' }}</td>
+                        <td class="px-3 py-1.5 text-xs text-gray-700">{{ [m.phone, m.idCard].filter(Boolean).join(' / ') || '-' }}</td>
                         <td class="px-3 py-1.5">
-                          <span v-if="m.existing" class="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">已存在</span>
-                          <span v-else class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600">将新建</span>
+                          <span v-if="m.existing" class="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">已在总库</span>
+                          <span v-else-if="!m.studentNo && !m.phone && !m.idCard" class="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-600">缺标识</span>
+                          <span v-else class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600">总库无此人</span>
                         </td>
                       </tr>
                     </tbody>
@@ -1498,7 +1501,7 @@
                     class="flex items-center justify-between px-4 py-3 cursor-pointer border-b border-gray-50 last:border-0 hover:bg-emerald-50">
                     <div>
                       <p class="text-sm font-medium text-gray-900">{{ s.name }}</p>
-                      <p class="text-xs text-gray-400">{{ s.user_no || '-' }} · {{ s.account || '-' }}</p>
+                      <p class="text-xs text-gray-400">学号 {{ s.user_no || '-' }} · 手机 {{ s.account || '-' }}</p>
                     </div>
                     <span class="text-xs text-emerald-600">加入</span>
                   </div>
@@ -2254,7 +2257,14 @@ const showAddClass = ref(false)
 const addClassForm = ref({ className: '', studentIds: [] as string[] })
 const addClassExcelInput = ref<HTMLInputElement | null>(null)
 const addClassFileName = ref('')
-const addClassMembers = ref<{ name: string; studentId: string; existing: boolean }[]>([])
+const addClassMembers = ref<{
+  name: string
+  studentNo: string
+  phone: string
+  idCard: string
+  existing: boolean
+  resolvedId: string
+}[]>([])
 
 /** 打开新增班级弹窗，重置表单与导入数据 */
 function openAddClassModal() {
@@ -2283,19 +2293,26 @@ async function handleAddClassExcel(e: Event) {
     const workbook = XLSX.read(data, { type: 'array' })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     const rows: any[] = XLSX.utils.sheet_to_json(sheet)
-    const members: { name: string; studentId: string; existing: boolean }[] = []
+    const members: { name: string; studentNo: string; phone: string; idCard: string; existing: boolean; resolvedId: string }[] = []
     for (const row of rows) {
-      const stuName = (row['学生姓名'] || row['name'] || '').toString().trim()
-      const stuId = (row['学生学号'] || row['studentId'] || '').toString().trim()
-      if (!stuName && !stuId) continue
-      const match = store.students.find(s =>
-        (stuId && (s.studentId === stuId || s.id === stuId)) ||
-        (stuName && s.name === stuName)
-      )
-      members.push({ name: stuName, studentId: stuId, existing: !!match })
+      const stuName = (row['学生姓名'] || row['姓名'] || row['name'] || '').toString().trim()
+      const studentNo = (row['学生学号'] || row['学号'] || row['工号'] || row['studentId'] || row['student_id'] || '').toString().trim()
+      const phone = (row['手机号'] || row['电话'] || row['phone'] || '').toString().trim()
+      const idCard = (row['身份证号'] || row['身份证'] || row['idCard'] || row['id_card'] || '').toString().trim()
+      if (!stuName && !studentNo && !phone && !idCard) continue
+      // 判定同一人只依据 学号/工号、手机号、身份证号 —— 姓名不参与（会重名）
+      let existing = false
+      let resolvedId = ''
+      try {
+        const res = await resolveStudent({ studentNo, phone, idCard })
+        if (res?.student?.id) { existing = true; resolvedId = String(res.student.id) }
+      } catch { existing = false }
+      members.push({ name: stuName, studentNo, phone, idCard, existing, resolvedId })
     }
     addClassMembers.value = members
-    if (members.length === 0) alert('未从文件中解析出有效成员，请检查表格列：学生姓名 / 学生学号')
+    if (members.length === 0) {
+      alert('未从文件中解析出有效成员。\n请检查表格列：学生学号 / 手机号 / 身份证号（三者至少有一列），姓名可选填。')
+    }
   } catch (err) {
     console.error(err)
     alert('解析文件失败，请确认上传的是有效的 Excel/CSV 文件')
@@ -2310,7 +2327,8 @@ async function saveAddClass() {
   if (!className || !courseId.value) return
   let assignedCount = 0
   let createdCount = 0
-  const notInRepo: string[] = []
+  const notInRepoList: string[] = []
+  const noIdentityList: string[] = []
   const course = store.courses.find((c: any) => c.id === courseId.value)
 
   // 持久化班级记录（无论有无成员）
@@ -2322,49 +2340,55 @@ async function saveAddClass() {
   } catch {}
 
   for (const m of addClassMembers.value) {
-    // 学号优先解析「真实学生主键」：本地 store → 总库解析端点。
-    // 选课必须用真实主键，否则学生端按自己身份查不到该课。
-    let student: any = m.studentId
-      ? store.students.find(s => s.id === m.studentId || s.studentId === m.studentId)
-      : (m.name ? store.students.find(s => s.name === m.name) : undefined)
-
-    if (!student) {
-      try {
-        const res = await resolveStudent(m.studentId || m.name)
-        const hit = res?.student
-        if (hit) {
-          const pk = String(hit.id)
-          const existing = store.students.find(s => s.id === pk)
-          if (existing) {
-            // 总库有、原本不在同班 → 归入本班级
-            store.updateStudent(pk, { className })
-            student = existing
-            assignedCount++
-          } else {
-            store.addStudent({
-              id: pk,
-              name: hit.name || m.name || pk,
-              studentId: hit.student_id || hit.id || m.studentId || undefined,
-              className,
-              phone: '',
-              email: '',
-              avatar: '',
-              joinDate: getNow().toISOString().split('T')[0],
-              status: 'active',
-            })
-            student = store.students.find(s => s.id === pk)
-            createdCount++
-          }
+    // 判定同一人只依据 学号/工号、手机号、身份证号 —— **姓名不参与**（会重名）。
+    // 也不能只看本地 store：那是 localStorage + mock 初始化的，混有 `stu-1` 这类假 id，
+    // 命中后拿假 id 选课会被后端拒绝，教师端显示"成功"而学生端看不到课。
+    let student: any = undefined
+    let reason = ''   // 'no-identity' 缺标识 / 'not-found' 总库查不到
+    let detail = ''
+    try {
+      const res = await resolveStudent({
+        studentNo: m.studentNo || '',
+        phone: m.phone || '',
+        idCard: m.idCard || '',
+      })
+      const hit = res?.student
+      if (hit) {
+        const pk = String(hit.id)
+        const existing = store.students.find(s => s.id === pk)
+        if (existing) {
+          // 总库有、原本不在同班 → 归入本班级
+          store.updateStudent(pk, { className })
+          student = { ...existing, id: pk }
+          assignedCount++
+        } else {
+          store.addStudent({
+            id: pk,
+            name: hit.name || m.name || pk,
+            studentId: hit.student_id || hit.id || undefined,
+            className,
+            phone: '',
+            email: '',
+            avatar: '',
+            joinDate: getNow().toISOString().split('T')[0],
+            status: 'active',
+          })
+          student = store.students.find(s => s.id === pk)
+          createdCount++
         }
-      } catch { /* 解析失败按未入库处理 */ }
-    } else {
-      store.updateStudent(student.id, { className })
-      assignedCount++
-    }
+      } else {
+        reason = res?.reason === 'no-identity' ? 'no-identity' : 'not-found'
+        detail = res?.message || ''
+      }
+    } catch { reason = 'not-found' }
 
-    // 总库查不到 → 不造孤儿学生（后端会拒绝，若仍本地造一个，教师会看到"成功"但学生端看不到）
+    const label = `${m.name || ''}${m.studentNo ? `（${m.studentNo}）` : ''}`.trim()
+      || [ m.phone, m.idCard ].filter(Boolean).join('/')
+
+    // 未解析到真实学生：不落库（后端会拒绝；若本地造一个，教师会看到"成功"但学生端看不到）
     if (!student) {
-      notInRepo.push(`${m.name || ''}${m.studentId ? `（${m.studentId}）` : ''}`.trim())
+      if (reason === 'no-identity') noIdentityList.push(label)
+      else notInRepoList.push(`${label}${detail ? ` - ${detail}` : ''}`)
       continue
     }
 
@@ -2410,9 +2434,14 @@ async function saveAddClass() {
   const baseMsg = total > 0
     ? `已创建班级"${className}"，共处理 ${total} 名成员（匹配已有 ${assignedCount} 人，新建 ${createdCount} 人）`
     : `已创建班级"${className}"`
-  const msg = notInRepo.length > 0
-    ? `${baseMsg}\n\n以下 ${notInRepo.length} 人不在系统总库，未加入（请先在管理员端-学生管理 添加入库）：\n${notInRepo.join('、')}`
-    : baseMsg
+  const warnings: string[] = []
+  if (noIdentityList.length > 0) {
+    warnings.push(`以下 ${noIdentityList.length} 人缺少身份标识（学号/工号、手机号、身份证号），未加入：\n${noIdentityList.join('、')}`)
+  }
+  if (notInRepoList.length > 0) {
+    warnings.push(`以下 ${notInRepoList.length} 人在总库中找不到，未加入（请先在管理员端-学生管理 入库）：\n${notInRepoList.join('\n')}`)
+  }
+  const msg = warnings.length > 0 ? `${baseMsg}\n\n${warnings.join('\n\n')}` : baseMsg
   addClassForm.value = { className: '', studentIds: [] }
   addClassFileName.value = ''
   addClassMembers.value = []
@@ -2460,9 +2489,10 @@ async function addRepoStudentToCourse(s: any) {
   repoAddMsg.value = ''
   // 必须用「学生真实主键」写选课：students.id 才是学生端查询用的键，
   // users.ref_id / user_no 可能与之不一致（旧代码取 ref_id||user_no 会写入错误 id 导致学生端看不到课）。
+  // 判定同一人只依据 学号/工号、手机号、身份证号（姓名不参与）。
   let studentId = String(s.student_pk || s.id || '')
   try {
-    const resolved = await resolveStudent(s.student_no || s.user_no || s.ref_id || s.name)
+    const resolved = await resolveStudent({ studentNo: s.student_no || s.user_no || '', phone: s.account || s.phone || '' })
     if (resolved?.student?.id) studentId = String(resolved.student.id)
   } catch { /* 解析失败退回原取值 */ }
   // 补写学生到 store，否则未分班面板因 store.students.find 落空而不显示
