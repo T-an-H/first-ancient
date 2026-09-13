@@ -660,6 +660,10 @@ async function loadStudentGradesForRadar() {
         ...grades,
       ]
     } catch { /* 成绩拉取失败则用已有数据 */ }
+
+    // 拉取后端成绩明细（detailed_grade）——平时成绩（综合评价）的权威源，
+    // 供「职业方向推荐」按真实评价计算平时成绩（替代 localStorage/mock）。
+    await store.syncDetailedGradesFromApi(studentId)
   } catch { /* 整体失败静默，雷达显示空态 */ }
 }
 

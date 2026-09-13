@@ -342,6 +342,11 @@ export async function fetchStudentScores(studentId: string) {
   return request(`/teaching/scores/student/${studentId}`)
 }
 
+/** 取某生的成绩明细（平时五类 + 期中/期末分项），平时成绩与职业画像的后端权威源 */
+export async function fetchStudentDetailedGrades(studentId: string) {
+  return request(`/detailed-grades/student/${encodeURIComponent(studentId)}`)
+}
+
 export async function fetchCourseQualityEvaluations(courseId: string) {
   return request(`/quality-evaluations/course/${encodeURIComponent(courseId)}`)
 }

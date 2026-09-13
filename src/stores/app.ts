@@ -8,6 +8,7 @@ import {
   fetchCourseGroups,
   fetchCourseQualityEvaluations,
   fetchEvalConfig,
+  fetchStudentDetailedGrades,
   saveEvaluation as apiSaveEval,
   deleteEvaluation as apiDeleteEval,
   submitTeacherEval as apiSubmitEval,
@@ -932,6 +933,31 @@ export const useAppStore = defineStore('app', () => {
       replaceCourseGroups(courseId, remoteGroups)
     } else {
       console.warn('同步课程分组失败，继续使用当前缓存:', groupsResult.reason)
+    }
+  }
+
+  /**
+   * 从后端拉取某生的成绩明细（detailed_grade），并入本地 detailedGrades。
+   *
+   * 后端 detailed_grade 是「平时成绩（综合评价）」的权威源（由 evaluations + exam_scores 聚合），
+   * 优先级高于本地 localStorage/mock：同一 (studentId, courseId) 以后端为准，其余保留本地。
+   * 供学生端个人中心（平时成绩 / 职业方向推荐）使用。
+   */
+  async function syncDetailedGradesFromApi(studentId: string) {
+    if (!studentId) return
+    try {
+      const result = await fetchStudentDetailedGrades(studentId)
+      const remote = Array.isArray(result?.grades) ? (result.grades as DetailedGrade[]) : []
+      if (remote.length === 0) return
+      const key = (dg: { studentId: string; courseId: string }) => `${dg.studentId}||${dg.courseId}`
+      const remoteKeys = new Set(remote.map(key))
+      detailedGrades.value = [
+        ...detailedGrades.value.filter((dg) => dg.studentId !== studentId || !remoteKeys.has(key(dg))),
+        ...remote,
+      ]
+      saveToStorage('detailedGrades', detailedGrades.value)
+    } catch (error) {
+      console.warn('同步成绩明细失败，继续使用本地数据:', error)
     }
   }
 
@@ -2822,7 +2848,7 @@ export const useAppStore = defineStore('app', () => {
     submitHomework, getHomeworkSubmission,
     setStudentHomeworkSummaries, getStudentHomeworkSummaries, getPendingStudentHomeworkTasks,
     findStudentHomeworkSummary, syncStudentHomeworkTodos,
-    syncCourseEvaluationState, syncQualityEvaluationState, addEvaluation, updateEvaluation, deleteEvaluation,
+    syncCourseEvaluationState, syncQualityEvaluationState, syncDetailedGradesFromApi, addEvaluation, updateEvaluation, deleteEvaluation,
     setEvalConfig, addStudentGroup, addStudent, addTeacher, updateTeacher, deleteTeacher, updateStudent, deleteStudent, updateStudentGroup, deleteStudentGroup,
     getCourseGroups, clearCourseGroups, setCourseGroups, randomGroup,
     detectAnomalies, getEvalSessions, hasGroups,

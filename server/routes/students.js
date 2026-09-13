@@ -27,16 +27,23 @@ function buildStudentWhereClause(query) {
   const departmentName = normalizeText(query.department);
   const departmentId = normalizeText(query.departmentId);
 
+  // 线上历史库 students/classes 的字符列是 utf8mb4_bin，而连接参数是 utf8mb4_unicode_ci，
+  // 直接比较/模糊匹配会抛 ER_CANT_AGGREGATE_2COLLATIONS。统一在**每个参与运算的表达式**上
+  // 显式指定 collation（含 COALESCE 内部各列，否则 COALESCE 自身就会先冲突）。
+  // 对已是 unicode_ci 的库无影响。
+  const C = 'utf8mb4_unicode_ci';
+  const col = (expr) => `(${expr}) COLLATE ${C}`;
+
   if (search) {
     const keyword = `%${search}%`;
     conditions.push(
-      `(student.name LIKE ? OR student.student_id LIKE ? OR COALESCE(cls.name, student.class_name, '') LIKE ?)`
+      `(${col('student.name')} LIKE ? OR ${col('student.student_id')} LIKE ? OR ${col(`COALESCE(${col('cls.name')}, ${col('student.class_name')}, '')`)} LIKE ?)`
     );
     params.push(keyword, keyword, keyword);
   }
 
   if (className) {
-    conditions.push('(COALESCE(cls.name, student.class_name) = ?)');
+    conditions.push(`(${col(`COALESCE(${col('cls.name')}, ${col('student.class_name')})`)} = ?)`);
     params.push(className);
   }
 
@@ -46,7 +53,7 @@ function buildStudentWhereClause(query) {
   }
 
   if (departmentName) {
-    conditions.push('(COALESCE(dept.name, student.department) = ?)');
+    conditions.push(`(${col(`COALESCE(${col('dept.name')}, ${col('student.department')})`)} = ?)`);
     params.push(departmentName);
   }
 

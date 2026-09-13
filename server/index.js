@@ -24,7 +24,9 @@ import { warmAssistantModel } from './assistant-agent.js';
 import qualityEvaluationRoutes from './routes/qualityEvaluations.js';
 import ensureAdminSchema from './bootstrap/ensureAdminSchema.js';
 import ensureProjectSchema from './bootstrap/ensureProjectSchema.js';
+import ensureGradeSchema from './bootstrap/ensureGradeSchema.js';
 import projectRoutes from './routes/projects.js';
+import gradeRoutes from './routes/grades.js';
 import accountRoutes from './routes/accounts.js';
 import { authMiddleware, requireAdmin } from './middleware/auth.js';
 
@@ -96,6 +98,9 @@ app.use('/api/teaching', teachingRoutes);
 // 评价管理路由
 app.use('/api/eval', evalRoutes);
 
+// 成绩配置 + 成绩明细路由（平时成绩后端权威源）：/api/grade-config/*、/api/detailed-grades/*
+app.use('/api', gradeRoutes);
+
 // 作业管理路由（含AI出题/批改）
 app.use('/api/homeworks', homeworkRoutes);
 app.use('/api/quality-evaluations', qualityEvaluationRoutes);
@@ -112,6 +117,7 @@ app.use('/api/accounts', requireAdmin, accountRoutes);
 async function start() {
   await ensureAdminSchema();
   await ensureProjectSchema();
+  await ensureGradeSchema();
 
   app.listen(PORT, () => {
     void warmAssistantModel();

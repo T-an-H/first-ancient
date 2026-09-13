@@ -1,0 +1,94 @@
+name: Seed evaluation data
+
+# 手动触发：把评价/成绩「种子数据」灌到线上库（幂等，可重复执行）。
+# 只在 Actions 页面点 “Run workflow” 时运行，不会随 push 自动跑。
+#
+# 作用（详见 server/scripts/seed-eval-data.mjs）：
+#   补齐课程/排课(含 class_name)/选课 + 多轮评价 + 部分课期中期末 + grade_config，
+#   并聚合回填 detailed_grade，使「平时成绩（综合评价）」与职业方向推荐有真实数据。
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '仅打印将执行的操作，不写库'
+        type: boolean
+        default: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup SSH key
+        env:
+          SSH_KEY_B64: ${{ secrets.ALIYUN_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload seed script to server
+        env:
+          DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
+        run: |
+          set -e
+          SSH_OPTS="ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no"
+          rsync -avz -e "$SSH_OPTS" \
+            server/scripts/seed-eval-data.mjs \
+            server/lib/detailedGrades.js \
+            server/lib/gradeDefaults.js \
+            server/bootstrap/ensureGradeSchema.js \
+            root@${DEPLOY_HOST}:/tmp/seed-bundle/
+
+      - name: Copy into app dir and run seed
+        env:
+          DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
+          DEPLOY_USER: ${{ secrets.ALIYUN_USER }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -e
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << REMOTE
+            set -e
+            APP=/var/www/first-ancient/server
+            # 分发到运行目录（脚本按相对路径 import ../db.js 等）
+            cp /tmp/seed-bundle/seed-eval-data.mjs "\$APP/scripts/seed-eval-data.mjs"
+            cp /tmp/seed-bundle/detailedGrades.js "\$APP/lib/detailedGrades.js"
+            cp /tmp/seed-bundle/gradeDefaults.js "\$APP/lib/gradeDefaults.js"
+            cp /tmp/seed-bundle/ensureGradeSchema.js "\$APP/bootstrap/ensureGradeSchema.js"
+            cd "\$APP"
+            echo "== 种子前数据量 =="
+            node -e "import('./db.js').then(async ({default:p})=>{for(const t of ['courses','schedules','evaluations','detailed_grade']){try{const [r]=await p.query('SELECT COUNT(*) c FROM '+t);console.log(t, r[0].c)}catch(e){console.log(t,'(missing)')}}await p.end()})"
+            echo "== 执行种子 =="
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "DRY RUN：跳过实际写入"
+            else
+              node scripts/seed-eval-data.mjs
+            fi
+            echo "== 种子后数据量 =="
+            node -e "import('./db.js').then(async ({default:p})=>{for(const t of ['courses','schedules','evaluations','detailed_grade']){try{const [r]=await p.query('SELECT COUNT(*) c FROM '+t);console.log(t, r[0].c)}catch(e){console.log(t,'(missing)')}}await p.end()})"
+          REMOTE
+
+      - name: Restart api (apply schema changes)
+        env:
+          DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
+          DEPLOY_USER: ${{ secrets.ALIYUN_USER }}
+        run: |
+          set -e
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << 'REMOTE'
+            set -e
+            cd /var/www/first-ancient/server
+            PM2_BIN="$(npm config get prefix)/bin/pm2"
+            [ -x "$PM2_BIN" ] || PM2_BIN="pm2"
+            "$PM2_BIN" restart course-api || "$PM2_BIN" start index.js --name course-api
+            "$PM2_BIN" save
+          REMOTE
