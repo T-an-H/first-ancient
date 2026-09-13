@@ -150,6 +150,7 @@ export interface Enrollment {
   enrollDate: string;
   progress: number;
   status: 'enrolled' | 'in_progress' | 'completed' | 'dropped';
+  className?: string;
 }
 
 export interface DashboardStats {

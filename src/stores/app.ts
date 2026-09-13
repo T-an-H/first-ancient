@@ -655,6 +655,16 @@ export const useAppStore = defineStore('app', () => {
     saveToStorage('enrollments', enrollments.value)
   }
 
+  /** 按课程更新学生的班级（enrollment 级别，非全局 student） */
+  function updateEnrollmentClassName(courseId: string, studentId: string, className: string) {
+    enrollments.value = enrollments.value.map((e) =>
+      e.courseId === courseId && e.studentId === studentId
+        ? { ...e, className }
+        : e,
+    )
+    saveToStorage('enrollments', enrollments.value)
+  }
+
   function deleteEnrollment(id: string) {
     enrollments.value = enrollments.value.filter((e) => e.id !== id)
     saveToStorage('enrollments', enrollments.value)
@@ -2837,7 +2847,7 @@ export const useAppStore = defineStore('app', () => {
     addCourse, updateCourse, deleteCourse, assignMentorToCourse,
     addCategory, updateCategory, deleteCategory,
     addSchedule, updateSchedule, deleteSchedule,
-    addEnrollment, updateEnrollment, deleteEnrollment,
+    addEnrollment, updateEnrollment, updateEnrollmentClassName, deleteEnrollment,
     addGrade, updateGrade, deleteGrade,
     addCloudFile, updateCloudFile, deleteCloudFile,
     addTodo, updateTodo, deleteTodo,

@@ -1059,7 +1059,7 @@
             </button>
           </div>
         </div>
-        <div v-if="!isViewOnly" class="flex gap-2 flex-wrap">
+        <div v-if="!isViewOnly && !isReadOnly" class="flex gap-2 flex-wrap">
           <button @click="openAddStudentModal"
             class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm">
             <UserPlus class="w-3.5 h-3.5" />
@@ -1105,7 +1105,7 @@
               </td>
               <td class="px-4 py-2.5 text-sm text-gray-600">{{ item.student.studentId || '-' }}</td>
               <td class="px-4 py-2.5">
-                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{{ item.student.className || '未分班' }}</span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{{ getStudentClassForCourse(item.student.id) || '未分班' }}</span>
               </td>
               <td class="px-4 py-2.5">
                 <span v-if="item.groupName" class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">{{ item.groupName }}</span>
@@ -1128,7 +1128,7 @@
                   <!-- 班级操作 -->
                   <div class="flex items-center gap-1.5">
                     <span class="text-[10px] text-gray-400 w-7 text-right">班级</span>
-                    <button v-if="item.student.className" @click="handleRemoveStudentFromClass(item.student.id)"
+                    <button v-if="getStudentClassForCourse(item.student.id)" @click="handleRemoveStudentFromClass(item.student.id)"
                       class="px-2 py-0.5 text-[11px] text-amber-700 bg-amber-50 hover:bg-amber-100 rounded transition-colors" title="移出当前班级">
                       移出班级
                     </button>
@@ -1168,12 +1168,15 @@
               {{ classData.className || '未分班' }}
               <span class="text-xs text-gray-400 font-normal">（{{ classData.students.length }}人）</span>
             </h3>
-            <div v-if="!isViewOnly && classData.className" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div v-if="!isViewOnly && !isReadOnly && classData.className" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button @click.stop="openAddStudentToClass(classData.className)" class="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded" title="添加学员到班级">
                 <UserPlus class="w-3.5 h-3.5" />
               </button>
               <button @click.stop="handleImportGroupsForClass(classData.className)" class="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title="导入分组">
                 <Upload class="w-3.5 h-3.5" />
+              </button>
+              <button @click.stop="handleDownloadGroupTemplate" class="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded" title="下载分组模板">
+                <FileSpreadsheet class="w-3.5 h-3.5" />
               </button>
               <button @click.stop="openNewGroupForClass(classData.className)" class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="新建分组">
                 <Plus class="w-3.5 h-3.5" />
@@ -1200,7 +1203,7 @@
                     <p class="text-[11px] text-gray-400">{{ group.memberIds.length }} 名成员</p>
                   </div>
                 </div>
-                <div v-if="!isViewOnly" class="flex gap-1 opacity-0 group-hover/grp:opacity-100 transition-opacity">
+                <div v-if="!isViewOnly && !isReadOnly" class="flex gap-1 opacity-0 group-hover/grp:opacity-100 transition-opacity">
                   <button @click.stop="openAddMemberToGroup(group)" class="p-1 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded" title="添加本班级未分组学员">
                     <UserPlus class="w-3.5 h-3.5" />
                   </button>
@@ -1216,7 +1219,7 @@
                 <template v-for="sid in group.memberIds" :key="sid">
                   <span class="group/tag relative inline-flex items-center gap-1 text-[11px] pl-2 pr-1 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
                     {{ getStudentName(sid) }}
-                    <button v-if="!isViewOnly" @click.stop="openRemoveMemberModal(group.id, sid)"
+                    <button v-if="!isViewOnly && !isReadOnly" @click.stop="openRemoveMemberModal(group.id, sid)"
                       class="w-3.5 h-3.5 rounded-full flex items-center justify-center text-indigo-400 hover:text-white hover:bg-red-500 transition-colors" title="移除学员">
                       <X class="w-2.5 h-2.5" />
                     </button>
@@ -1229,14 +1232,32 @@
           <div v-else class="border border-dashed border-gray-200 rounded-lg p-6 text-center">
             <Users class="w-8 h-8 mx-auto mb-2 text-gray-200" />
             <p class="text-xs text-gray-400">该班级暂无分组</p>
-            <button v-if="!isViewOnly" @click="openNewGroupForClass(classData.className)"
+            <button v-if="!isViewOnly && !isReadOnly" @click="openNewGroupForClass(classData.className)"
               class="mt-3 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
               <Plus class="w-3 h-3" />新建分组
             </button>
           </div>
 
+          <!-- 本班未分组学生 -->
+          <div v-if="getUngroupedStudentsForClass(classData.className).length > 0" class="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+            <div class="flex items-center gap-2 mb-2">
+              <UserX class="w-3.5 h-3.5 text-amber-600" />
+              <span class="text-xs font-semibold text-amber-800">未分组</span>
+              <span class="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-800">{{ getUngroupedStudentsForClass(classData.className).length }}人</span>
+            </div>
+            <div class="flex flex-wrap gap-1">
+              <span v-for="stu in getUngroupedStudentsForClass(classData.className)" :key="stu.id"
+                class="text-[11px] px-2 py-0.5 rounded-full bg-white text-amber-700 border border-amber-200">
+                {{ stu.name }}
+              </span>
+            </div>
+          </div>
+          <div v-else-if="getGroupsForClassBlock(classData.className).length > 0 && classData.students.length > 0" class="mt-3 text-center">
+            <span class="text-[11px] text-gray-400">已全部分组</span>
+          </div>
+
           <!-- 一键分组按钮（每个班级内部） -->
-          <div v-if="!isViewOnly && classData.className && classData.students.length >= 2" class="mt-4 pt-3 border-t border-gray-100 flex gap-2 justify-end">
+          <div v-if="!isViewOnly && !isReadOnly && classData.className && classData.students.length >= 2" class="mt-4 pt-3 border-t border-gray-100 flex gap-2 justify-end">
             <button @click.stop="showOneClickGroupForClass(classData.className)"
               class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
               <RefreshCw class="w-3.5 h-3.5" />一键分组
@@ -1279,7 +1300,7 @@
                   <span v-if="getStudentGroupName(stu.id)" class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">{{ getStudentGroupName(stu.id) }}</span>
                   <span v-else class="text-xs text-gray-400">未分组</span>
                 </td>
-                <td v-if="!isViewOnly" class="px-3 py-2.5">
+                <td v-if="!isViewOnly && !isReadOnly" class="px-3 py-2.5">
                   <div class="flex flex-col gap-1.5 items-end">
                     <!-- 分组操作 -->
                     <div class="flex items-center gap-1.5">
@@ -1296,7 +1317,7 @@
                     <!-- 班级操作 -->
                     <div class="flex items-center gap-1.5">
                       <span class="text-[10px] text-gray-400 w-7 text-right">班级</span>
-                      <button v-if="stu.className" @click="handleRemoveStudentFromClass(stu.id)"
+                      <button v-if="getStudentClassForCourse(stu.id)" @click="handleRemoveStudentFromClass(stu.id)"
                         class="px-2 py-0.5 text-[11px] text-amber-700 bg-amber-50 hover:bg-amber-100 rounded transition-colors" title="移出当前班级">
                         移出班级
                       </button>
@@ -1432,6 +1453,10 @@
                   class="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm text-teal-700 bg-teal-50 hover:bg-teal-100 border border-dashed border-teal-300 rounded-lg transition-colors">
                   <Upload class="w-4 h-4" />
                   {{ addClassMembers.length > 0 ? `已解析 ${addClassMembers.length} 名成员，点击重新选择` : '一键导入班级成员信息（Excel）' }}
+                </button>
+                <button type="button" @click="handleDownloadAddClassTemplate"
+                  class="mt-1.5 inline-flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700">
+                  <FileSpreadsheet class="w-3 h-3" /> 下载导入模板
                 </button>
                 <p class="text-[11px] text-gray-400 mt-1.5">必填列：<b>学生学号 / 工号</b>、<b>手机号</b>、<b>身份证号</b>（三者至少有一列，用于精确匹配总库）；姓名可选填，不作为判定依据</p>
 
@@ -1692,7 +1717,7 @@
                   </div>
                   <span class="flex-1">{{ stu.name }}</span>
                   <span class="text-xs text-gray-400">{{ stu.studentId || stu.id }}</span>
-                  <span class="text-[10px] text-gray-400">当前：{{ stu.className || '未分班' }}</span>
+                  <span class="text-[10px] text-gray-400">当前：{{ getStudentClassForCourse(stu.id) || '未分班' }}</span>
                 </div>
                 <div v-if="candidateAddStudentsToClass.length === 0" class="text-center py-6 text-xs text-gray-400">
                   没有可添加的学员
@@ -1974,7 +1999,7 @@ import {
   EvalFrequencyDescs, getDefaultGradeConfig
 } from '@/types'
 import type { EvalTemplate, EvalType, Evaluation, EvalFrequency, Schedule, GradeWeightConfig, EvaluationConfig } from '@/types'
-import { AlertTriangle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, LogOut, Network } from 'lucide-vue-next'
+import { AlertTriangle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, UserX, LogOut, Network } from 'lucide-vue-next'
 import { getNow } from '@/lib/date'
 import {
   createEmptyEvalDraft,
@@ -2357,8 +2382,7 @@ async function saveAddClass() {
         const pk = String(hit.id)
         const existing = store.students.find(s => s.id === pk)
         if (existing) {
-          // 总库有、原本不在同班 → 归入本班级
-          store.updateStudent(pk, { className })
+          // 总库有、原本不在同班 → 归入本班级（按课程 enrollment 级别）
           student = { ...existing, id: pk }
           assignedCount++
         } else {
@@ -2366,7 +2390,6 @@ async function saveAddClass() {
             id: pk,
             name: hit.name || m.name || pk,
             studentId: hit.student_id || hit.id || undefined,
-            className,
             phone: '',
             email: '',
             avatar: '',
@@ -2406,10 +2429,14 @@ async function saveAddClass() {
         status: 'enrolled',
         progress: 0,
         enrollDate: getNow().toISOString().split('T')[0],
+        className,
       })
       try {
         await bulkImportEnrollments([{ id: enrId, studentId: student.id, courseId: courseId.value }])
       } catch {}
+    } else {
+      // 已选课但可能未分班到本班级 → 更新 enrollment.className
+      store.updateEnrollmentClassName(courseId.value, student.id, className)
     }
     try {
       await syncStudent(student.id, { className })
@@ -2527,6 +2554,7 @@ async function addRepoStudentToCourse(s: any) {
     status: 'enrolled',
     progress: 0,
     enrollDate: getNow().toISOString().split('T')[0],
+    className: '',
   })
   // 同步到 MySQL
   try {
@@ -2548,10 +2576,13 @@ function openEditClassModal(className: string) {
 function handleSaveEditClass() {
   if (!editingOldClassName.value || !editClassName.value.trim()) return
   const newName = editClassName.value.trim()
-  // 更新该班级所有学生的 className
-  for (const stu of store.students) {
-    if (stu.className === editingOldClassName.value) {
-      store.updateStudent(stu.id, { className: newName })
+  // 更新该课程中属于此班级的所有 enrollment.className
+  for (const e of store.enrollments) {
+    if (e.courseId === courseId.value) {
+      const cn = (e.className ?? store.students.find((s) => s.id === e.studentId)?.className) || ''
+      if (cn === editingOldClassName.value) {
+        store.updateEnrollmentClassName(courseId.value, e.studentId, newName)
+      }
     }
   }
   showEditClassModal.value = false
@@ -2559,9 +2590,13 @@ function handleSaveEditClass() {
 }
 function handleDeleteClass(className: string) {
   if (!confirm(`确定删除班级"${className}"？该操作只会清空学生的班级信息，不会删除学生。`)) return
-  for (const stu of store.students) {
-    if (stu.className === className) {
-      store.updateStudent(stu.id, { className: '' })
+  // 清空该课程中属于此班级的 enrollment.className
+  for (const e of store.enrollments) {
+    if (e.courseId === courseId.value) {
+      const enrCn = (e.className ?? store.students.find((s) => s.id === e.studentId)?.className) || ''
+      if (enrCn === className) {
+        store.updateEnrollmentClassName(courseId.value, e.studentId, '')
+      }
     }
   }
   // 同步删除课程班级记录
@@ -3661,6 +3696,56 @@ async function handleDownloadTemplate() {
   }
 }
 
+/** 下载分组导入模板（组名 | 学生姓名/学号） */
+async function handleDownloadGroupTemplate() {
+  try {
+    const XLSX = await import('xlsx')
+    const data = [
+      { '组名': '第一组', '学生姓名/学号': '张三' },
+      { '组名': '第一组', '学生姓名/学号': '李四' },
+      { '组名': '第二组', '学生姓名/学号': '王五' },
+    ]
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '分组')
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([buf], { type: 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = '分组导入模板.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('下载分组模板失败:', err)
+    alert('下载模板失败')
+  }
+}
+
+/** 下载班级成员导入模板（学生姓名 | 学生学号 | 手机号 | 身份证号） */
+async function handleDownloadAddClassTemplate() {
+  try {
+    const XLSX = await import('xlsx')
+    const data = [
+      { '学生姓名': '张三', '学生学号': '20240001', '手机号': '13800000001', '身份证号': '110101200001011234' },
+    ]
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '班级成员')
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([buf], { type: 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = '班级成员导入模板.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('下载班级成员模板失败:', err)
+    alert('下载模板失败')
+  }
+}
+
 const enabledTypes = computed(() => baseEnabledTypes.value.filter((t) => {
   if ((t === 'intra_group' || t === 'inter_group') && !courseHasGroups.value) return false
   if (t === 'mentor' && !selectedConfig.value?.hasMentor) return false
@@ -3760,13 +3845,26 @@ async function loadCourseClasses() {
   } catch { courseClassNames.value = [] }
 }
 
+/** 获取学生在本课程的班级（优先 enrollment.className，回退 student.className 兼容旧数据） */
+function getStudentClassForCourse(studentId: string): string {
+  const enr = store.enrollments.find(
+    (e) => e.studentId === studentId && e.courseId === courseId.value,
+  )
+  const student = store.students.find((s) => s.id === studentId)
+  return (enr?.className ?? student?.className) || ''
+}
+
 /** 班级板块：按学生 className 分组 + 合并独立班级列表 */
 const classBlocks = computed(() => {
   if (!courseId.value) return []
   const classMap = new Map<string, typeof enrolledStudents.value>()
   for (const item of enrolledStudents.value) {
     if (!item.student) continue
-    const cn = item.student.className || ''
+    // 优先使用 enrollment.className（按课程分班），回退到 student.className（兼容旧数据）
+    const enr = store.enrollments.find(
+      (e) => e.studentId === item.student!.id && e.courseId === courseId.value,
+    )
+    const cn = (enr?.className ?? item.student.className) || ''
     if (!classMap.has(cn)) classMap.set(cn, [])
     classMap.get(cn)!.push(item)
   }
@@ -3820,7 +3918,7 @@ const searchedStudentList = computed(() => {
     }))
 })
 
-/** 获取某班级的分组（检查组内所有学生 className 是否匹配） */
+/** 获取某班级的分组（检查组内所有学生班级是否匹配，优先 enrollment.className） */
 function getGroupsForClassBlock(className: string) {
   if (!courseId.value) return []
   const allGroups = store.studentGroups.filter((g) => g.courseId === courseId.value)
@@ -3829,9 +3927,24 @@ function getGroupsForClassBlock(className: string) {
     // 检查组中所有成员是否都属于该班级
     return g.memberIds.every((sid) => {
       const student = store.students.find((s) => s.id === sid)
-      return student && (student.className || '') === className
+      if (!student) return false
+      const enr = store.enrollments.find(
+        (e) => e.studentId === sid && e.courseId === courseId.value,
+      )
+      const cn = (enr?.className ?? student.className) || ''
+      return cn === className
     })
   })
+}
+
+/** 获取某班级中未分入任何组的学生 */
+function getUngroupedStudentsForClass(className: string) {
+  const classBlock = classedBlocks.value.find((cb) => cb.className === className)
+  if (!classBlock) return []
+  const groupedIds = new Set(
+    getGroupsForClassBlock(className).flatMap((g) => g.memberIds),
+  )
+  return classBlock.students.filter((s) => !groupedIds.has(s.id))
 }
 
 /** 获取某班级的学生人数 */
@@ -3841,7 +3954,12 @@ function getClassStudentCount(className: string) {
 
 /** 获取某班级的学生列表 */
 function getClassStudents(className: string) {
-  return store.students.filter((s) => (s.className || '') === className && store.enrollments.some((e) => e.courseId === courseId.value && e.studentId === s.id && e.status !== 'dropped'))
+  return store.students.filter((s) => {
+    if (!store.enrollments.some((e) => e.courseId === courseId.value && e.studentId === s.id && e.status !== 'dropped')) return false
+    const enr = store.enrollments.find((e) => e.studentId === s.id && e.courseId === courseId.value)
+    const cn = (enr?.className ?? s.className) || ''
+    return cn === className
+  })
 }
 
 /** 点击班级内的"新建分组" */
@@ -4416,7 +4534,7 @@ function handleEditStudent(student: import('@/types').Student) {
   editingStudent.value = student
   editStudentName.value = student.name
   editStudentIdField.value = student.id
-  editStudentClass.value = student.className || ''
+  editStudentClass.value = getStudentClassForCourse(student.id)
   const group = store.studentGroups.find(g => g.courseId === courseId.value && g.memberIds.includes(student.id))
   editStudentGroupId.value = group?.id || ''
   showEditStudentModal.value = true
@@ -4432,7 +4550,9 @@ function handleSaveEditStudent() {
     return
   }
   const oldId = student.id
-  store.updateStudent(oldId, { name: editStudentName.value.trim(), id: newId, className: editStudentClass.value || '' })
+  store.updateStudent(oldId, { name: editStudentName.value.trim(), id: newId })
+  // 班级按课程更新 enrollment.className
+  store.updateEnrollmentClassName(courseId.value, newId, editStudentClass.value || '')
 
   if (newId !== oldId) {
     store.enrollments.forEach((e) => {
@@ -4558,6 +4678,7 @@ async function handleImportStudentsExcel(event: Event) {
         status: 'enrolled',
         progress: 0,
         enrollDate: getNow().toISOString().split('T')[0],
+        className: '',
       })
       enrollments.push({ id: enrId, studentId: student!.id, courseId: courseId.value })
       imported++
@@ -4775,7 +4896,7 @@ const quickAddGroupCandidates = computed(() => {
   if (!courseId.value || !quickAddGroupStudentId.value) return []
   const student = store.students.find((s) => s.id === quickAddGroupStudentId.value)
   if (!student) return []
-  const studentClass = student.className || ''
+  const studentClass = getStudentClassForCourse(quickAddGroupStudentId.value)
   if (!studentClass) return [] // 未分班不能加入分组
   return store.studentGroups
     .filter((g) => g.courseId === courseId.value)
@@ -4820,7 +4941,11 @@ const quickAddClassCandidates = computed(() => {
   if (!courseId.value || !quickAddClassStudentId.value) return []
   const student = store.students.find((s) => s.id === quickAddClassStudentId.value)
   if (!student) return []
-  const currentClass = student.className || ''
+  // 优先使用 enrollment.className（按课程分班），回退到 student.className
+  const enr = store.enrollments.find(
+    (e) => e.studentId === quickAddClassStudentId.value && e.courseId === courseId.value,
+  )
+  const currentClass = (enr?.className ?? student.className) || ''
   const classes = new Set<string>()
   // 首选：课程独立班级列表（含空班级），与 classBlocks 同源
   for (const cn of courseClassNames.value) {
@@ -4829,8 +4954,11 @@ const quickAddClassCandidates = computed(() => {
   // 兜底：若独立列表为空，回退到从已选课学生反推，避免接口未返回时回归
   if (classes.size === 0) {
     for (const item of enrolledStudents.value) {
-      if (item.student && item.student.className && item.student.className !== currentClass) {
-        classes.add(item.student.className)
+      if (item.student) {
+        const cn = getStudentClassForCourse(item.student.id)
+        if (cn && cn !== currentClass) {
+          classes.add(cn)
+        }
       }
     }
   }
@@ -4853,7 +4981,7 @@ function confirmQuickAddToClass() {
       })
     }
   }
-  store.updateStudent(quickAddClassStudentId.value, { className: quickAddClassSelected.value })
+  store.updateEnrollmentClassName(courseId.value, quickAddClassStudentId.value, quickAddClassSelected.value)
   showQuickAddClassModal.value = false
 }
 
@@ -4871,10 +4999,14 @@ const candidateAddStudentsToClass = computed(() => {
     .map((e) => e.studentId)
   const search = addStudentToClassSearch.value.trim().toLowerCase()
   return store.students
-    .filter((s) =>
-      enrolledIds.includes(s.id) &&
-      (s.className || '') !== addStudentToClassName.value
-    )
+    .filter((s) => {
+      if (!enrolledIds.includes(s.id)) return false
+      const enr = store.enrollments.find(
+        (e) => e.studentId === s.id && e.courseId === courseId.value,
+      )
+      const cn = (enr?.className ?? s.className) || ''
+      return cn !== addStudentToClassName.value
+    })
     .filter((s) => {
       if (search) {
         return s.name.toLowerCase().includes(search) || (s.studentId || s.id).toLowerCase().includes(search)
@@ -4901,7 +5033,7 @@ function toggleAddStudentToClass(studentId: string) {
 
 function confirmAddStudentsToClass() {
   for (const sid of addStudentToClassSelected.value) {
-    store.updateStudent(sid, { className: addStudentToClassName.value })
+    store.updateEnrollmentClassName(courseId.value, sid, addStudentToClassName.value)
   }
   showAddStudentToClassModal.value = false
   addStudentToClassSelected.value = []
@@ -4910,7 +5042,7 @@ function confirmAddStudentsToClass() {
 /** 从班级移除学员（将其设为未分班，同时从所有分组中移除） */
 function handleRemoveStudentFromClass(studentId: string) {
   if (!confirm('确定将该学员移出当前班级？（该学员将变为未分班状态，并从所有分组中移除）')) return
-  store.updateStudent(studentId, { className: '' })
+  store.updateEnrollmentClassName(courseId.value, studentId, '')
   // 从所有分组中移除
   for (const g of store.studentGroups) {
     if (g.courseId === courseId.value && g.memberIds.includes(studentId)) {
@@ -4944,7 +5076,11 @@ async function handleImportGroupsExcel(event: Event) {
     const targetClassName = classNameForImport.value
     const classStudentIds = targetClassName ? new Set(
       enrolledStudents.value
-        .filter(e => e.student!.className === targetClassName)
+        .filter(e => {
+          const enr = store.enrollments.find((en) => en.studentId === e.student!.id && en.courseId === courseId.value)
+          const cn = (enr?.className ?? e.student!.className) || ''
+          return cn === targetClassName
+        })
         .map(e => e.student!.id)
     ) : null
 
