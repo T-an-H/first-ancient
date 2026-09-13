@@ -49,6 +49,70 @@
         </p>
       </div>
 
+      <!-- 职业方向推荐（demand §5.5.2：平时成绩最高课程 × 1000职业与要求对照表） -->
+      <div v-if="isStudentView" class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-lg font-semibold text-gray-900">职业方向推荐</h2>
+          <span class="text-xs text-gray-400">按平时成绩最高的 {{ careerCourses.length }} 门课程</span>
+        </div>
+
+        <div v-if="careerCourses.length === 0" class="rounded-lg bg-gray-50 px-3 py-8 text-center text-sm text-gray-400">
+          暂无平时成绩数据，待课程评价产生成绩后自动生成职业方向推荐
+        </div>
+
+        <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
+          <!-- 课程成绩雷达 -->
+          <div class="flex flex-col">
+            <RadarChart
+              :labels="careerCourses.map((c) => shortTitle(c.title))"
+              :values="careerCourses.map((c) => c.compareScore)"
+              :count="careerCourses.length"
+              empty-text="暂无课程成绩数据"
+            />
+            <button
+              @click="showCareerDetail = true"
+              class="mt-2 self-center inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-brand-600 rounded-lg border border-brand-200 hover:bg-brand-50"
+            >
+              查看 {{ careerCourses.length }} 门课程与推荐职业详情
+            </button>
+          </div>
+
+          <!-- 推荐职业 -->
+          <div>
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">推荐职业</h3>
+            <div
+              v-if="recommendedCareers.length === 0"
+              class="rounded-lg border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400"
+            >
+              暂未匹配到推荐职业。<br />当前课程与职业要求课程的科目覆盖不足。
+            </div>
+            <div v-else class="space-y-3">
+              <div
+                v-for="item in recommendedCareers"
+                :key="item.career.name"
+                class="rounded-lg border border-gray-100 bg-gray-50 p-3"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="font-medium text-gray-900 truncate">{{ item.career.name }}</div>
+                    <div class="text-[11px] text-gray-400 mt-0.5">{{ item.career.category }}</div>
+                  </div>
+                  <span class="flex-shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-brand-100 text-brand-700">
+                    覆盖 {{ item.matchedCourseIds.length }} 门
+                  </span>
+                </div>
+                <div class="mt-1.5 text-[11px] text-gray-500">
+                  命中科目：{{ item.matchedSubjects.slice(0, 5).join('、') }}{{ item.matchedSubjects.length > 5 ? '…' : '' }}
+                </div>
+              </div>
+            </div>
+            <p class="mt-3 text-[11px] text-gray-300 leading-relaxed">
+              说明：按平时成绩（综合评价）最高的 {{ careerCourses.length }} 门课程与《1000职业与要求对照表》科目对照生成；课程若已出期末/期中成绩，则以期末/期中成绩参与对照。仅作参考。
+            </p>
+          </div>
+        </div>
+      </div>
+
       <!-- 详细基本信息 -->
       <div class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
         <h2 class="mb-4 text-lg font-semibold text-gray-900">基本信息</h2>
@@ -227,15 +291,71 @@
         </div>
       </div>
     </div>
+
+    <!-- 职业方向详情弹窗 -->
+    <div
+      v-if="showCareerDetail"
+      class="fixed inset-0 z-50 flex items-center justify-center"
+      @click.self="showCareerDetail = false"
+    >
+      <div class="absolute inset-0 bg-black/50" />
+      <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-gray-900">职业方向详情</h3>
+          <button @click="showCareerDetail = false" class="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <h4 class="text-sm font-semibold text-gray-700 mb-2">平时成绩最高的 {{ careerCourses.length }} 门课程</h4>
+        <div class="space-y-2 mb-5">
+          <div
+            v-for="(c, i) in careerCourses"
+            :key="c.courseId"
+            class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm"
+          >
+            <span class="text-gray-800 min-w-0 truncate">
+              {{ i + 1 }}. {{ c.title }}
+              <span class="text-[11px] text-gray-400 ml-1">（{{ c.scoreSource }}）</span>
+            </span>
+            <span class="font-semibold flex-shrink-0" :class="gradeColorClass(c.compareScore)">{{ c.compareScore }}</span>
+          </div>
+        </div>
+
+        <h4 class="text-sm font-semibold text-gray-700 mb-2">推荐职业</h4>
+        <div v-if="recommendedCareers.length === 0" class="text-sm text-gray-400 py-4 text-center">
+          暂未匹配到推荐职业
+        </div>
+        <div v-else class="space-y-3">
+          <div v-for="item in recommendedCareers" :key="item.career.name" class="rounded-lg border border-gray-100 p-3">
+            <div class="font-medium text-gray-900">{{ item.career.name }}</div>
+            <div class="text-xs text-gray-400 mt-0.5">{{ item.career.category }}</div>
+            <div class="text-xs text-gray-600 mt-1.5">
+              覆盖课程：{{ item.matchedCourseIds.map((id) => courseTitleOf(id)).join('、') }}
+            </div>
+            <div class="text-[11px] text-gray-400 mt-1">
+              要求课程（命中部分）：{{ item.matchedSubjects.slice(0, 8).join('、') }}{{ item.matchedSubjects.length > 8 ? '…' : '' }}
+            </div>
+          </div>
+        </div>
+
+        <p class="text-[11px] text-gray-300 mt-4 leading-relaxed">
+          说明：推荐按平时成绩（综合评价）最高的课程与《1000职业与要求对照表》中职业要求课程的科目对照生成；课程若已出期末/期中成绩，则以期末/期中成绩参与对照。仅作参考。
+        </p>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { X } from 'lucide-vue-next'
 import { fetchUserProfile, changePassword, changePhone, uploadAvatar, fetchStudents, fetchCourses, fetchStudentScores } from '@/api'
 import { getStoredStudentSession, getStudentLookupKeyword, matchStudentFromSession } from '@/lib/studentSession'
 import { useAppStore } from '@/stores/app'
+import { recommendCareers } from '@/lib/careerMatch'
+import type { DetailedGrade } from '@/types'
 import RadarChart from '@/components/RadarChart.vue'
 
 const router = useRouter()
@@ -541,6 +661,135 @@ async function loadStudentGradesForRadar() {
       ]
     } catch { /* 成绩拉取失败则用已有数据 */ }
   } catch { /* 整体失败静默，雷达显示空态 */ }
+}
+
+// ====== 职业方向推荐（demand §5.5.2：平时成绩最高课程 × 1000职业与要求对照表） ======
+const showCareerDetail = ref(false)
+/** §5.5.2：取「平时成绩（综合评价）」最高的 6 门课程参与职业对照 */
+const CAREER_COURSE_COUNT = 6
+/** 推荐职业个数上限 */
+const CAREER_RESULT_COUNT = 6
+
+type CareerScoreSource = '平时' | '期中' | '期末'
+interface CareerCourse {
+  courseId: string
+  title: string
+  description: string
+  /** 参与职业对照的分数：平时成绩，若已出期末/期中则用期末/期中 */
+  compareScore: number
+  scoreSource: CareerScoreSource
+}
+
+/** 加权平均：仅计入「已评」子项（score 非空且权重>0），按有效权重归一 */
+function weightedAvg(subs: { score?: number | null; weight: number }[]): number | null {
+  const valid = subs.filter((s) => s.score !== undefined && s.score !== null && s.weight > 0)
+  if (valid.length === 0) return null
+  const totalWeight = valid.reduce((sum, s) => sum + s.weight, 0)
+  if (totalWeight === 0) return null
+  return Math.round(valid.reduce((sum, s) => sum + Number(s.score) * s.weight, 0) / totalWeight)
+}
+
+/** 某课「平时成绩（综合评价）」= 五类评价按配置权重加权 */
+function regularScoreOf(detail: DetailedGrade, courseId: string): number | null {
+  const cfg = store.getGradeConfig(courseId)
+  return weightedAvg([
+    { score: detail.selfEvalScore, weight: cfg.selfEvalWeight },
+    { score: detail.peerReviewScore, weight: cfg.peerReviewWeight },
+    { score: detail.interGroupScore, weight: cfg.interGroupEvalWeight },
+    { score: detail.teacherScore, weight: cfg.teacherScoreWeight },
+    { score: detail.mentorScore, weight: cfg.mentorScoreWeight },
+  ])
+}
+
+/** 某课期中成绩（考试+项目按权重加权），未出则该子项为 null */
+function midtermScoreOf(detail: DetailedGrade, courseId: string): number | null {
+  const cfg = store.getGradeConfig(courseId)
+  return weightedAvg([
+    { score: detail.midtermExamScore, weight: cfg.midtermExamWeight },
+    { score: detail.midtermProjectScore, weight: cfg.midtermProjectWeight },
+  ])
+}
+
+/** 某课期末成绩（考试+项目按权重加权），未出则该子项为 null */
+function finalScoreOf(detail: DetailedGrade, courseId: string): number | null {
+  const cfg = store.getGradeConfig(courseId)
+  return weightedAvg([
+    { score: detail.finalExamScore, weight: cfg.finalExamWeight },
+    { score: detail.finalProjectScore, weight: cfg.finalProjectWeight },
+  ])
+}
+
+/**
+ * 参与职业对照的课程（按参与分降序，取前 N）：
+ * 优先用平时成绩；若该课已出期末/期中成绩，则改用期末/期中参与对照（demand §5.5.2）。
+ */
+const careerCourses = computed<CareerCourse[]>(() => {
+  const sid = radarStudentId.value
+  if (!sid) return []
+  const rows: CareerCourse[] = []
+  for (const detail of store.detailedGrades.filter((d) => d.studentId === sid)) {
+    const courseId = String(detail.courseId || '')
+    if (!courseId) continue
+    const course = store.courses.find((c) => String(c.id) === courseId)
+
+    const regular = regularScoreOf(detail, courseId)
+    const midterm = midtermScoreOf(detail, courseId)
+    const final = finalScoreOf(detail, courseId)
+
+    let compareScore: number | null = regular
+    let scoreSource: CareerScoreSource = '平时'
+    if (final !== null && final > 0) {
+      compareScore = final
+      scoreSource = '期末'
+    } else if (midterm !== null && midterm > 0) {
+      compareScore = midterm
+      scoreSource = '期中'
+    }
+    if (compareScore === null || compareScore <= 0) continue
+
+    rows.push({
+      courseId,
+      title: course?.title || courseId,
+      description: (course as any)?.description || '',
+      compareScore,
+      scoreSource,
+    })
+  }
+  return rows.sort((a, b) => b.compareScore - a.compareScore).slice(0, CAREER_COURSE_COUNT)
+})
+
+/** 推荐职业（§5.5.2：≥3 门课程命中同一职业即推荐，取前 6；不足自动降门槛） */
+const recommendedCareers = computed(() =>
+  recommendCareers(
+    careerCourses.value.map((c) => ({
+      courseId: c.courseId,
+      title: c.title,
+      description: c.description,
+      score: c.compareScore,
+    })),
+    3,
+    CAREER_RESULT_COUNT,
+  ),
+)
+
+function shortTitle(title: string) {
+  const t = String(title || '')
+  return t.length > 6 ? `${t.slice(0, 6)}…` : t
+}
+
+function courseTitleOf(courseId: string) {
+  return (
+    careerCourses.value.find((c) => c.courseId === courseId)?.title ||
+    store.courses.find((c) => String(c.id) === String(courseId))?.title ||
+    courseId
+  )
+}
+
+function gradeColorClass(score: number) {
+  if (score >= 90) return 'text-emerald-600'
+  if (score >= 80) return 'text-blue-600'
+  if (score >= 60) return 'text-brand-700'
+  return 'text-red-500'
 }
 
 onMounted(() => {
