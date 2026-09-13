@@ -4822,9 +4822,16 @@ const quickAddClassCandidates = computed(() => {
   if (!student) return []
   const currentClass = student.className || ''
   const classes = new Set<string>()
-  for (const item of enrolledStudents.value) {
-    if (item.student && item.student.className && item.student.className !== currentClass) {
-      classes.add(item.student.className)
+  // 首选：课程独立班级列表（含空班级），与 classBlocks 同源
+  for (const cn of courseClassNames.value) {
+    if (cn && cn !== currentClass) classes.add(cn)
+  }
+  // 兜底：若独立列表为空，回退到从已选课学生反推，避免接口未返回时回归
+  if (classes.size === 0) {
+    for (const item of enrolledStudents.value) {
+      if (item.student && item.student.className && item.student.className !== currentClass) {
+        classes.add(item.student.className)
+      }
     }
   }
   return Array.from(classes).sort((a, b) => a.localeCompare(b, 'zh-CN'))
