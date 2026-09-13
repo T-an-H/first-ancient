@@ -64,10 +64,30 @@ function stableHash(str) {
   return Math.abs(h);
 }
 
+/**
+ * 短确定性 id（base36）。
+ *
+ * 注意：evaluations.id 是 VARCHAR(64)，而线上课程 id 本身就有 22 字符
+ * （course-<13位时间戳>-<6位>），加上 9 位学号后，`seed-ev-<courseId>-<sid>-s<n>-<type>-<evaluatorId>`
+ * 会到 65 字符而**超长报错**（本地测试库学号是 1 位故未暴露）。
+ * 这里改用 hash 短 id，并对每个逻辑键保证唯一。
+ */
+function shortId(prefix, ...parts) {
+  return assertIdFits(`${prefix}${stableHash(parts.join('|')).toString(36)}`, prefix);
+}
+
 /** 确定性分数：同一 (key, session, type) 每次运行结果一致，便于幂等复跑 */
 function scoreFor(key, session, type) {
   const base = 58 + (stableHash(`${key}|${session}|${type}`) % 38); // 58~95
   return Math.min(98, Math.max(40, base));
+}
+
+/** 写入前校验 id 不超过列宽，避免线上因超长报错（VARCHAR(64)） */
+function assertIdFits(id, label) {
+  if (id.length > 64) {
+    throw new Error(`${label} 生成的 id 超长（${id.length}>64）: ${id}`);
+  }
+  return id;
 }
 
 async function main() {
@@ -155,7 +175,7 @@ async function main() {
 
       // ---- 3. 选课 ----
       for (const stu of students) {
-        const enrollId = `enr-seed-${courseId}-${stu.id}`;
+        const enrollId = shortId('enr-seed-', courseId, stu.id);
         await connection.query(
           `INSERT INTO enrollments (id, student_id, course_id, schedule_id, enroll_date, progress, status)
            VALUES (?, ?, ?, '', ?, 45, 'enrolled')
@@ -186,7 +206,7 @@ async function main() {
           ];
 
           for (const ev of evals) {
-            const id = `seed-ev-${courseId}-${stu.id}-s${session}-${ev.type}-${ev.evaluatorId}`;
+            const id = shortId('seed-ev-', courseId, stu.id, session, ev.type, ev.evaluatorId);
             const score = scoreFor(`${courseId}|${stu.id}|${ev.evaluatorId}`, session, ev.type);
             await connection.query(
               `REPLACE INTO evaluations
@@ -208,7 +228,7 @@ async function main() {
       const needsFinal = def.assessment === 'final';
       for (const stu of students) {
         if (needsMidterm) {
-          const id = `seed-exam-${courseId}-${stu.id}-midterm`;
+          const id = shortId('seed-exam-', courseId, stu.id, 'midterm');
           await connection.query(
             `REPLACE INTO exam_scores (id, course_id, student_id, exam_name, score, full_score, weight, type, status, graded_at)
              VALUES (?, ?, ?, '期中考试', ?, 100, 50, 'midterm_exam', 'submitted', ?)`,
@@ -217,7 +237,7 @@ async function main() {
           summary.examScores += 1;
         }
         if (needsFinal) {
-          const id = `seed-exam-${courseId}-${stu.id}-final`;
+          const id = shortId('seed-exam-', courseId, stu.id, 'final');
           await connection.query(
             `REPLACE INTO exam_scores (id, course_id, student_id, exam_name, score, full_score, weight, type, status, graded_at)
              VALUES (?, ?, ?, '期末考试', ?, 100, 50, 'final_exam', 'submitted', ?)`,
