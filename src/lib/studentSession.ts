@@ -30,9 +30,15 @@ export function getStoredStudentSession(): StoredStudentSession {
     }
 
     const account = readText(user.account)
+    // 学号/工号才是总库 students.id 与选课表里的学生标识；
+    // users.account 往往是手机号（登录用），不能当学生主键，否则查不到课程。
+    // 取值优先级：userNo(学号) > studentId/student_id > id > account
+    const userNo = readText(user.userNo ?? user.user_no)
+    const studentNo = readText(user.studentId ?? user.student_id)
+    const primaryId = userNo || studentNo || readText(user.id) || account
     return {
-      id: readText(user.id),
-      studentId: readText(user.studentId ?? user.student_id ?? account),
+      id: primaryId,
+      studentId: studentNo || userNo || primaryId,
       name: readText(user.name),
       className: readText(user.className ?? user.class_name),
       account,

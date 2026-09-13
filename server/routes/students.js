@@ -101,6 +101,40 @@ async function getStudentRowById(connection, studentId) {
   return rows[0] || null;
 }
 
+/**
+ * 学生查询专用的宽松解析：入参可能是主键、学号、手机号或 users.user_no。
+ * 仅用于「读」场景（如查课程）——不要用在写场景，避免解析到非预期学生。
+ */
+async function resolveStudentRow(connection, studentId) {
+  const direct = await getStudentRowById(connection, studentId);
+  if (direct) return direct;
+
+  const [rows] = await connection.query(
+    `SELECT
+       student.id,
+       student.student_id,
+       student.name,
+       student.phone,
+       student.email,
+       student.class_id,
+       COALESCE(cls.name, student.class_name) AS class_name,
+       cls.department_id,
+       COALESCE(dept.name, student.department) AS department_name,
+       student.status,
+       student.created_at
+     FROM students AS student
+     LEFT JOIN classes AS cls ON cls.id = student.class_id
+     LEFT JOIN departments AS dept ON dept.id = cls.department_id
+     WHERE student.student_id = ?
+        OR student.phone = ?
+        OR student.id IN (SELECT u.ref_id FROM users u WHERE u.account = ? OR u.user_no = ?)
+     LIMIT 1`,
+    [studentId, studentId, studentId, studentId]
+  );
+
+  return rows[0] || null;
+}
+
 function parseDateValue(value) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -451,7 +485,8 @@ router.get('/department/:dept', async (req, res) => {
 router.get('/:id/courses', async (req, res) => {
   const connection = await pool.getConnection();
   try {
-    const student = await getStudentRowById(connection, req.params.id);
+    // 宽松解析：前端可能传主键/学号/手机号，都能定位到学生
+    const student = await resolveStudentRow(connection, req.params.id);
     if (!student) {
       throw httpError(404, 'Student not found', 'STUDENT_NOT_FOUND');
     }
