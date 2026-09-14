@@ -63,11 +63,12 @@ export function scoreFromEvalDraft(defs: EvalScoreItemDef[], draft: EvalScoreDra
   return draft.reduce<number>((total, value) => total + (typeof value === 'number' ? value : 0), 0)
 }
 
-export function evalItemsFromDraft(defs: EvalScoreItemDef[], draft: EvalScoreDraftValue[]): EvalScoreItem[] {
+export function evalItemsFromDraft(defs: EvalScoreItemDef[], draft: EvalScoreDraftValue[], remarks?: string[]): EvalScoreItem[] {
   return defs.map((item, index) => ({
     label: item.label,
     max: item.max,
     score: typeof draft[index] === 'number' ? Number(draft[index]) : 0,
+    remark: remarks?.[index] || undefined,
   }))
 }
 

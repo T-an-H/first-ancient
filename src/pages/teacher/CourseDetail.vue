@@ -394,21 +394,30 @@
               <div
                 v-for="(item, index) in getEvalItemDefinitions(evalCriteriaType)"
                 :key="index"
-                class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2"
+                class="rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2"
               >
-                <span class="text-sm text-gray-700">{{ item.label }} ：</span>
-                <div class="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min="0"
-                    :max="item.max"
-                    :value="evalCriteriaDraft[index] ?? ''"
-                    @input="setEvalCriteriaScore(index, $event)"
-                    placeholder="填写分数"
-                    class="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-center text-sm outline-none focus:border-blue-500"
-                  />
-                  <span class="text-xs text-gray-400">/ {{ item.max }}</span>
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-sm text-gray-700">{{ item.label }} ：</span>
+                  <div class="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="0"
+                      :max="item.max"
+                      :value="evalCriteriaDraft[index] ?? ''"
+                      @input="setEvalCriteriaScore(index, $event)"
+                      placeholder="填写分数"
+                      class="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-center text-sm outline-none focus:border-blue-500"
+                    />
+                    <span class="text-xs text-gray-400">/ {{ item.max }}</span>
+                  </div>
                 </div>
+                <input
+                  type="text"
+                  :value="evalCriteriaRemarks[index] ?? ''"
+                  @input="setEvalCriteriaRemark(index, $event)"
+                  placeholder="备注（选填）"
+                  class="mt-1.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-600 outline-none focus:border-blue-400"
+                />
               </div>
               <p class="text-right text-sm font-medium text-gray-800">合计：{{ evalCriteriaTotal }} 分</p>
               <p v-if="evalCriteriaError" class="text-right text-xs text-red-500">{{ evalCriteriaError }}</p>
@@ -2241,7 +2250,12 @@ const isViewOnly = computed(() => {
 const canManageEval = computed(() => !isViewOnly.value || isMentor.value)
 /** 能否添加/管理课程项目：企业导师可以添加项目；领导/其他教师仅查看 */
 const canManageProjects = computed(() => !isViewOnly.value || isMentor.value)
-const kgStudents = computed(() => enrolledStudents.value.map((item: any) => item.student).filter(Boolean))
+const kgStudents = computed(() =>
+  enrolledStudents.value
+    .map((item: any) => item.student)
+    .filter(Boolean)
+    .map((s: any) => ({ ...s, groupName: getStudentGroupName(s.id) }))
+)
 
 // 从数据库加载课程学员
 onMounted(async () => {
@@ -2872,6 +2886,7 @@ const selectedStudentIds = ref<string[]>([])
 const evalScoreInputs = ref<Record<string, number>>({})
 const evalCriteriaDrafts = ref<Record<string, EvalScoreDraftValue[]>>({})
 const evalCriteriaDraft = ref<EvalScoreDraftValue[]>([])
+const evalCriteriaRemarks = ref<string[]>([])
 const evalCriteriaError = ref('')
 const showEvalCriteriaPopup = ref(false)
 const evalCriteriaStudentId = ref('')
@@ -4516,6 +4531,7 @@ function openEvalCriteria(student: { id: string; name: string }) {
     const saved = existing?.items?.[index]
     return saved && saved.score !== undefined ? saved.score : ''
   })
+  evalCriteriaRemarks.value = defs.map((item, index) => existing?.items?.[index]?.remark || '')
   evalScoreInputs.value = {}
   showEvalCriteriaPopup.value = true
 }
@@ -4525,6 +4541,7 @@ function closeEvalCriteriaPopup() {
   evalCriteriaStudentId.value = ''
   evalCriteriaStudentName.value = ''
   evalCriteriaDraft.value = []
+  evalCriteriaRemarks.value = []
   evalCriteriaError.value = ''
 }
 
@@ -4534,6 +4551,11 @@ function setEvalCriteriaScore(index: number, e: Event) {
   const max = getEvalItemDefinitions(evalCriteriaType.value)[index]?.max ?? 100
   const next: EvalScoreDraftValue = raw === '' || Number.isNaN(parsed) ? '' : Math.min(max, Math.max(0, parsed))
   evalCriteriaDraft.value = evalCriteriaDraft.value.map((value, i) => (i === index ? next : value))
+}
+
+function setEvalCriteriaRemark(index: number, e: Event) {
+  const raw = (e.target as HTMLInputElement).value
+  evalCriteriaRemarks.value = evalCriteriaRemarks.value.map((value, i) => (i === index ? raw : value))
 }
 
 function saveEvalCriteria() {
@@ -4549,7 +4571,7 @@ function saveEvalCriteria() {
     return
   }
 
-  const items = evalItemsFromDraft(defs, evalCriteriaDraft.value)
+  const items = evalItemsFromDraft(defs, evalCriteriaDraft.value, evalCriteriaRemarks.value)
   const score = scoreFromEvalDraft(defs, evalCriteriaDraft.value)
   const existing = courseId.value
     ? store.evaluations.find(

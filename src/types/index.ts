@@ -399,6 +399,8 @@ export interface EvalScoreItem {
   score: number;
   /** 单项满分，旧数据可能没有 */
   max?: number;
+  /** 单项备注，评价人员自由填写 */
+  remark?: string;
 }
 
 export interface Evaluation {

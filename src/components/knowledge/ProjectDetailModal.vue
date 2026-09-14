@@ -378,21 +378,30 @@
           <div
             v-for="(item, index) in getEvalItemDefinitions(activeEvalType)"
             :key="index"
-            class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2"
+            class="rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2"
           >
-            <span class="text-sm text-gray-700">{{ item.label }} ：</span>
-            <div class="flex items-center gap-1">
-              <input
-                type="number"
-                min="0"
-                :max="item.max"
-                :value="testEvalDraft[index] ?? ''"
-                @input="setTestEvalScore(index, $event)"
-                placeholder="填写分数"
-                class="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-center text-sm outline-none focus:border-indigo-500"
-              />
-              <span class="text-xs text-gray-400">/ {{ item.max }}</span>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-sm text-gray-700">{{ item.label }} ：</span>
+              <div class="flex items-center gap-1">
+                <input
+                  type="number"
+                  min="0"
+                  :max="item.max"
+                  :value="testEvalDraft[index] ?? ''"
+                  @input="setTestEvalScore(index, $event)"
+                  placeholder="填写分数"
+                  class="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-center text-sm outline-none focus:border-indigo-500"
+                />
+                <span class="text-xs text-gray-400">/ {{ item.max }}</span>
+              </div>
             </div>
+            <input
+              type="text"
+              :value="testEvalRemarks[index] ?? ''"
+              @input="setTestEvalRemark(index, $event)"
+              placeholder="备注（选填）"
+              class="mt-1.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-600 outline-none focus:border-indigo-400"
+            />
           </div>
           <p class="text-right text-sm font-medium text-gray-800">合计：{{ testEvalTotal }} 分</p>
           <p v-if="testEvalError" class="text-right text-xs text-red-500">{{ testEvalError }}</p>
@@ -566,6 +575,7 @@ async function saveTestScore(studentId: string) {
 const showTestEvalModal = ref(false)
 const testEvalStudent = ref<{ id: string; name: string } | null>(null)
 const testEvalDraft = ref<EvalScoreDraftValue[]>([])
+const testEvalRemarks = ref<string[]>([])
 const testEvalError = ref('')
 
 const testEvalTotal = computed(() =>
@@ -596,6 +606,7 @@ function openTestEval(student: { id: string; name: string }) {
     const saved = existing?.items?.[index]
     return saved && saved.score !== undefined ? saved.score : ''
   })
+  testEvalRemarks.value = defs.map((item, index) => existing?.items?.[index]?.remark || '')
   showTestEvalModal.value = true
 }
 
@@ -603,6 +614,7 @@ function closeTestEval() {
   showTestEvalModal.value = false
   testEvalStudent.value = null
   testEvalDraft.value = []
+  testEvalRemarks.value = []
   testEvalError.value = ''
 }
 
@@ -612,6 +624,11 @@ function setTestEvalScore(index: number, e: Event) {
   const max = getEvalItemDefinitions(activeEvalType.value)[index]?.max ?? 100
   const next: EvalScoreDraftValue = raw === '' || Number.isNaN(parsed) ? '' : Math.min(max, Math.max(0, parsed))
   testEvalDraft.value = testEvalDraft.value.map((value, i) => (i === index ? next : value))
+}
+
+function setTestEvalRemark(index: number, e: Event) {
+  const raw = (e.target as HTMLInputElement).value
+  testEvalRemarks.value = testEvalRemarks.value.map((value, i) => (i === index ? raw : value))
 }
 
 function saveTestEval() {
@@ -628,7 +645,7 @@ function saveTestEval() {
     return
   }
 
-  const items = evalItemsFromDraft(defs, testEvalDraft.value)
+  const items = evalItemsFromDraft(defs, testEvalDraft.value, testEvalRemarks.value)
   const score = scoreFromEvalDraft(defs, testEvalDraft.value)
   const existing = store.evaluations.find(
     (e) => e.courseId === props.courseId && e.studentId === student.id &&
