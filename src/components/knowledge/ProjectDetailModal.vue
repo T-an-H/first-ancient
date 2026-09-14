@@ -609,7 +609,8 @@ function closeTestEval() {
 function setTestEvalScore(index: number, e: Event) {
   const raw = (e.target as HTMLInputElement).value
   const parsed = Number(raw)
-  const next: EvalScoreDraftValue = raw === '' || Number.isNaN(parsed) ? '' : parsed
+  const max = getEvalItemDefinitions(activeEvalType.value)[index]?.max ?? 100
+  const next: EvalScoreDraftValue = raw === '' || Number.isNaN(parsed) ? '' : Math.min(max, Math.max(0, parsed))
   testEvalDraft.value = testEvalDraft.value.map((value, i) => (i === index ? next : value))
 }
 

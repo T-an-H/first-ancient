@@ -470,7 +470,10 @@ const evalFormValid = computed(() => {
 
 function setRatingAnswer(index: number, e: Event) {
   const raw = (e.target as HTMLInputElement).value
-  evalAnswers.value[index] = raw === '' ? '' : Number(raw)
+  if (raw === '') { evalAnswers.value[index] = ''; return }
+  const parsed = Number(raw)
+  if (Number.isNaN(parsed)) { evalAnswers.value[index] = ''; return }
+  evalAnswers.value[index] = Math.min(10, Math.max(1, parsed))
 }
 
 async function loadQuestionnaire() {
