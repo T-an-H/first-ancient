@@ -429,7 +429,7 @@
       </Teleport>
     </div>
 
-    <!-- Tab: 课程管理（知识图谱） -->
+    <!-- Tab: 课程任务与评价 -->
     <div v-if="activeTab === 'course-mgmt'" class="space-y-6">
       <KnowledgeGraph :course-id="courseId" :students="kgStudents" :can-manage="canManageProjects" :eval-type="isMentor ? 'mentor' : 'teacher'" />
     </div>
@@ -868,6 +868,102 @@
         <div v-else class="text-center py-8">
           <BarChart3 class="w-12 h-12 text-gray-200 mx-auto mb-2" />
           <p class="text-sm text-gray-400">暂无成绩数据，请先录入期中/期末成绩</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: 成绩管理（评价分数总览） -->
+    <div v-if="activeTab === 'grade-overview'" class="space-y-6">
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div class="flex items-center gap-2">
+            <BarChart3 class="w-5 h-5 text-gray-400" />
+            <h2 class="font-semibold text-gray-900">成绩管理</h2>
+            <span class="text-xs text-gray-400">评价分数总体查看</span>
+          </div>
+          <div class="flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
+            <button v-for="d in overviewDimensions" :key="d.key"
+              @click="overviewDimension = d.key"
+              :class="`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${overviewDimension === d.key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`">
+              {{ d.label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+          <select v-model="overviewFilterClass"
+            class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none bg-white">
+            <option value="">全部班级</option>
+            <option v-for="opt in gradeClassOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </select>
+          <select v-model="overviewFilterGroup"
+            class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none bg-white">
+            <option value="">全部分组</option>
+            <option v-for="g in overviewGroupOptions" :key="g.id" :value="g.groupName">{{ g.groupName }}</option>
+          </select>
+          <div class="relative w-48">
+            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input v-model="overviewSearch" type="text" placeholder="搜索学生姓名或学号..."
+              class="w-full pl-8 pr-3 py-1.5 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-xs" />
+          </div>
+        </div>
+
+        <div v-if="overviewDimension !== 'individual'" class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="border-b border-gray-200 text-gray-500">
+                <th class="text-left py-2 px-3 font-medium">{{ overviewDimension === 'class' ? '班级' : '分组' }}</th>
+                <th class="text-center py-2 px-3 font-medium">参评人数</th>
+                <th class="text-center py-2 px-3 font-medium">平均分</th>
+                <th class="text-center py-2 px-3 font-medium">最高分</th>
+                <th class="text-center py-2 px-3 font-medium">最低分</th>
+                <th class="text-center py-2 px-3 font-medium">综合均分</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in overviewAggregateRows" :key="row.label"
+                class="border-b border-gray-50 hover:bg-gray-50/50">
+                <td class="py-2 px-3 font-medium text-gray-800">{{ row.label }}</td>
+                <td class="text-center py-2 px-3 text-gray-600">{{ row.count }}</td>
+                <td class="text-center py-2 px-3 text-blue-600 font-medium">{{ row.avg }}</td>
+                <td class="text-center py-2 px-3 text-emerald-600">{{ row.max }}</td>
+                <td class="text-center py-2 px-3 text-amber-600">{{ row.min }}</td>
+                <td class="text-center py-2 px-3 text-gray-700">{{ row.totalAvg }}</td>
+              </tr>
+              <tr v-if="overviewAggregateRows.length === 0">
+                <td colspan="6" class="text-center py-8 text-gray-400">暂无评价数据</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-else class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="border-b border-gray-200 text-gray-500">
+                <th class="text-left py-2 px-3 font-medium">姓名</th>
+                <th class="text-left py-2 px-3 font-medium">学号</th>
+                <th class="text-left py-2 px-3 font-medium">班级</th>
+                <th class="text-center py-2 px-3 font-medium">评价次数</th>
+                <th class="text-center py-2 px-3 font-medium">评价均分</th>
+                <th class="text-center py-2 px-3 font-medium">综合总分</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in overviewIndividualRows" :key="row.id"
+                class="border-b border-gray-50 hover:bg-gray-50/50">
+                <td class="py-2 px-3 font-medium text-gray-800">{{ row.name }}</td>
+                <td class="py-2 px-3 text-gray-500">{{ row.studentNo }}</td>
+                <td class="py-2 px-3 text-gray-600">{{ row.className || '未分班' }}</td>
+                <td class="text-center py-2 px-3 text-gray-600">{{ row.evalCount }}</td>
+                <td class="text-center py-2 px-3 text-blue-600 font-medium">{{ row.avg }}</td>
+                <td class="text-center py-2 px-3 text-emerald-600 font-medium">{{ row.total }}</td>
+              </tr>
+              <tr v-if="overviewIndividualRows.length === 0">
+                <td colspan="6" class="text-center py-8 text-gray-400">暂无学生数据</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -2170,11 +2266,12 @@ const completedCount = computed(() =>
 
 // ---- Tab 配置 ----
 const tabList = [
-  { key: 'students',     label: '学生管理', icon: Users },
-  { key: 'course-mgmt',  label: '课程管理', icon: Network },
-  { key: 'quality-eval', label: '素质评价', icon: UserCheck },
-  { key: 'grade-config', label: '成绩配置', icon: Settings },
-  { key: 'grade-entry',  label: '成绩管理', icon: TrendingUp },
+  { key: 'students',       label: '学生管理',       icon: Users },
+  { key: 'course-mgmt',    label: '课程任务与评价', icon: Network },
+  { key: 'quality-eval',   label: '素质评价',       icon: UserCheck },
+  { key: 'grade-config',   label: '权重分配',       icon: Settings },
+  { key: 'grade-entry',    label: '综合评价',       icon: TrendingUp },
+  { key: 'grade-overview', label: '成绩管理',       icon: BarChart3 },
 ]
 
 /** Tab 红点提醒：检测该 tab 下未处理的事务数量，支持红点一路溯源 */
@@ -3571,6 +3668,131 @@ function getStudentAvgScore(studentId: string): string | number {
   const sum = relevantEvals.reduce((a, e) => a + e.score, 0)
   return Math.round(sum / relevantEvals.length)
 }
+
+// ====== 成绩管理（评价分数总览） ======
+const overviewDimensions = [
+  { key: 'class',      label: '按班级' },
+  { key: 'group',      label: '按分组' },
+  { key: 'individual', label: '按个人' },
+] as const
+type OverviewDimension = typeof overviewDimensions[number]['key']
+const overviewDimension = ref<OverviewDimension>('class')
+const overviewFilterClass = ref('')
+const overviewFilterGroup = ref('')
+const overviewSearch = ref('')
+
+/** 当前班级下的分组选项（供筛选下拉用） */
+const overviewGroupOptions = computed(() => {
+  if (!courseId.value) return []
+  let groups = store.studentGroups.filter((g) => g.courseId === courseId.value)
+  if (overviewFilterClass.value) {
+    groups = groups.filter((g) =>
+      g.memberIds.length > 0 && g.memberIds.every((sid) => getStudentClassForCourse(sid) === overviewFilterClass.value),
+    )
+  }
+  return groups.map((g) => ({ id: g.id, groupName: g.name }))
+})
+
+/** 概览：按班级/分组聚合的行 */
+const overviewAggregateRows = computed(() => {
+  if (!courseId.value) return []
+  const cid = courseId.value
+  let students = enrolledStudents.value
+    .filter(({ student }) => student)
+    .map(({ student }) => student!)
+  if (overviewFilterClass.value) {
+    students = students.filter((s) => getStudentClassForCourse(s.id) === overviewFilterClass.value)
+  }
+  if (overviewSearch.value.trim()) {
+    const q = overviewSearch.value.trim().toLowerCase()
+    students = students.filter((s) => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q))
+  }
+
+  const fmt = (n: number) => Math.round(n * 10) / 10
+  function buildRow(label: string, list: typeof students) {
+    const evals: number[] = []
+    const totals: number[] = []
+    for (const s of list) {
+      const allEvals = store.evaluations.filter((e) => e.courseId === cid && e.studentId === s.id)
+      if (allEvals.length > 0) {
+        evals.push(allEvals.reduce((a, e) => a + e.score, 0) / allEvals.length)
+      }
+      const t = getStudentTotalScore(s.id)
+      if (typeof t === 'number') totals.push(t)
+    }
+    return {
+      label,
+      count: list.length,
+      avg: evals.length ? fmt(evals.reduce((a, b) => a + b, 0) / evals.length) : '-',
+      max: evals.length ? fmt(Math.max(...evals)) : '-',
+      min: evals.length ? fmt(Math.min(...evals)) : '-',
+      totalAvg: totals.length ? fmt(totals.reduce((a, b) => a + b, 0) / totals.length) : '-',
+    }
+  }
+
+  if (overviewDimension.value === 'class') {
+    const classMap = new Map<string, typeof students>()
+    for (const s of students) {
+      const cn = getStudentClassForCourse(s.id) || '未分班'
+      if (!classMap.has(cn)) classMap.set(cn, [])
+      classMap.get(cn)!.push(s)
+    }
+    return Array.from(classMap.entries()).map(([label, list]) => buildRow(label, list))
+  } else {
+    const groups = store.studentGroups.filter((g) => g.courseId === cid)
+    const rows: ReturnType<typeof buildRow>[] = []
+    for (const g of groups) {
+      const gClass = g.memberIds.length > 0 ? getStudentClassForCourse(g.memberIds[0]) : ''
+      if (overviewFilterClass.value && gClass !== overviewFilterClass.value) continue
+      if (overviewFilterGroup.value && g.name !== overviewFilterGroup.value) continue
+      const memberIds = new Set(g.memberIds)
+      rows.push(buildRow(`${gClass || '未分班'} / ${g.name}`, students.filter((s) => memberIds.has(s.id))))
+    }
+    const groupedIds = new Set(groups.flatMap((g) => g.memberIds))
+    const ungrouped = students.filter((s) => !groupedIds.has(s.id))
+    if (ungrouped.length > 0 && !overviewFilterGroup.value) {
+      rows.push(buildRow('未分组', ungrouped))
+    }
+    return rows
+  }
+})
+
+/** 概览：按个人行 */
+const overviewIndividualRows = computed(() => {
+  if (!courseId.value) return []
+  const cid = courseId.value
+  let students = enrolledStudents.value
+    .filter(({ student }) => student)
+    .map(({ student }) => student!)
+  if (overviewFilterClass.value) {
+    students = students.filter((s) => getStudentClassForCourse(s.id) === overviewFilterClass.value)
+  }
+  if (overviewFilterGroup.value) {
+    const groups = store.studentGroups.filter((g) => g.courseId === cid)
+    const g = groups.find((gg) => gg.name === overviewFilterGroup.value)
+    if (g) {
+      const ids = new Set(g.memberIds)
+      students = students.filter((s) => ids.has(s.id))
+    }
+  }
+  if (overviewSearch.value.trim()) {
+    const q = overviewSearch.value.trim().toLowerCase()
+    students = students.filter((s) => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q))
+  }
+  return students.map((s) => {
+    const allEvals = store.evaluations.filter((e) => e.courseId === cid && e.studentId === s.id)
+    const avg = allEvals.length > 0 ? Math.round(allEvals.reduce((a, e) => a + e.score, 0) / allEvals.length * 10) / 10 : '-'
+    return {
+      id: s.id,
+      name: s.name,
+      studentNo: s.studentNo || s.id,
+      className: getStudentClassForCourse(s.id),
+      evalCount: allEvals.length,
+      avg,
+      total: getStudentTotalScore(s.id),
+    }
+  })
+})
 
 function getStudentScoreForExam(studentId: string, examName: string): string | number {
   if (!courseId.value) return '-'
