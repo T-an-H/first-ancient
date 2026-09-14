@@ -876,6 +876,11 @@
     <div v-if="activeTab === 'grade-overview'" class="space-y-6">
       <!-- 班级/分组筛选 -->
       <div class="flex flex-wrap items-center gap-2">
+        <div class="relative w-56">
+          <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+          <input v-model="compStudentSearch" type="text" placeholder="搜索学号或姓名查看某学生情况..."
+            class="w-full pl-8 pr-3 py-1.5 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-xs" />
+        </div>
         <select v-model="compFilterClass" class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:border-blue-500 outline-none bg-white">
           <option value="">全部班级</option>
           <option v-for="opt in gradeClassOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
@@ -885,6 +890,7 @@
           <option v-for="g in compGroupOptions" :key="g.id" :value="g.groupName">{{ g.groupName }}</option>
         </select>
         <span class="text-xs text-gray-400">参评学生 {{ compStudents.length }} 人</span>
+        <span v-if="compStudentSearch.trim()" class="text-xs text-blue-500">已按"{{ compStudentSearch.trim() }}"筛选</span>
       </div>
 
         <div v-if="compSessions.length === 0" class="bg-white rounded-xl border border-gray-100 shadow-sm p-10 text-center">
@@ -3748,6 +3754,7 @@ function getStudentAvgScore(studentId: string): string | number {
 // ====== 综合评价（课程级聚合，仿学生端） ======
 const compFilterClass = ref('')
 const compFilterGroup = ref('')
+const compStudentSearch = ref('')
 const compSelectedSession = ref<number | null>(null)
 
 const compGroupOptions = computed(() => {
@@ -3761,7 +3768,7 @@ const compGroupOptions = computed(() => {
   return groups.map((g) => ({ id: g.id, groupName: g.name }))
 })
 
-/** 按班级/分组筛选后的学生 */
+/** 按班级/分组/搜索筛选后的学生 */
 const compStudents = computed(() => {
   if (!courseId.value) return []
   let students = enrolledStudents.value
@@ -3776,6 +3783,12 @@ const compStudents = computed(() => {
       const ids = new Set(g.memberIds)
       students = students.filter((s) => ids.has(s.id))
     }
+  }
+  const search = compStudentSearch.value.trim().toLowerCase()
+  if (search) {
+    students = students.filter((s) =>
+      s.name.toLowerCase().includes(search) || s.id.toLowerCase().includes(search),
+    )
   }
   return students
 })
