@@ -872,100 +872,174 @@
       </div>
     </div>
 
-    <!-- Tab: 成绩管理（评价分数总览） -->
+    <!-- Tab: 综合评价（课程级聚合，仿学生端） -->
     <div v-if="activeTab === 'grade-overview'" class="space-y-6">
-      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <div class="flex items-center gap-2">
-            <BarChart3 class="w-5 h-5 text-gray-400" />
-            <h2 class="font-semibold text-gray-900">成绩管理</h2>
-            <span class="text-xs text-gray-400">评价分数总体查看</span>
-          </div>
-          <div class="flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
-            <button v-for="d in overviewDimensions" :key="d.key"
-              @click="overviewDimension = d.key"
-              :class="`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${overviewDimension === d.key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`">
-              {{ d.label }}
-            </button>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2 mb-4">
-          <select v-model="overviewFilterClass"
-            class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none bg-white">
-            <option value="">全部班级</option>
-            <option v-for="opt in gradeClassOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-          </select>
-          <select v-model="overviewFilterGroup"
-            class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none bg-white">
-            <option value="">全部分组</option>
-            <option v-for="g in overviewGroupOptions" :key="g.id" :value="g.groupName">{{ g.groupName }}</option>
-          </select>
-          <div class="relative w-48">
-            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            <input v-model="overviewSearch" type="text" placeholder="搜索学生姓名或学号..."
-              class="w-full pl-8 pr-3 py-1.5 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-xs" />
-          </div>
-        </div>
-
-        <div v-if="overviewDimension !== 'individual'" class="overflow-x-auto">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="border-b border-gray-200 text-gray-500">
-                <th class="text-left py-2 px-3 font-medium">{{ overviewDimension === 'class' ? '班级' : '分组' }}</th>
-                <th class="text-center py-2 px-3 font-medium">参评人数</th>
-                <th class="text-center py-2 px-3 font-medium">平均分</th>
-                <th class="text-center py-2 px-3 font-medium">最高分</th>
-                <th class="text-center py-2 px-3 font-medium">最低分</th>
-                <th class="text-center py-2 px-3 font-medium">综合均分</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in overviewAggregateRows" :key="row.label"
-                class="border-b border-gray-50 hover:bg-gray-50/50">
-                <td class="py-2 px-3 font-medium text-gray-800">{{ row.label }}</td>
-                <td class="text-center py-2 px-3 text-gray-600">{{ row.count }}</td>
-                <td class="text-center py-2 px-3 text-blue-600 font-medium">{{ row.avg }}</td>
-                <td class="text-center py-2 px-3 text-emerald-600">{{ row.max }}</td>
-                <td class="text-center py-2 px-3 text-amber-600">{{ row.min }}</td>
-                <td class="text-center py-2 px-3 text-gray-700">{{ row.totalAvg }}</td>
-              </tr>
-              <tr v-if="overviewAggregateRows.length === 0">
-                <td colspan="6" class="text-center py-8 text-gray-400">暂无评价数据</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="border-b border-gray-200 text-gray-500">
-                <th class="text-left py-2 px-3 font-medium">姓名</th>
-                <th class="text-left py-2 px-3 font-medium">学号</th>
-                <th class="text-left py-2 px-3 font-medium">班级</th>
-                <th class="text-center py-2 px-3 font-medium">评价次数</th>
-                <th class="text-center py-2 px-3 font-medium">评价均分</th>
-                <th class="text-center py-2 px-3 font-medium">综合总分</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in overviewIndividualRows" :key="row.id"
-                class="border-b border-gray-50 hover:bg-gray-50/50">
-                <td class="py-2 px-3 font-medium text-gray-800">{{ row.name }}</td>
-                <td class="py-2 px-3 text-gray-500">{{ row.studentNo }}</td>
-                <td class="py-2 px-3 text-gray-600">{{ row.className || '未分班' }}</td>
-                <td class="text-center py-2 px-3 text-gray-600">{{ row.evalCount }}</td>
-                <td class="text-center py-2 px-3 text-blue-600 font-medium">{{ row.avg }}</td>
-                <td class="text-center py-2 px-3 text-emerald-600 font-medium">{{ row.total }}</td>
-              </tr>
-              <tr v-if="overviewIndividualRows.length === 0">
-                <td colspan="6" class="text-center py-8 text-gray-400">暂无学生数据</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <!-- 班级/分组筛选 -->
+      <div class="flex flex-wrap items-center gap-2">
+        <select v-model="compFilterClass" class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:border-blue-500 outline-none bg-white">
+          <option value="">全部班级</option>
+          <option v-for="opt in gradeClassOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
+        <select v-model="compFilterGroup" class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:border-blue-500 outline-none bg-white">
+          <option value="">全部分组</option>
+          <option v-for="g in compGroupOptions" :key="g.id" :value="g.groupName">{{ g.groupName }}</option>
+        </select>
+        <span class="text-xs text-gray-400">参评学生 {{ compStudents.length }} 人</span>
       </div>
+
+        <div v-if="compSessions.length === 0" class="bg-white rounded-xl border border-gray-100 shadow-sm p-10 text-center">
+          <BarChart3 class="w-12 h-12 text-gray-200 mx-auto mb-3" />
+          <p class="text-sm text-gray-400">暂无评价数据</p>
+        </div>
+
+        <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- 左列 -->
+          <div class="space-y-6">
+            <!-- 综合评分卡片 -->
+            <div class="bg-gradient-to-br from-blue-600 via-indigo-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg border border-blue-500/20">
+              <div class="flex items-center justify-between mb-5">
+                <div>
+                  <p class="text-blue-100/80 text-xs mb-2 tracking-wide">
+                    {{ compSelectedSession === null ? '最终综合评分' : `第 ${compSelectedSession} 次综合评分` }}
+                  </p>
+                  <p class="text-4xl font-bold leading-none">
+                    {{ compCurrentScore ?? '-' }}<span class="text-lg text-blue-200/80 ml-1 font-medium">分</span>
+                  </p>
+                  <p class="text-blue-100/60 text-xs mt-2">全班参评学生平均</p>
+                </div>
+                <div class="text-right bg-white/10 rounded-xl px-4 py-3 border border-white/10">
+                  <p class="text-blue-100/70 text-xs mb-1">参评人数</p>
+                  <p class="text-2xl font-semibold">{{ compStudents.length }}<span class="text-xs text-blue-200/80 ml-0.5">人</span></p>
+                </div>
+              </div>
+              <div class="relative h-2.5 bg-white/15 rounded-full overflow-hidden">
+                <div v-if="compCurrentScore !== null" class="h-full rounded-full bg-gradient-to-r from-emerald-300 to-emerald-400 transition-all"
+                  :style="{ width: Math.min(compCurrentScore, 100) + '%' }" />
+              </div>
+            </div>
+
+            <!-- 次数选择器 -->
+            <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+              <h3 class="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5">
+                <Calendar class="w-4 h-4 text-blue-500" /> 查看各次评价
+              </h3>
+              <div class="flex flex-wrap gap-2">
+                <button @click="compSelectedSession = null"
+                  class="px-4 py-2 rounded-full text-sm font-medium transition-all border"
+                  :class="compSelectedSession === null ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'">
+                  最终
+                  <span v-if="compFinalScore !== null" class="ml-1 font-bold">({{ compFinalScore }})</span>
+                </button>
+                <button v-for="s in compSessionScores" :key="s.session"
+                  @click="compSelectedSession = s.session"
+                  class="px-4 py-2 rounded-full text-sm font-medium transition-all border"
+                  :class="compSelectedSession === s.session ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'">
+                  第{{ s.session }}次
+                  <span v-if="s.score !== null" class="ml-1 font-bold">({{ s.score }})</span>
+                  <span v-else class="ml-1 text-gray-300">(-)</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 评价维度细分 -->
+            <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+              <h3 class="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-1.5">
+                <BarChart3 class="w-4 h-4 text-blue-500" /> 评价维度细分
+                <span class="text-xs font-normal text-gray-400 ml-1">· {{ compSelectedSession === null ? '全部平均' : `第 ${compSelectedSession} 次` }}</span>
+              </h3>
+              <div class="space-y-3">
+                <div v-for="dim in compDimensions" :key="dim.label" class="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50/50">
+                  <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-600/15">
+                    <component :is="dim.icon" class="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-900">{{ dim.label }}</p>
+                    <div class="flex items-center gap-2 mt-1.5">
+                      <div class="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                        <div class="h-full rounded-full bg-blue-600 transition-all duration-500" :style="{ width: dim.score + '%' }" />
+                      </div>
+                      <span class="text-xs font-bold text-blue-600 w-12 text-right">{{ dim.score }}<span class="text-gray-400 font-normal">/100</span></span>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="compDimensions.length === 0" class="text-center py-6 text-gray-400">暂无分项评价数据</div>
+              </div>
+            </div>
+
+            <!-- 能力雷达 -->
+            <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+              <h3 class="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-1.5">
+                <Network class="w-4 h-4 text-blue-500" /> 能力雷达
+              </h3>
+              <RadarChart :labels="compRadarData.labels" :values="compRadarData.values" :count="compRadarData.count" empty-text="暂无分项评价数据，评分后自动生成雷达图。" />
+            </div>
+
+            <!-- 成绩权重说明 -->
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-200 text-sm text-blue-800 shadow-sm">
+              <p class="font-semibold mb-2 flex items-center gap-1.5"><PieChart class="w-4 h-4 text-blue-600" /> 成绩构成</p>
+              <p>总成绩 = 平时成绩({{ gradeConfig.regularWeight }}%) + 期中成绩({{ gradeConfig.midtermWeight }}%) + 期末成绩({{ gradeConfig.finalWeight }}%)</p>
+              <p class="text-xs text-blue-700 mt-1.5 leading-relaxed">
+                平时成绩构成：个人自评({{ gradeConfig.selfEvalWeight }}%) + 小组内互评({{ gradeConfig.peerReviewWeight }}%) + 小组间互评({{ gradeConfig.interGroupEvalWeight }}%) + 教师评价({{ gradeConfig.teacherScoreWeight }}%) + 企业导师评价({{ gradeConfig.mentorScoreWeight }}%)
+              </p>
+            </div>
+          </div>
+
+          <!-- 右列：增值评价 -->
+          <div class="space-y-6">
+            <div class="bg-gradient-to-br from-blue-600 via-indigo-600 to-indigo-700 rounded-2xl p-5 border border-blue-500/20 text-white shadow-lg">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center border border-white/10">
+                  <TrendingUp class="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 class="text-lg font-semibold text-white">增值评价</h3>
+                  <p class="text-blue-100/70 text-xs mt-0.5">课程学业成长趋势</p>
+                </div>
+              </div>
+              <p class="text-blue-100/80 text-sm mt-3 leading-relaxed">基于本课程历次评价数据，分析全班学业进步趋势。</p>
+            </div>
+
+            <div v-if="compValueAdded.length > 0" class="space-y-6">
+              <div class="grid grid-cols-3 gap-4">
+                <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                  <p class="text-xs text-gray-400 mb-1.5">当前得分</p>
+                  <p class="text-2xl font-bold text-gray-900">{{ compValueAdded[compValueAdded.length - 1].score }}</p>
+                  <p class="text-xs text-gray-400 mt-1">第{{ compValueAdded.length }}次</p>
+                </div>
+                <div v-if="compValueAddedStats" class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                  <p class="text-xs text-gray-400 mb-1.5">相比上次</p>
+                  <p class="text-2xl font-bold" :class="compValueAddedStats.change > 0 ? 'text-emerald-600' : compValueAddedStats.change < 0 ? 'text-red-500' : 'text-gray-500'">
+                    {{ compValueAddedStats.change > 0 ? '+' : '' }}{{ compValueAddedStats.change.toFixed(1) }}
+                  </p>
+                  <p class="text-xs text-gray-400 mt-1">{{ compValueAddedStats.change > 0 ? '进步' : compValueAddedStats.change < 0 ? '退步' : '持平' }}</p>
+                </div>
+                <div v-if="compValueAddedStats" class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                  <p class="text-xs text-gray-400 mb-1.5">累计变化</p>
+                  <p class="text-2xl font-bold" :class="compValueAddedStats.totalChange > 0 ? 'text-emerald-600' : compValueAddedStats.totalChange < 0 ? 'text-red-500' : 'text-gray-500'">
+                    {{ compValueAddedStats.totalChange > 0 ? '+' : '' }}{{ compValueAddedStats.totalChange.toFixed(1) }}
+                  </p>
+                  <p class="text-xs text-gray-400 mt-1">共{{ compValueAdded.length }}次</p>
+                </div>
+              </div>
+              <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                <h3 class="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-1.5"><TrendingUp class="w-4 h-4 text-blue-500" /> 成绩趋势图</h3>
+                <svg :viewBox="`0 0 ${Math.max(compValueAdded.length * 80, 320)} 220`" class="w-full" style="min-height: 200px">
+                  <polyline fill="none" stroke="#3b82f6" stroke-width="2"
+                    :points="compValueAdded.map((d, i) => `${i * 80 + 40},${200 - d.score * 1.8}`).join(' ')" />
+                  <g v-for="(d, i) in compValueAdded" :key="i">
+                    <circle :cx="i * 80 + 40" :cy="200 - d.score * 1.8" r="4" fill="#3b82f6" />
+                    <text :x="i * 80 + 40" :y="215" text-anchor="middle" class="text-[10px]" fill="#9ca3af">第{{ d.session }}次</text>
+                    <text :x="i * 80 + 40" :y="200 - d.score * 1.8 - 10" text-anchor="middle" class="text-[10px]" fill="#3b82f6">{{ d.score }}</text>
+                  </g>
+                </svg>
+              </div>
+            </div>
+            <div v-else class="bg-white rounded-2xl p-10 border border-gray-100 shadow-sm text-center">
+              <TrendingUp class="w-10 h-10 text-gray-200 mx-auto mb-3" />
+              <p class="text-sm text-gray-400">完成至少一次评价后，系统将自动生成增值评价趋势图</p>
+            </div>
+          </div>
+        </div>
     </div>
 
       <!-- 新建考试/项目弹窗 -->
@@ -2095,7 +2169,9 @@ import {
   EvalFrequencyDescs, getDefaultGradeConfig
 } from '@/types'
 import type { EvalTemplate, EvalType, Evaluation, EvalFrequency, Schedule, GradeWeightConfig, EvaluationConfig } from '@/types'
-import { AlertTriangle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, UserX, LogOut, Network } from 'lucide-vue-next'
+import { AlertTriangle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, UserX, LogOut, Network, PieChart, Sparkles, MessageSquare, Award } from 'lucide-vue-next'
+import RadarChart from '@/components/RadarChart.vue'
+import { computeRadarData } from '@/lib/evalRadar'
 import { getNow } from '@/lib/date'
 import {
   createEmptyEvalDraft,
@@ -2270,8 +2346,8 @@ const tabList = [
   { key: 'course-mgmt',    label: '课程任务与评价', icon: Network },
   { key: 'quality-eval',   label: '素质评价',       icon: UserCheck },
   { key: 'grade-config',   label: '权重分配',       icon: Settings },
-  { key: 'grade-entry',    label: '综合评价',       icon: TrendingUp },
-  { key: 'grade-overview', label: '成绩管理',       icon: BarChart3 },
+  { key: 'grade-entry',    label: '成绩管理',       icon: TrendingUp },
+  { key: 'grade-overview', label: '综合评价',       icon: BarChart3 },
 ]
 
 /** Tab 红点提醒：检测该 tab 下未处理的事务数量，支持红点一路溯源 */
@@ -3669,129 +3745,156 @@ function getStudentAvgScore(studentId: string): string | number {
   return Math.round(sum / relevantEvals.length)
 }
 
-// ====== 成绩管理（评价分数总览） ======
-const overviewDimensions = [
-  { key: 'class',      label: '按班级' },
-  { key: 'group',      label: '按分组' },
-  { key: 'individual', label: '按个人' },
-] as const
-type OverviewDimension = typeof overviewDimensions[number]['key']
-const overviewDimension = ref<OverviewDimension>('class')
-const overviewFilterClass = ref('')
-const overviewFilterGroup = ref('')
-const overviewSearch = ref('')
+// ====== 综合评价（课程级聚合，仿学生端） ======
+const compFilterClass = ref('')
+const compFilterGroup = ref('')
+const compSelectedSession = ref<number | null>(null)
 
-/** 当前班级下的分组选项（供筛选下拉用） */
-const overviewGroupOptions = computed(() => {
+const compGroupOptions = computed(() => {
   if (!courseId.value) return []
   let groups = store.studentGroups.filter((g) => g.courseId === courseId.value)
-  if (overviewFilterClass.value) {
+  if (compFilterClass.value) {
     groups = groups.filter((g) =>
-      g.memberIds.length > 0 && g.memberIds.every((sid) => getStudentClassForCourse(sid) === overviewFilterClass.value),
+      g.memberIds.length > 0 && g.memberIds.every((sid) => getStudentClassForCourse(sid) === compFilterClass.value),
     )
   }
   return groups.map((g) => ({ id: g.id, groupName: g.name }))
 })
 
-/** 概览：按班级/分组聚合的行 */
-const overviewAggregateRows = computed(() => {
+/** 按班级/分组筛选后的学生 */
+const compStudents = computed(() => {
   if (!courseId.value) return []
-  const cid = courseId.value
   let students = enrolledStudents.value
     .filter(({ student }) => student)
     .map(({ student }) => student!)
-  if (overviewFilterClass.value) {
-    students = students.filter((s) => getStudentClassForCourse(s.id) === overviewFilterClass.value)
+  if (compFilterClass.value) {
+    students = students.filter((s) => getStudentClassForCourse(s.id) === compFilterClass.value)
   }
-  if (overviewSearch.value.trim()) {
-    const q = overviewSearch.value.trim().toLowerCase()
-    students = students.filter((s) => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q))
-  }
-
-  const fmt = (n: number) => Math.round(n * 10) / 10
-  function buildRow(label: string, list: typeof students) {
-    const evals: number[] = []
-    const totals: number[] = []
-    for (const s of list) {
-      const allEvals = store.evaluations.filter((e) => e.courseId === cid && e.studentId === s.id)
-      if (allEvals.length > 0) {
-        evals.push(allEvals.reduce((a, e) => a + e.score, 0) / allEvals.length)
-      }
-      const t = getStudentTotalScore(s.id)
-      if (typeof t === 'number') totals.push(t)
-    }
-    return {
-      label,
-      count: list.length,
-      avg: evals.length ? fmt(evals.reduce((a, b) => a + b, 0) / evals.length) : '-',
-      max: evals.length ? fmt(Math.max(...evals)) : '-',
-      min: evals.length ? fmt(Math.min(...evals)) : '-',
-      totalAvg: totals.length ? fmt(totals.reduce((a, b) => a + b, 0) / totals.length) : '-',
-    }
-  }
-
-  if (overviewDimension.value === 'class') {
-    const classMap = new Map<string, typeof students>()
-    for (const s of students) {
-      const cn = getStudentClassForCourse(s.id) || '未分班'
-      if (!classMap.has(cn)) classMap.set(cn, [])
-      classMap.get(cn)!.push(s)
-    }
-    return Array.from(classMap.entries()).map(([label, list]) => buildRow(label, list))
-  } else {
-    const groups = store.studentGroups.filter((g) => g.courseId === cid)
-    const rows: ReturnType<typeof buildRow>[] = []
-    for (const g of groups) {
-      const gClass = g.memberIds.length > 0 ? getStudentClassForCourse(g.memberIds[0]) : ''
-      if (overviewFilterClass.value && gClass !== overviewFilterClass.value) continue
-      if (overviewFilterGroup.value && g.name !== overviewFilterGroup.value) continue
-      const memberIds = new Set(g.memberIds)
-      rows.push(buildRow(`${gClass || '未分班'} / ${g.name}`, students.filter((s) => memberIds.has(s.id))))
-    }
-    const groupedIds = new Set(groups.flatMap((g) => g.memberIds))
-    const ungrouped = students.filter((s) => !groupedIds.has(s.id))
-    if (ungrouped.length > 0 && !overviewFilterGroup.value) {
-      rows.push(buildRow('未分组', ungrouped))
-    }
-    return rows
-  }
-})
-
-/** 概览：按个人行 */
-const overviewIndividualRows = computed(() => {
-  if (!courseId.value) return []
-  const cid = courseId.value
-  let students = enrolledStudents.value
-    .filter(({ student }) => student)
-    .map(({ student }) => student!)
-  if (overviewFilterClass.value) {
-    students = students.filter((s) => getStudentClassForCourse(s.id) === overviewFilterClass.value)
-  }
-  if (overviewFilterGroup.value) {
-    const groups = store.studentGroups.filter((g) => g.courseId === cid)
-    const g = groups.find((gg) => gg.name === overviewFilterGroup.value)
+  if (compFilterGroup.value) {
+    const g = store.studentGroups.find((gg) => gg.courseId === courseId.value && gg.name === compFilterGroup.value)
     if (g) {
       const ids = new Set(g.memberIds)
       students = students.filter((s) => ids.has(s.id))
     }
   }
-  if (overviewSearch.value.trim()) {
-    const q = overviewSearch.value.trim().toLowerCase()
-    students = students.filter((s) => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q))
-  }
-  return students.map((s) => {
-    const allEvals = store.evaluations.filter((e) => e.courseId === cid && e.studentId === s.id)
-    const avg = allEvals.length > 0 ? Math.round(allEvals.reduce((a, e) => a + e.score, 0) / allEvals.length * 10) / 10 : '-'
-    return {
-      id: s.id,
-      name: s.name,
-      studentNo: s.studentNo || s.id,
-      className: getStudentClassForCourse(s.id),
-      evalCount: allEvals.length,
-      avg,
-      total: getStudentTotalScore(s.id),
-    }
+  return students
+})
+
+/** 所有出现过的评价轮次 */
+const compSessions = computed(() => {
+  if (!courseId.value) return []
+  const cid = courseId.value
+  const ids = new Set(compStudents.value.map((s) => s.id))
+  const sessions = new Set<number>()
+  store.evaluations.forEach((e) => {
+    if (e.courseId === cid && ids.has(e.studentId)) sessions.add(e.sessionNumber)
   })
+  return Array.from(sessions).sort((a, b) => a - b)
+})
+
+const compEvalWeightKeyMap: Record<string, keyof GradeWeightConfig> = {
+  self: 'selfEvalWeight',
+  intra_group: 'peerReviewWeight',
+  inter_group: 'interGroupEvalWeight',
+  teacher: 'teacherScoreWeight',
+  mentor: 'mentorScoreWeight',
+}
+
+/** 某次 session 下，课程级综合分 = 各生该次综合分的平均 */
+function compSessionScore(session: number): number | null {
+  const cid = courseId.value
+  if (!cid) return null
+  const cfg = gradeConfig.value
+  const students = compStudents.value
+  const scores: number[] = []
+  for (const s of students) {
+    const evals = store.evaluations.filter(
+      (e) => e.courseId === cid && e.studentId === s.id && e.sessionNumber === session,
+    )
+    if (evals.length === 0) continue
+    let weightedSum = 0
+    let totalWeight = 0
+    for (const type of ALL_EVAL_TYPES) {
+      const filtered = evals.filter((e) => e.type === type)
+      if (filtered.length === 0) continue
+      const avg = filtered.reduce((a, e) => a + e.score, 0) / filtered.length
+      const w = (cfg[compEvalWeightKeyMap[type]] as number) || 0
+      weightedSum += avg * w
+      totalWeight += w
+    }
+    if (totalWeight > 0) scores.push(weightedSum / totalWeight)
+  }
+  if (scores.length === 0) return null
+  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+}
+
+const compSessionScores = computed(() =>
+  compSessions.value.map((sn) => ({ session: sn, score: compSessionScore(sn) })),
+)
+
+const compFinalScore = computed(() => {
+  const valid = compSessionScores.value.filter((s) => s.score !== null)
+  if (valid.length === 0) return null
+  return Math.round(valid.reduce((a, s) => a + (s.score as number), 0) / valid.length)
+})
+
+const compCurrentScore = computed(() => {
+  if (compSelectedSession.value === null) return compFinalScore.value
+  const found = compSessionScores.value.find((s) => s.session === compSelectedSession.value)
+  return found ? found.score : null
+})
+
+/** 评价维度细分：各 evalType 跨学生平均 */
+const compDimensionMeta: Record<string, { label: string; icon: any }> = {
+  self: { label: '个人自评', icon: UserCheck },
+  intra_group: { label: '小组内互评', icon: Users },
+  inter_group: { label: '小组间互评', icon: MessageSquare },
+  teacher: { label: '教师评价', icon: Award },
+  mentor: { label: '企业导师评价', icon: Sparkles },
+}
+
+const compDimensions = computed(() => {
+  const cid = courseId.value
+  if (!cid) return []
+  const ids = new Set(compStudents.value.map((s) => s.id))
+  const evals = store.evaluations.filter(
+    (e) => e.courseId === cid && ids.has(e.studentId) &&
+      (compSelectedSession.value === null || e.sessionNumber === compSelectedSession.value),
+  )
+  const dims: { label: string; icon: any; score: number }[] = []
+  for (const type of ALL_EVAL_TYPES) {
+    const filtered = evals.filter((e) => e.type === type)
+    if (filtered.length === 0) continue
+    const avg = Math.round(filtered.reduce((a, e) => a + e.score, 0) / filtered.length)
+    dims.push({ label: compDimensionMeta[type].label, icon: compDimensionMeta[type].icon, score: avg })
+  }
+  return dims
+})
+
+const compRadarData = computed(() => {
+  const cid = courseId.value
+  if (!cid) return { labels: [], values: [], count: 0 }
+  const ids = new Set(compStudents.value.map((s) => s.id))
+  const evals = store.evaluations.filter(
+    (e) => e.courseId === cid && ids.has(e.studentId) &&
+      (compSelectedSession.value === null || e.sessionNumber === compSelectedSession.value),
+  )
+  return computeRadarData(evals)
+})
+
+/** 增值评价趋势 */
+const compValueAdded = computed(() =>
+  compSessionScores.value
+    .filter((s) => s.score !== null)
+    .map((s) => ({ session: s.session, score: s.score as number })),
+)
+
+const compValueAddedStats = computed(() => {
+  const data = compValueAdded.value
+  if (data.length < 2) return null
+  const change = data[data.length - 1].score - data[data.length - 2].score
+  const totalChange = data[data.length - 1].score - data[0].score
+  return { change, totalChange }
 })
 
 function getStudentScoreForExam(studentId: string, examName: string): string | number {
