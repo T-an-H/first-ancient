@@ -534,13 +534,15 @@ router.get('/:id/courses', async (req, res) => {
     }
     const enrolledCourseIds = [...enrollmentByCourse.keys()];
 
-    // ---- 来源二（兜底）：学生所在班级的排课（保留原有行为，避免回归）----
+    // ---- 来源二（兜底）：学生所在班级的排课 ----
+    // ⚠️ 班级语义：class_name 为空 = 全班级，对该课程所有学生生效，因此一并取上。
     let classScheduleRows = [];
     if (className) {
       const [rows] = await connection.query(
         `SELECT id, course_id, title, teacher, mentor, room, class_name, day, start_date, end_date, time_slot
          FROM schedules
          WHERE TRIM(COALESCE(class_name, '')) = ?
+            OR TRIM(COALESCE(class_name, '')) = ''
          ORDER BY start_date ASC, time_slot ASC, id ASC`,
         [className]
       );
@@ -601,11 +603,13 @@ router.get('/:id/courses', async (req, res) => {
         ...(schedulesByCourse.get(normalizeText(courseRow.id)) || []),
         ...(schedulesByCourse.get(normalizeText(courseRow.title)) || []),
       ];
-      // 进度按「学生所在班级」的排课算（与旧行为一致）。学生无班级、或该课没排到他班上时，
-      // 不借用别班排课（会虚高），改由下方按课程起止日期兜底。
-      const timingRows = className
-        ? allRows.filter((row) => normalizeText(row.class_name) === className)
-        : [];
+      // 进度按「学生所在班级」的排课算。不借用别班排课（会虚高），
+      // 但全班级排课（class_name 为空）对该课程所有学生生效，必须计入；
+      // 学生自身无班级时也照样吃全班级排课，而不是直接退回课程起止日期。
+      const timingRows = allRows.filter((row) => {
+        const rowClass = normalizeText(row.class_name);
+        return !rowClass || rowClass === className;
+      });
 
       const uniqueTeachers = [...new Set(allRows.map((row) => normalizeText(row.teacher)).filter(Boolean))];
       const uniqueMentors = [...new Set(allRows.map((row) => normalizeText(row.mentor)).filter(Boolean))];

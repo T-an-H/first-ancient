@@ -7,6 +7,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchCategories, fetchCourses, fetchSchedules, fetchStudentCourses, fetchStudents } from '@/api'
 import { getStoredStudentSession, getStudentLookupKeyword, matchStudentFromSession } from '@/lib/studentSession'
+import { mergeSchedulesForClass } from '@/lib/schedule'
 import { getTodayStart, parseLocalDate } from '@/lib/date'
 import { useAppStore } from '@/stores/app'
 import * as d3 from 'd3'
@@ -151,12 +152,7 @@ async function buildFallbackCourseState(baseStudent: Student | null, session: Re
   const schedules: Schedule[] = scheduleRes.schedules ?? []
   const normalizedClassName = String(className).trim()
   if (normalizedClassName) {
-    store.schedules = [
-      ...store.schedules.filter(
-        (schedule) => String(schedule.className ?? '').trim() !== normalizedClassName,
-      ),
-      ...schedules,
-    ]
+    store.schedules = mergeSchedulesForClass(store.schedules, schedules, normalizedClassName)
   }
   const courseList: Course[] = courseRes.courses ?? []
   const courseById = new Map(courseList.map((course) => [course.id, course]))
@@ -244,12 +240,7 @@ async function loadRemoteCourses() {
       try {
         const scheduleRes = await fetchSchedules({ class: className })
         const schedules: Schedule[] = scheduleRes.schedules ?? []
-        store.schedules = [
-          ...store.schedules.filter(
-            (schedule) => String(schedule.className ?? '').trim() !== className,
-          ),
-          ...schedules,
-        ]
+        store.schedules = mergeSchedulesForClass(store.schedules, schedules, className)
       } catch (error) {
         console.warn('同步学生班级排课失败，继续使用已有本地排课', error)
       }

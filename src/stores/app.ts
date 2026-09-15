@@ -1900,20 +1900,16 @@ export const useAppStore = defineStore('app', () => {
   }
 
   /**
-   * 获取某课程的评价次数 — 基于实际排课数量计算
+   * 获取某课程的评价次数 — 基于实际课次计算
    * 每 2 节课对应 1 次评价，确保不会产生无对应排课的幻影场次
    */
   function getEvalSessions(courseId: string, className = ''): number {
     const course = courses.value.find((c) => c.id === courseId)
     if (!course) return 1
 
-    // 按班级过滤：同一门课挂多个班时，各自算各自的轮次；
-    // 不传班级（教师查看整门课）时统计全部课次。
-    const normalizedClassName = String(className).trim()
-    const scheduleCount = schedules.value
-      .filter((s) => s.courseId === courseId)
-      .filter((s) => !normalizedClassName || String(s.className ?? '').trim() === normalizedClassName)
-      .length
+    // 口径与 getCourseScheduleOccurrences 对齐：数「去重后的课次」而不是「排课行数」。
+    // 前者会把「全班级行 + 本班专属行」重合的同一节课算成两次，导致评价轮次虚增。
+    const scheduleCount = getCourseScheduleOccurrences(courseId, className).length
 
     // 无排课 → 1 次默认评价
     if (scheduleCount === 0) return 1

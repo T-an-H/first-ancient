@@ -346,6 +346,10 @@ router.get('/department/:dept', async (req, res) => {
 
 router.get('/:id/students', async (req, res) => {
   try {
+    // 课程排课的班级分布。
+    // ⚠️ class_name 为空 = 全班级：该排课对所有学生生效，无法从它反推「哪些班在上这门课」，
+    // 因此不能计入 classNames（下面仍按 IS NOT NULL 排除）；但只要存在任意全班级排课，
+    // 就完全跳过班级限制，退化为「已选课学生」—— 否则条件会膨胀成 OR TRUE。
     const [scheduleRows] = await pool.query(
       `SELECT DISTINCT class_name
        FROM schedules
@@ -355,6 +359,15 @@ router.get('/:id/students', async (req, res) => {
       [req.params.id]
     );
 
+    const [globalRows] = await pool.query(
+      `SELECT 1 FROM schedules
+       WHERE course_id = ?
+         AND (class_name IS NULL OR TRIM(class_name) = '')
+       LIMIT 1`,
+      [req.params.id]
+    );
+    const hasGlobalSchedule = globalRows.length > 0;
+
     const classNames = scheduleRows
       .map((row) => normalizeText(row.class_name))
       .filter(Boolean);
@@ -362,7 +375,7 @@ router.get('/:id/students', async (req, res) => {
     const conditions = ['enrollment.id IS NOT NULL'];
     const params = [req.params.id];
 
-    if (classNames.length > 0) {
+    if (classNames.length > 0 && !hasGlobalSchedule) {
       const placeholders = classNames.map(() => '?').join(', ');
       conditions.push(`TRIM(COALESCE(cls.name, student.class_name, '')) IN (${placeholders})`);
       params.push(...classNames);

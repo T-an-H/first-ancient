@@ -25,7 +25,14 @@ public class Schedule {
     /** 周几（周一~周日） */
     private String day;
 
-    /** 上课班级 */
+    /**
+     * 上课班级
+     *
+     * ⚠️ 未同步「空 = 全班级」语义：本 Java 服务的 GET /api/schedules 没有按班级过滤
+     * （连 class 查询参数都不接收），与 Express 主后端行为不一致。
+     * 当前部署走 Express（见 更新公告与共创者上传教程/部署过程.md），
+     * 若日后前端 API 指向本服务，按班级取排课会静默失效。
+     */
     private String className;
 
     private LocalDate startDate;

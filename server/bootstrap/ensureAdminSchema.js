@@ -444,6 +444,8 @@ async function syncClassesAndStudents(connection, departments) {
      WHERE class_name IS NOT NULL AND TRIM(class_name) <> ''`
   );
 
+  // ⚠️ 这里刻意排除 class_name 为空的排课：空 = 全班级，归属不到具体班级，
+  // 不能 seed 出一条 name='' 的 classes 记录。语义见 Schedule.className 注释。
   const [scheduleClasses] = await connection.query(
     `SELECT DISTINCT
        TRIM(schedule.class_name) AS class_name,

@@ -814,6 +814,7 @@ import type { AITierQuestion, LearningTier, CloudFile, QualityEvalFile, Schedule
 import Modal from '@/components/Modal.vue'
 import { fetchSchedules, fetchTierTestQuestions, fetchTierTestResult, submitTierTest } from '@/api'
 import { getNow, parseLocalDate } from '@/lib/date'
+import { mergeSchedulesForClass } from '@/lib/schedule'
 import { computeRadarData } from '@/lib/evalRadar'
 
 const route = useRoute()
@@ -861,14 +862,13 @@ onMounted(async () => {
     )
     const remoteSchedules = (response.schedules ?? []) as Schedule[]
     if (remoteSchedules.length > 0) {
-      store.schedules = [
-        ...store.schedules.filter((schedule) => {
-          if (schedule.courseId !== courseId) return true
-          if (!currentClassName.value) return false
-          return String(schedule.className ?? '').trim() !== currentClassName.value
-        }),
-        ...remoteSchedules,
-      ]
+      // 必须限定 courseId 范围：本请求按课程拉取，否则会清掉其他课程的排课
+      store.schedules = mergeSchedulesForClass(
+        store.schedules,
+        remoteSchedules,
+        currentClassName.value,
+        { courseId },
+      )
 
       const latestEndDate = remoteSchedules
         .map((schedule) => parseLocalDate(schedule.endDate))

@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS schedules (
   teacher    VARCHAR(64)  DEFAULT '' COMMENT '教师',
   semester   VARCHAR(32)  DEFAULT '' COMMENT '学期',
   room       VARCHAR(64)  DEFAULT '' COMMENT '教室',
-  class_name VARCHAR(64)  DEFAULT NULL COMMENT '班级',
+  class_name VARCHAR(64)  DEFAULT NULL COMMENT '班级；NULL/空串 = 全班级，对本课程所有学生生效（查读写一律 TRIM(COALESCE(class_name,'')) ）',
   start_date VARCHAR(32)  DEFAULT '' COMMENT '开始日期',
   end_date   VARCHAR(32)  DEFAULT '' COMMENT '结束日期',
   time_slot  VARCHAR(32)  DEFAULT '' COMMENT '时间段'

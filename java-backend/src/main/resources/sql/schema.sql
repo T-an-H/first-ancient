@@ -165,7 +165,7 @@ CREATE TABLE schedule (
     course_id  VARCHAR(64)  NOT NULL COMMENT '课程ID',
     title      VARCHAR(200) DEFAULT '' COMMENT '排课标题',
     day        VARCHAR(16)  DEFAULT '' COMMENT '周几（周一~周日）',
-    class_name VARCHAR(64)  DEFAULT '' COMMENT '上课班级',
+    class_name VARCHAR(64)  DEFAULT '' COMMENT '上课班级；空 = 全班级（语义未在 Java 服务实现，见 Schedule.java）',
     start_date DATE         DEFAULT NULL COMMENT '开始日期',
     end_date   DATE         DEFAULT NULL COMMENT '结束日期',
     time_slot  VARCHAR(64)  DEFAULT '' COMMENT '时间段，如 8:00-9:40',

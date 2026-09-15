@@ -9,6 +9,7 @@ import * as d3 from 'd3'
 import { fetchSchedules, fetchStudents } from '@/api'
 import type { Schedule } from '@/types'
 import { getStoredStudentSession, matchStudentFromSession } from '@/lib/studentSession'
+import { mergeSchedulesForClass } from '@/lib/schedule'
 import { renderIcon } from '@/utils/d3-renderer'
 import { isVirtualToday, getVirtualMonday, getTodayStart, getSemesterOf, parseLocalDate } from '@/lib/date'
 
@@ -53,15 +54,9 @@ async function loadMySchedules() {
 
     const schRes = await fetchSchedules({ class: className })
     const remoteSchedules = (schRes.schedules ?? []) as Schedule[]
-    const remoteScheduleIds = new Set(remoteSchedules.map((schedule) => schedule.id))
     dbSchedules.value = remoteSchedules
-    store.schedules = [
-      ...store.schedules.filter((schedule) =>
-        !remoteScheduleIds.has(schedule.id) &&
-        String(schedule.className ?? '').trim() !== String(className).trim(),
-      ),
-      ...remoteSchedules,
-    ]
+    // 按班级全量拉取，替换 store 中「本班可见」的旧行（含旧的全班级行）
+    store.schedules = mergeSchedulesForClass(store.schedules, remoteSchedules, className)
   } catch (e) {
     console.error('加载课表失败:', e)
     const myStudent = matchStudentFromSession(store.students, store.currentUser)

@@ -396,6 +396,7 @@ router.post('/sync', async (req, res) => {
          schedule.class_name,
          course.department_id,
          course.department,
+         course.category_name AS course_category_name,
          class_table.department_id AS class_department_id
        FROM schedules AS schedule
        LEFT JOIN courses AS course ON course.id = schedule.course_id
@@ -437,7 +438,12 @@ router.post('/sync', async (req, res) => {
         continue;
       }
 
-      const categoryName = deriveCategoryName(row.class_name);
+      // ⚠️ 全班级排课（class_name 为空）反推不出班级，若直接交给 deriveCategoryName
+      // 会得到「未分类」，为每门只挂全班级排课的课凭空造一个「未分类」分类。
+      // 此时改用课程自身已有的 category_name，取不到才落「未分类」。
+      const categoryName = normalizeText(row.class_name)
+        ? deriveCategoryName(row.class_name)
+        : (normalizeText(row.course_category_name) || '未分类');
       const [existingCategoryRows] = await connection.query(
         'SELECT id FROM categories WHERE department_id = ? AND name = ? LIMIT 1',
         [department.id, categoryName]

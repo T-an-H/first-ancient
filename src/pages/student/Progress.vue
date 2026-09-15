@@ -99,6 +99,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { fetchSchedules, fetchStudentCourses, fetchStudents } from '@/api'
 import { getStoredStudentSession, getStudentLookupKeyword, matchStudentFromSession } from '@/lib/studentSession'
+import { isScheduleVisibleToClass, mergeSchedulesForClass } from '@/lib/schedule'
 import { useAppStore } from '@/stores/app'
 import type { Course, Enrollment, Schedule, Student } from '@/types'
 
@@ -193,12 +194,7 @@ function mergeSchedulesByClass(className: string, schedules: Schedule[]) {
   const normalizedClassName = String(className).trim()
   if (!normalizedClassName) return
 
-  store.schedules = [
-    ...store.schedules.filter(
-      (item) => String(item.className ?? '').trim() !== normalizedClassName,
-    ),
-    ...schedules,
-  ]
+  store.schedules = mergeSchedulesForClass(store.schedules, schedules, normalizedClassName)
 }
 
 function getCourse(courseId: string) {
@@ -326,11 +322,10 @@ function buildScheduleOccurrences(schedule: Schedule): ScheduleOccurrence[] {
 
 function getCourseOccurrences(courseId: string, className = '') {
   const normalizedClassName = String(className).trim()
-  const sourceSchedules = dbSchedules.value.filter((item) => {
-    if (item.courseId !== courseId) return false
-    if (!normalizedClassName) return true
-    return String(item.className || '').trim() === normalizedClassName
-  })
+  // 空班级排课 = 全班级，对本课程所有学生可见（判据统一走 isScheduleVisibleToClass）
+  const sourceSchedules = dbSchedules.value.filter(
+    (item) => item.courseId === courseId && isScheduleVisibleToClass(item, normalizedClassName),
+  )
 
   const occurrences: ScheduleOccurrence[] = []
   const seen = new Set<string>()
@@ -516,8 +511,8 @@ async function loadRemoteProgress() {
       mergeSchedulesByClass(className, dbSchedules.value)
     } catch (error) {
       console.warn('加载学生课表失败，继续使用本地课表数据', error)
-      dbSchedules.value = store.schedules.filter(
-        (item) => String(item.className ?? '').trim() === className,
+      dbSchedules.value = store.schedules.filter((item) =>
+        isScheduleVisibleToClass(item, className),
       )
     }
   } finally {

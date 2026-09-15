@@ -131,7 +131,13 @@ export interface Schedule {
   semester?: string;
   /** 周几（如 周一），未设置时由 startDate 推导 */
   day?: string;
-  /** 上课班级 */
+  /**
+   * 上课班级
+   *
+   * ⚠️ 为空（未设置 / 空串）表示「全班级」—— 该排课对本课程所有学生生效，
+   * 而不是「班级未填写」。判据统一走 `isScheduleVisibleToClass`（@/lib/schedule），
+   * 不要在各处内联 `className === xxx` 比较。
+   */
   className?: string;
   startDate: string;
   endDate: string;
