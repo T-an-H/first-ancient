@@ -2843,10 +2843,15 @@ export const useAppStore = defineStore('app', () => {
         }
       }
 
-      // AI 分层待办清理
+      // AI 分层待办清理：按学生端「尚未完成的分层测试」真实情况取齐。
+      // 注意不要从待办 id 反解 courseId ——课程 id 自身含 `-`
+      //（如 course-seed-589812111），拼接后再反解必然错位，
+      // 会导致学生考完分层后待办永远挂着。
+      // getPendingAITierTests 已排除「已分层」的课程，这里直接以它为准。
       if (t.id.startsWith('auto-ai-tier-')) {
-        const key = t.id.replace('auto-ai-tier-', '')
-        if (studentTiers.value[key]) {
+        const stillPending = student?.id
+          && getPendingAITierTests(student.id).some((test) => `auto-ai-tier-${test.courseId}-${student.id}` === t.id)
+        if (!stillPending) {
           changed = true
           return { ...t, completed: true }
         }

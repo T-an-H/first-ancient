@@ -153,10 +153,16 @@ function getTodoTrace(t: { id: string; title: string }): TodoTrace | null {
     return { path: `/teacher/courses/${courseId}?tab=quality-eval`, label: '去批改' }
   }
   // [AI分层] auto-ai-tier-{courseId}-{studentId}
+  // 不从 id 反解 courseId（课程 id 自身含 `-`，反解会错位）。
+  // 改为：先剥掉前缀与尾部的 studentId，再用「学生真实待测的课程」核对，
+  // 与后端/待办清理保持同一口径。
   if (t.id.startsWith('auto-ai-tier-') && currentStudentId) {
-    const courseId = t.id.replace('auto-ai-tier-', '').slice(0, -currentStudentId.length - 1)
-    if (!courseId) return null
-    return { path: `/student/courses/${courseId}?tab=ai_tier`, label: '去测试' }
+    const rest = t.id.replace('auto-ai-tier-', '').slice(0, -currentStudentId.length - 1)
+    const pending = store.getPendingAITierTests(currentStudentId)
+    const hit = pending.find((test) => test.courseId === rest)
+    // 待办对应的课程已不在待测列表（已完成分层）→ 不给跳转入口
+    if (!hit) return null
+    return { path: `/student/courses/${hit.courseId}?tab=ai_tier`, label: '去测试' }
   }
   // [作业] auto-homework-{homeworkId}-{studentId}
   if (t.id.startsWith('auto-homework-') && currentStudentId) {
