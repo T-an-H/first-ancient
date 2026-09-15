@@ -145,7 +145,7 @@ function renderSidebar() {
     .attr('class', 'w-6 h-6')
 
   const headerText = headerFlex.append('div')
-  headerText.append('h1').attr('class', 'font-bold text-lg').text('课程平台')
+  headerText.append('h1').attr('class', 'font-bold text-lg').text('课程多元评价平台')
   headerText.append('p').attr('class', 'font-semibold text-base text-white').text(cfg.label)
 
   const nav = aside.append('nav')

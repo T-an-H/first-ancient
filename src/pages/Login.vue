@@ -6,7 +6,7 @@
           <div class="w-20 h-20 rounded-2xl bg-white/20 flex items-center justify-center mb-6">
             <img src="@/assets/doubao.svg" alt="小智" class="w-12 h-12" />
           </div>
-          <h1 class="text-3xl font-bold text-white mb-3">课程平台</h1>
+          <h1 class="text-3xl font-bold text-white mb-3">课程多元评价平台</h1>
           <p class="text-white/70 text-lg">统一登录后进入对应角色工作区</p>
         </div>
         <div class="flex flex-wrap gap-2">
@@ -21,7 +21,7 @@
           <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center mx-auto mb-4">
             <img src="@/assets/doubao.svg" alt="小智" class="w-8 h-8" />
           </div>
-          <h2 class="text-xl font-bold text-gray-900">课程平台</h2>
+          <h2 class="text-xl font-bold text-gray-900">课程多元评价平台</h2>
         </div>
 
         <h2 class="text-2xl font-bold text-gray-900 mb-2 hidden lg:block">欢迎登录</h2>

@@ -5,7 +5,7 @@
       <button @click="mobileNavOpen = true" aria-label="打开菜单" class="p-2 -ml-2 rounded hover:bg-white/10">
         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
-      <span class="ml-2 text-sm font-medium">课程平台</span>
+      <span class="ml-2 text-sm font-medium">课程多元评价平台</span>
     </div>
 
     <!-- 侧边栏：桌面静态 / 移动抽屉 -->
