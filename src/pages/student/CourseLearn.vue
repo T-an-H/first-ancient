@@ -193,10 +193,13 @@
                   <span class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-base font-bold"
                     :class="tierBadgeClass">
                     <Layers class="w-5 h-5" />
-                    {{ tierLabelMap[testTier] }}
+                    {{ testTierLabel }}
                   </span>
                 </div>
                 <p class="text-xs text-gray-400">本次分层结果已在系统中锁定，本学期不可修改</p>
+                <p v-if="testAlreadySubmitted" class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  你此前已完成过本课程的分层测试，此处显示的是已有结果，本次作答未重复计分
+                </p>
                 <button @click="closeAITest"
                   class="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors inline-flex items-center gap-2">
                   <CheckCircle class="w-4 h-4" />
@@ -809,7 +812,7 @@ import KnowledgeGraph from '@/components/knowledge/KnowledgeGraph.vue'
 import RadarChart from '@/components/RadarChart.vue'
 import type { AITierQuestion, LearningTier, CloudFile, QualityEvalFile, Schedule } from '@/types'
 import Modal from '@/components/Modal.vue'
-import { fetchSchedules, fetchTierTestQuestions, submitTierTest } from '@/api'
+import { fetchSchedules, fetchTierTestQuestions, fetchTierTestResult, submitTierTest } from '@/api'
 import { getNow, parseLocalDate } from '@/lib/date'
 import { computeRadarData } from '@/lib/evalRadar'
 
@@ -895,10 +898,31 @@ onMounted(async () => {
   await store.syncQualityEvaluationState(courseId)
   store.pushNearDeadlineEvalReminders()
   if (myStudent.value) {
+    // 后端为分层结果的权威源：先同步，避免换设备/清缓存后被误判为「逾期自动分配基础层」
+    await syncTierFromBackend()
     store.autoAssignOverdueBasicTier(courseId, myStudent.value.id, currentClassName.value)
     await store.syncStudentHomeworkTodos(courseId, myStudent.value.id)
   }
 })
+
+/**
+ * 从后端拉取本课程的分层结果并回写本地缓存。
+ *
+ * 本地 studentTiers 在 localStorage 里只有「本机提交过」才有记录，
+ * 后端才是权威源。查询失败（离线等）不阻断页面，沿用本地缓存兜底。
+ */
+async function syncTierFromBackend() {
+  const student = myStudent.value
+  if (!student) return
+  try {
+    const remote = await fetchTierTestResult(courseId, student.id)
+    if (remote) {
+      store.syncStudentTierFromBackend(courseId, student.id, remote.tier, remote.score, remote.submittedAt)
+    }
+  } catch (error) {
+    console.warn('同步分层结果失败，沿用本地缓存:', error)
+  }
+}
 
 // 路由 query 变化时切换 tab（红点溯源：同一页面内二次跳转）
 watch(() => route.query.tab, (val) => {
@@ -960,6 +984,9 @@ const tierLabelMap: Record<LearningTier, string> = {
   advanced: '进阶层',
   excellent: '卓越层',
 }
+
+/** 结果页展示用；后端异常返回空 tier 时回落到基础层标签 */
+const testTierLabel = computed(() => tierLabelMap[testTier.value] ?? tierLabelMap.basic)
 
 const tierBadgeClass = computed(() => {
   if (!tierFinalized.value) return 'bg-brand-400/10 text-brand-700 border border-brand-400'
@@ -1063,6 +1090,8 @@ const testSubmitted = ref(false)
 const testScore = ref(0)
 /** 后端判定的层级（结果页显示用） */
 const testTier = ref<LearningTier>('basic')
+/** 本次提交时后端已有结果（未被重复计分），结果页据此提示 */
+const testAlreadySubmitted = ref(false)
 const testLoading = ref(false)
 const testSubmitting = ref(false)
 const testLoadError = ref('')
@@ -1074,6 +1103,7 @@ async function openAITest() {
   testAnswers.value = {}
   testSubmitted.value = false
   testScore.value = 0
+  testAlreadySubmitted.value = false
   testLoadError.value = ''
   testLoading.value = true
   aiTestOpen.value = true
@@ -1104,11 +1134,23 @@ function selectAnswer(questionId: string, answer: number | boolean) {
   testAnswers.value = { ...testAnswers.value, [questionId]: answer }
 }
 
-/** 把选择结果转成后端需要的「选项原文」 */
+/**
+ * 把选择结果转成后端需要的答案文本。
+ *
+ * 注意：`picked ? '正确' : '错误'` 必须与试卷里的判断题选项文字一致
+ * （后端会把「正确/错误」「对/错」「true/false」视作等价，但仍以选项原文最稳）。
+ */
 function toAnswerText(q: AITierQuestion): string {
   const picked = testAnswers.value[q.id]
   if (picked === undefined) return ''
-  if (q.type === 'true_false') return picked ? '正确' : '错误'
+  if (q.type === 'true_false') {
+    const boolText = picked ? '正确' : '错误'
+    const options = q.options ?? []
+    // 选项文案可能不是「正确/错误」（如「对/错」），优先用试卷里的原文
+    const hit = options.find((opt) => opt === boolText)
+      ?? options.find((opt) => (picked ? ['对', '是', '正确'].includes(opt) : ['错', '否', '错误'].includes(opt)))
+    return hit ?? boolText
+  }
   return q.options?.[picked as number] ?? ''
 }
 
@@ -1130,11 +1172,13 @@ async function submitAITest() {
 
   try {
     const result = await submitTierTest(courseId, student.id, answers)
-    testScore.value = result.score
-    testTier.value = result.tier
+    testScore.value = result.score ?? 0
+    testTier.value = result.tier ?? 'basic'
+    // 后端已有结果时本次提交未被计入，结果页里说明清楚
+    testAlreadySubmitted.value = Boolean(result.alreadySubmitted)
     testSubmitted.value = true
     // 后端是权威源，同时回写本地缓存，供作业过滤/图谱可见性等读取
-    store.submitAITierTest(courseId, student.id, result.score, result.tier)
+    store.submitAITierTest(courseId, student.id, testScore.value, testTier.value)
   } catch (error) {
     testSubmitError.value = error instanceof Error ? error.message : '提交失败，请稍后重试'
   } finally {

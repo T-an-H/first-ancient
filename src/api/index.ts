@@ -595,12 +595,35 @@ export interface TierTestSubmitResult {
   alreadySubmitted?: boolean
 }
 
+export interface TierTestResultDTO {
+  tier: 'basic' | 'advanced' | 'excellent'
+  score: number
+  tierLabel: string
+  submittedAt?: string
+}
+
 /** 获取某课程的分层测试题（首次调用会触发生成，耗时较长） */
 export async function fetchTierTestQuestions(courseId: string): Promise<TierTestQuestionDTO[]> {
   const res = await request(`/tier-test/${encodeURIComponent(courseId)}/questions`, {
     timeoutMs: 60000,
   })
   return (res.questions ?? []) as TierTestQuestionDTO[]
+}
+
+/**
+ * 查询某学生某课程的分层结果（后端为权威源）
+ *
+ * 未提交过时后端返回 success: true + result: null，此处归一为 null。
+ */
+export async function fetchTierTestResult(
+  courseId: string,
+  studentId: string,
+): Promise<TierTestResultDTO | null> {
+  const res = await request(
+    `/tier-test/${encodeURIComponent(courseId)}/result/${encodeURIComponent(studentId)}`,
+    { timeoutMs: 8000 },
+  )
+  return (res.result ?? null) as TierTestResultDTO | null
 }
 
 /**

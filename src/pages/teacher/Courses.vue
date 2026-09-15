@@ -509,9 +509,9 @@ import {
   EvalTypeLabels, EvalTypeColors,
   EvalFrequencyLabels, EvalFrequencyDescs, OverdueRuleLabels
 } from '@/types'
-import type { EvalTemplate, EvalType, Evaluation, EvalFrequency, OverdueRule, EvaluationConfig, Course } from '@/types'
+import type { EvalTemplate, EvalType, Evaluation, EvalFrequency, OverdueRule, EvaluationConfig, Course, LearningTier } from '@/types'
 import { getNow } from '@/lib/date'
-import { fetchTeacherCourses, fetchStudentsPool } from '@/api'
+import { fetchTeacherCourses, fetchStudentsPool, fetchTierTestResult } from '@/api'
 
 
 const router = useRouter()
@@ -554,6 +554,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+
+  // 分层统计依赖后端结果，独立加载，不阻塞课程列表渲染
+  void loadTeacherTierMap()
 })
 
 const sortedAndFilteredCourses = computed(() => {
@@ -909,13 +912,48 @@ const TIER_COLORS: Record<string, string> = {
 const TIER_ORDER = ['excellent', 'advanced', 'basic', 'untested'] as const
 const TIER_LABELS: Record<string, string> = { excellent: '卓越层', advanced: '进阶层', basic: '基础层', untested: '未分层' }
 
-/** 统计某课程内各 AI 分层人数（关联学生端分层记录） */
+/**
+ * 教师端分层统计：从后端读权威结果。
+ *
+ * 此前读的是 `store.getStudentTier`（学生浏览器里的 localStorage），
+ * 教师机器上从来不会有学生的本地缓存，统计只能靠 mock 种子数据，
+ * 与学生端真实分层、教师端「已发作业按层级可见」对不上。
+ */
+const teacherTierMap = ref<Record<string, LearningTier>>({})
+const teacherTierLoaded = ref(false)
+
+async function loadTeacherTierMap() {
+  const next: Record<string, LearningTier> = {}
+  const courseIds = Array.from(new Set(store.enrollments.map((e) => e.courseId)))
+  await Promise.all(
+    courseIds.map(async (courseId) => {
+      const enrolled = store.enrollments.filter(
+        (e) => e.courseId === courseId && e.status !== 'dropped',
+      )
+      await Promise.all(
+        enrolled.map(async (e) => {
+          try {
+            const remote = await fetchTierTestResult(courseId, e.studentId)
+            if (remote?.tier) next[`${courseId}||${e.studentId}`] = remote.tier
+          } catch { /* 单条失败不影响整体统计 */ }
+        }),
+      )
+    }),
+  )
+  teacherTierMap.value = next
+  teacherTierLoaded.value = true
+}
+
+/** 统计某课程内各 AI 分层人数（后端结果优先，未加载完时用本地缓存兜底） */
 function getTierDistribution(courseId: string): Record<string, number> {
   const dist: Record<string, number> = { excellent: 0, advanced: 0, basic: 0, untested: 0 }
   for (const e of store.enrollments) {
     if (e.courseId !== courseId || e.status === 'dropped') continue
-    const rec = store.getStudentTier(courseId, e.studentId)
-    if (rec && rec.tier in dist) dist[rec.tier]++
+    const backendTier = teacherTierMap.value[`${courseId}||${e.studentId}`]
+    // 后端确认过「无记录」时不应再回落到 mock 本地缓存
+    const tier = backendTier
+      ?? (teacherTierLoaded.value ? undefined : store.getStudentTier(courseId, e.studentId)?.tier)
+    if (tier && tier in dist) dist[tier]++
     else dist.untested++
   }
   return dist

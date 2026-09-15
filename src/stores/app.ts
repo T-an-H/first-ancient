@@ -20,6 +20,7 @@ import {
   deleteCourse as apiDeleteCourse,
   submitQualityEvaluation as apiSubmitQualityEvaluation,
   scoreQualityEvaluation as apiScoreQualityEvaluation,
+  submitTierTest,
 } from '@/api'
 import type {
   Course, Category, Student, Schedule, Enrollment, Teacher, Grade,
@@ -2410,6 +2411,11 @@ export const useAppStore = defineStore('app', () => {
     }
     studentTiers.value = { ...studentTiers.value, [key]: record }
     saveToStorage('studentTiers', studentTiers.value)
+
+    // 同时写回后端，避免只存在于本浏览器（换设备后仍会重复分配、教师端也统计不到）
+    void submitTierTest(courseId, studentId, []).catch((error) => {
+      console.warn('AI 分层逾期自动分配写回后端失败（本地已生效）:', error)
+    })
   }
   function markConfigCompleted(courseId: string, type: 'weights' | 'evalConfig') {
     configCompleted.value = {
@@ -2628,6 +2634,37 @@ export const useAppStore = defineStore('app', () => {
     if (score >= 80) return 'excellent'
     if (score >= 60) return 'advanced'
     return 'basic'
+  }
+
+  /**
+   * 用后端权威结果覆盖本地缓存（不写库，仅同步本地）
+   *
+   * 本地 studentTiers 存在 localStorage，换设备/清缓存后会与 MySQL 脱节，
+   * 导致页面把「已考出高分层级」的学生显示成逾期自动分配的基础层。
+   * 因此学生端每次进课程页都以后端结果为准回写一次。
+   */
+  function syncStudentTierFromBackend(
+    courseId: string,
+    studentId: string,
+    tier: LearningTier,
+    score: number,
+    createdAt?: string,
+  ): StudentTierRecord {
+    const key = `${courseId}||${studentId}`
+    const record: StudentTierRecord = {
+      courseId,
+      studentId,
+      tier,
+      score,
+      createdAt: createdAt || getNow().toISOString().split('T')[0],
+    }
+    const cached = studentTiers.value[key]
+    if (cached && cached.tier === tier && cached.score === score) return cached
+    studentTiers.value = { ...studentTiers.value, [key]: record }
+    saveToStorage('studentTiers', studentTiers.value)
+    // 层级变化会影响作业可见性等派生待办
+    if (cached?.tier !== tier) generateAutoTodos()
+    return record
   }
 
   /**
@@ -2915,7 +2952,7 @@ export const useAppStore = defineStore('app', () => {
     // 待处理事务统计（红点提醒）
     hasPendingEvalForCourse, isCourseConfigPending, getMyPendingCourseIds,
     getCurrentStudent,
-    getStudentTier, determineTier, submitAITierTest,
+    getStudentTier, determineTier, submitAITierTest, syncStudentTierFromBackend,
     isAITierTestClosed, getPendingAITierTests, autoAssignOverdueBasicTier,
     // department actions
     setSelectedDepartment, getSelectedDepartment,

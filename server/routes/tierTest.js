@@ -11,6 +11,10 @@ import { generateTierTestQuestions } from '../deepseek.js';
 
 const router = Router();
 
+// --- 判分辅助函数开始 ---
+// 注意：这段被 server/lib/tierGrading.js 按标记抽出做单测，改逻辑时保留标记。
+// （曾因文件头注释里出现「const router = Router」导致按文本定位抽错内容，故改用显式标记。）
+
 /**
  * 归一化答案文本：去空格、去标点、统一大小写。
  * AI 生成的正确答案可能带「。」或全角/半角标点，前端提交的是选项原文，
@@ -23,6 +27,57 @@ function normalizeAnswer(value) {
     .replace(/\s+/g, '')
     .replace(/[，,。.!！？?；;：:、"'‘’“”()（）【】\[\]-]/g, '');
 }
+
+/**
+ * 答案等价类：把同一含义的写法归一到同一个 key，跨类比较。
+ *
+ * 必要性：front/back 两侧对判断题的表述不一致，直接全等会整段判错 —
+ * - AI 出题：prompt 要求 answer 写「正确 / 错误」
+ * - 本地兜底题库：answer 写「正确 / 错误」
+ * - 前端提交：`picked ? '正确' : '错误'`
+ * - 但模型仍可能返回 true/false、对/错、T/F、√/× 等写法
+ * 归一化后统一映射到 T/F；选择题则回落到原文比较。
+ */
+function answerKey(value) {
+  const text = normalizeAnswer(value);
+  if (!text) return '';
+  if (['正确', '对', '是', 'true', 't', 'yes', 'y', '√'].includes(text)) return 'T';
+  if (['错误', '错', '否', 'false', 'f', 'no', 'n', '×', 'x'].includes(text)) return 'F';
+  return text;
+}
+
+/**
+ * 兜底：AI 若把选择题答案写成选项序号（「B」「选项B」「2」…），
+ * 按序号取回选项原文再比较，避免整道题对所有学生恒判错。
+ */
+function resolveChoiceAnswer(expected, options) {
+  const raw = String(expected ?? '').trim();
+  if (!raw || !Array.isArray(options) || options.length === 0) return '';
+  const idxMatch = raw.match(/^(?:选项|option)?\s*([A-Za-z]|\d{1,2})$/) || raw.match(/^([A-Za-z]|\d{1,2})[.、)]$/);
+  if (!idxMatch) return '';
+  const token = idxMatch[1];
+  let idx = /^\d/.test(token) ? Number(token) - 1 : token.toUpperCase().charCodeAt(0) - 65;
+  if (!Number.isInteger(idx) || idx < 0 || idx >= options.length) return '';
+  return String(options[idx]);
+}
+
+/**
+ * 存库前把答案规范化成「选项原文」：
+ * - 判断题：对/错、true/false 等一律写成选项数组里的那两个字，保证与前端提交值同构
+ * - 选择题：答案是序号时还原成选项原文
+ * 这样落库的 answer 与判分口径一致，避免两处逻辑分叉。
+ */
+function canonicalAnswer(answer, options) {
+  const raw = String(answer ?? '').trim();
+  if (!Array.isArray(options) || options.length === 0) return raw;
+  const key = answerKey(raw);
+  if (key === 'T' || key === 'F') {
+    const hit = options.find(o => answerKey(o) === key);
+    if (hit) return String(hit);
+  }
+  return resolveChoiceAnswer(raw, options) || raw;
+}
+// --- 判分辅助函数结束 ---
 
 /**
  * GET /api/tier-test/:courseId/questions
@@ -77,6 +132,12 @@ router.get('/:courseId/questions', async (req, res) => {
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
       const qId = `tq-${courseId}-${i}-${Date.now()}`;
+      const options = q.options && q.options.length ? q.options : ['正确', '错误'];
+      const answer = canonicalAnswer(q.answer, options);
+      // 答案对不上任何选项 → 该题对所有学生恒判错，落日志便于发现题库问题
+      if (!options.some(o => answerKey(o) === answerKey(answer))) {
+        console.warn(`[分层测试] 题目 ${qId} 的答案无法匹配任何选项，该题将恒判错：answer=${JSON.stringify(q.answer)} options=${JSON.stringify(options)}`);
+      }
       await pool.execute(
         'INSERT INTO tier_test_questions (id, course_id, question_type, question_text, options, answer, score, order_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [
@@ -84,8 +145,8 @@ router.get('/:courseId/questions', async (req, res) => {
           courseId,
           q.question_type,
           q.question_text,
-          JSON.stringify(q.options || ['正确', '错误']),
-          String(q.answer),
+          JSON.stringify(options),
+          answer,
           q.score || 10,
           i,
         ]
@@ -150,13 +211,27 @@ router.post('/:courseId/submit', async (req, res) => {
       return res.status(400).json({ success: false, message: '还没有分层测试题目' });
     }
 
-    // 判分（选择题/判断题直接比对，忽略空格、大小写与标点，避免「正确。」这类差异误判）
+    // 判分：选择题/判断题比对答案原文，忽略空格、大小写与标点，
+    // 且判断题在「正确/错误」「对/错」「true/false」「T/F」之间互相等价
     let totalScore = 0;
     const details = questions.map(q => {
       const studentAns = answers.find(a => a.questionId === q.id);
-      const studentText = normalizeAnswer(studentAns?.answerText);
-      const correctText = normalizeAnswer(q.answer);
-      const isCorrect = Boolean(studentText) && studentText === correctText;
+      const studentKey = studentAns?.answerText ? answerKey(studentAns.answerText) : '';
+      const rawCorrect = String(q.answer ?? '').trim();
+
+      const options = typeof q.options === 'string'
+        ? (() => { try { return JSON.parse(q.options); } catch { return []; } })()
+        : q.options;
+
+      // 主比较：答案原文（判断题经 answerKey 归一后跨写法等价）
+      let isCorrect = Boolean(studentKey) && studentKey === answerKey(rawCorrect);
+
+      // 兜底：答案写成选项序号时，按序号取回选项原文再比一次
+      if (!isCorrect) {
+        const resolved = resolveChoiceAnswer(rawCorrect, options);
+        if (resolved) isCorrect = studentKey === answerKey(resolved);
+      }
+
       const score = isCorrect ? (q.score || 10) : 0;
       totalScore += score;
       return { questionId: q.id, isCorrect, score, correctAnswer: q.answer, studentAnswer: studentAns?.answerText || '' };
