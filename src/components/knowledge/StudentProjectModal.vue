@@ -59,11 +59,11 @@
           <p class="text-xs text-gray-400">点击资料查看后将自动记录预习进度，教师端可查看同学预习情况。</p>
         </div>
 
-        <!-- ===== 2. 工单 ===== -->
+        <!-- ===== 2. 测试 ===== -->
         <div v-if="activeSection === 'workorder'" class="space-y-4">
           <div>
-            <h5 class="text-sm font-semibold text-gray-700 mb-2">教师上传的本节课工单</h5>
-            <div v-if="files.workorder.length === 0" class="text-center py-6 text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">暂无工单</div>
+            <h5 class="text-sm font-semibold text-gray-700 mb-2">教师上传的本节课测试</h5>
+            <div v-if="files.workorder.length === 0" class="text-center py-6 text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">暂无测试</div>
             <div v-else class="space-y-2">
               <div v-for="(f, i) in files.workorder" :key="f.id || i" class="flex items-center gap-3 p-3 rounded-lg border border-gray-100">
                 <FileText class="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -78,7 +78,7 @@
 
           <div class="border-t border-gray-100 pt-4">
             <div class="flex items-center justify-between mb-2">
-              <h5 class="text-sm font-semibold text-gray-700">我的工单提交</h5>
+              <h5 class="text-sm font-semibold text-gray-700">我的测试提交</h5>
               <span v-if="myWorkorderScore !== null" class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">得分 {{ myWorkorderScore }} 分</span>
             </div>
             <div v-if="mySubmission('workorder')" class="mb-3">
@@ -99,10 +99,10 @@
               </button>
               <button @click="submitWorkorder" :disabled="myWorkorderDraft.length === 0"
                 class="px-3.5 py-2 text-xs font-medium rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed">
-                提交工单
+                提交测试
               </button>
             </div>
-            <p class="text-xs text-gray-400 mt-2">下载工单并完成后上传提交，教师批改后可见得分。</p>
+            <p class="text-xs text-gray-400 mt-2">下载测试并完成后上传提交，教师批改后可见得分。</p>
           </div>
         </div>
 
@@ -128,11 +128,11 @@
           <p class="text-xs text-gray-400">点击资料查看后将自动记录查看情况，教师端可查看同学们的学习情况。</p>
         </div>
 
-        <!-- ===== 4. 测试题目 ===== -->
+        <!-- ===== 4. 工单 ===== -->
         <div v-if="activeSection === 'test'" class="space-y-4">
           <div>
-            <h5 class="text-sm font-semibold text-gray-700 mb-2">教师上传的测试题目</h5>
-            <div v-if="files.test.length === 0" class="text-center py-6 text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">暂无测试题目</div>
+            <h5 class="text-sm font-semibold text-gray-700 mb-2">教师上传的工单</h5>
+            <div v-if="files.test.length === 0" class="text-center py-6 text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">暂无工单</div>
             <div v-else class="space-y-2">
               <div v-for="(f, i) in files.test" :key="f.id || i" class="flex items-center gap-3 p-3 rounded-lg border border-gray-100">
                 <FileText class="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -173,7 +173,7 @@
                 提交测试
               </button>
             </div>
-            <p class="text-xs text-gray-400 mt-2">完成测试题目后提交作答，教师批改后可见得分与评价。</p>
+            <p class="text-xs text-gray-400 mt-2">完成工单后提交作答，教师批改后可见得分与评价。</p>
           </div>
 
           <div class="border-t border-gray-100 pt-4">
@@ -313,9 +313,9 @@ const studentRadarData = computed(() =>
 
 const sections = [
   { key: 'preview', label: '预习资料', icon: BookOpen },
-  { key: 'workorder', label: '工单', icon: Wrench },
+  { key: 'workorder', label: '测试', icon: Wrench },
   { key: 'material', label: '本节课资料', icon: ClipboardCheck },
-  { key: 'test', label: '测试题目', icon: FileQuestion },
+  { key: 'test', label: '工单', icon: FileQuestion },
   { key: 'eval', label: '评教', icon: Star },
 ]
 const activeSection = ref('preview')
@@ -370,7 +370,7 @@ async function markViewed(type: string, f: any) {
   } catch { /* 静默失败不影响查看 */ }
 }
 
-// ===== 工单/测试提交 =====
+// ===== 测试/工单提交 =====
 const workorderInput = ref<HTMLInputElement | null>(null)
 const testInput = ref<HTMLInputElement | null>(null)
 const workorderDraft = ref<{ name: string; size: number; dataUrl: string }[]>([])
@@ -405,7 +405,7 @@ async function submitWorkorder() {
     })
     workorderDraft.value = []
     await loadProgress()
-    alert('工单提交成功')
+    alert('测试提交成功')
   } catch (err: any) { alert('提交失败：' + (err.message || err)) }
 }
 
@@ -470,7 +470,10 @@ const evalFormValid = computed(() => {
 
 function setRatingAnswer(index: number, e: Event) {
   const raw = (e.target as HTMLInputElement).value
-  evalAnswers.value[index] = raw === '' ? '' : Number(raw)
+  if (raw === '') { evalAnswers.value[index] = ''; return }
+  const parsed = Number(raw)
+  if (Number.isNaN(parsed)) { evalAnswers.value[index] = ''; return }
+  evalAnswers.value[index] = Math.min(10, Math.max(1, parsed))
 }
 
 async function loadQuestionnaire() {

@@ -86,21 +86,21 @@
           </div>
         </div>
 
-        <!-- ===== 2 工单 ===== -->
+        <!-- ===== 2 测试 ===== -->
         <div v-if="activeSection === 'workorder'">
           <div class="flex items-center justify-between mb-4">
             <div>
-              <h4 class="font-semibold text-gray-900">本节课工单</h4>
-              <p class="text-xs text-gray-400 mt-0.5">教师上传工单，学生下载完成后提交，教师批改打分</p>
+              <h4 class="font-semibold text-gray-900">本节课测试</h4>
+              <p class="text-xs text-gray-400 mt-0.5">教师上传测试，学生下载完成后提交，教师批改打分</p>
             </div>
             <div v-if="canManage" class="flex items-center gap-2">
               <input ref="workorderFileInput" type="file" class="hidden" multiple @change="onFileChange('workorder', $event)" />
               <button @click="workorderFileInput?.click()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
-                <Upload class="w-3.5 h-3.5" /> 上传工单
+                <Upload class="w-3.5 h-3.5" /> 上传测试
               </button>
             </div>
           </div>
-          <div v-if="files.workorder.length === 0" class="text-center py-8 text-gray-400 text-sm">暂无工单</div>
+          <div v-if="files.workorder.length === 0" class="text-center py-8 text-gray-400 text-sm">暂无测试</div>
           <ul v-else class="space-y-1.5 mb-4">
             <li v-for="f in files.workorder" :key="f.id" class="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
               <FileText class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
@@ -188,21 +188,21 @@
           </div>
         </div>
 
-        <!-- ===== 4 测试题目 ===== -->
+        <!-- ===== 4 工单 ===== -->
         <div v-if="activeSection === 'test'">
           <div class="flex items-center justify-between mb-4">
             <div>
-              <h4 class="font-semibold text-gray-900">测试题目</h4>
-              <p class="text-xs text-gray-400 mt-0.5">教师上传测试题，学生完成后批改评分（评价体系与任务管理一致）</p>
+              <h4 class="font-semibold text-gray-900">工单</h4>
+              <p class="text-xs text-gray-400 mt-0.5">教师上传工单，学生完成后批改评分（评价体系与任务管理一致）</p>
             </div>
             <div v-if="canManage" class="flex items-center gap-2">
               <input ref="testFileInput" type="file" class="hidden" multiple @change="onFileChange('test', $event)" />
               <button @click="testFileInput?.click()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
-                <Upload class="w-3.5 h-3.5" /> 上传测试题目
+                <Upload class="w-3.5 h-3.5" /> 上传工单
               </button>
             </div>
           </div>
-          <div v-if="files.test.length === 0" class="text-center py-8 text-gray-400 text-sm">暂无测试题目</div>
+          <div v-if="files.test.length === 0" class="text-center py-8 text-gray-400 text-sm">暂无工单</div>
           <ul v-else class="space-y-1.5 mb-4">
             <li v-for="f in files.test" :key="f.id" class="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
               <FileText class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
@@ -363,7 +363,7 @@
       </div>
     </div>
 
-    <!-- 测试题目：教师/企业导师分项评价 -->
+    <!-- 工单：教师/企业导师分项评价 -->
     <div v-if="showTestEvalModal" class="fixed inset-0 z-[65] flex items-center justify-center">
       <div class="absolute inset-0 bg-black/50" @click="closeTestEval" />
       <div class="relative w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl">
@@ -378,21 +378,30 @@
           <div
             v-for="(item, index) in getEvalItemDefinitions(activeEvalType)"
             :key="index"
-            class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2"
+            class="rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2"
           >
-            <span class="text-sm text-gray-700">{{ item.label }} ：</span>
-            <div class="flex items-center gap-1">
-              <input
-                type="number"
-                min="0"
-                :max="item.max"
-                :value="testEvalDraft[index] ?? ''"
-                @input="setTestEvalScore(index, $event)"
-                placeholder="填写分数"
-                class="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-center text-sm outline-none focus:border-indigo-500"
-              />
-              <span class="text-xs text-gray-400">/ {{ item.max }}</span>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-sm text-gray-700">{{ item.label }} ：</span>
+              <div class="flex items-center gap-1">
+                <input
+                  type="number"
+                  min="0"
+                  :max="item.max"
+                  :value="testEvalDraft[index] ?? ''"
+                  @input="setTestEvalScore(index, $event)"
+                  placeholder="填写分数"
+                  class="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-center text-sm outline-none focus:border-indigo-500"
+                />
+                <span class="text-xs text-gray-400">/ {{ item.max }}</span>
+              </div>
             </div>
+            <input
+              type="text"
+              :value="testEvalRemarks[index] ?? ''"
+              @input="setTestEvalRemark(index, $event)"
+              placeholder="备注（选填）"
+              class="mt-1.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-600 outline-none focus:border-indigo-400"
+            />
           </div>
           <p class="text-right text-sm font-medium text-gray-800">合计：{{ testEvalTotal }} 分</p>
           <p v-if="testEvalError" class="text-right text-xs text-red-500">{{ testEvalError }}</p>
@@ -440,9 +449,9 @@ const projectEvalSession = computed(() => Number(props.project?.orderNo ?? 0) + 
 
 const sections = [
   { key: 'preview', label: '预习资料', icon: BookOpen },
-  { key: 'workorder', label: '工单', icon: Wrench },
+  { key: 'workorder', label: '测试', icon: Wrench },
   { key: 'material', label: '本节课资料', icon: ClipboardCheck },
-  { key: 'test', label: '测试题目', icon: FileQuestion },
+  { key: 'test', label: '工单', icon: FileQuestion },
   { key: 'eval', label: '评教', icon: Star },
 ]
 const activeSection = ref('preview')
@@ -532,7 +541,7 @@ const materialDoneCount = computed(() => progressByType('material').length)
 const workorderSubmittedCount = computed(() => progressByType('workorder').length)
 const testSubmittedCount = computed(() => progressByType('test').length)
 
-// 工单/测试批改
+// 测试/工单批改
 const workorderScores = ref<Record<string, number | string>>({})
 const testScores = ref<Record<string, number | string>>({})
 function getWorkorderSubmission(sid: string) { return getProgressRecord(sid, 'workorder') }
@@ -547,7 +556,7 @@ function getTestScore(sid: string) {
 }
 async function saveWorkorderScore(studentId: string) {
   const rec = getProgressRecord(studentId, 'workorder')
-  if (!rec) { alert('该学生尚未提交工单'); return }
+  if (!rec) { alert('该学生尚未提交测试'); return }
   try {
     await javaGradeProjectProgress(rec.id, { score: Number(workorderScores.value[studentId]) })
     await loadProgress()
@@ -562,10 +571,11 @@ async function saveTestScore(studentId: string) {
   } catch (err: any) { alert('评分失败：' + (err.message || err)) }
 }
 
-// ===== 测试题目分项评价（教师/企业导师） =====
+// ===== 工单分项评价（教师/企业导师） =====
 const showTestEvalModal = ref(false)
 const testEvalStudent = ref<{ id: string; name: string } | null>(null)
 const testEvalDraft = ref<EvalScoreDraftValue[]>([])
+const testEvalRemarks = ref<string[]>([])
 const testEvalError = ref('')
 
 const testEvalTotal = computed(() =>
@@ -596,6 +606,7 @@ function openTestEval(student: { id: string; name: string }) {
     const saved = existing?.items?.[index]
     return saved && saved.score !== undefined ? saved.score : ''
   })
+  testEvalRemarks.value = defs.map((item, index) => existing?.items?.[index]?.remark || '')
   showTestEvalModal.value = true
 }
 
@@ -603,14 +614,21 @@ function closeTestEval() {
   showTestEvalModal.value = false
   testEvalStudent.value = null
   testEvalDraft.value = []
+  testEvalRemarks.value = []
   testEvalError.value = ''
 }
 
 function setTestEvalScore(index: number, e: Event) {
   const raw = (e.target as HTMLInputElement).value
   const parsed = Number(raw)
-  const next: EvalScoreDraftValue = raw === '' || Number.isNaN(parsed) ? '' : parsed
+  const max = getEvalItemDefinitions(activeEvalType.value)[index]?.max ?? 100
+  const next: EvalScoreDraftValue = raw === '' || Number.isNaN(parsed) ? '' : Math.min(max, Math.max(0, parsed))
   testEvalDraft.value = testEvalDraft.value.map((value, i) => (i === index ? next : value))
+}
+
+function setTestEvalRemark(index: number, e: Event) {
+  const raw = (e.target as HTMLInputElement).value
+  testEvalRemarks.value = testEvalRemarks.value.map((value, i) => (i === index ? raw : value))
 }
 
 function saveTestEval() {
@@ -627,7 +645,7 @@ function saveTestEval() {
     return
   }
 
-  const items = evalItemsFromDraft(defs, testEvalDraft.value)
+  const items = evalItemsFromDraft(defs, testEvalDraft.value, testEvalRemarks.value)
   const score = scoreFromEvalDraft(defs, testEvalDraft.value)
   const existing = store.evaluations.find(
     (e) => e.courseId === props.courseId && e.studentId === student.id &&

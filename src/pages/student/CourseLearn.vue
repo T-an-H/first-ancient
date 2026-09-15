@@ -206,7 +206,7 @@
             </template>
           </Modal>
 
-          <!-- ===== 课程图谱（项目/预习/工单/资料/测试/评教） ===== -->
+          <!-- ===== 课程图谱（项目/预习/测试/资料/工单/评教） ===== -->
           <div v-if="activeTab === 'course-mgmt'" class="space-y-4">
             <KnowledgeGraph :course-id="courseId" :students="[]" :can-manage="false" :student-mode="true" :my-student-id="myStudent?.id || ''" />
           </div>

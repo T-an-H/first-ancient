@@ -60,21 +60,30 @@
                 <div
                   v-for="(item, itemIndex) in getEvalItemDefinitions('self')"
                   :key="itemIndex"
-                  class="flex items-center justify-between gap-3 rounded bg-white/70 border border-brand-400/20 px-3 py-2"
+                  class="rounded bg-white/70 border border-brand-400/20 px-3 py-2"
                 >
-                  <span class="text-xs text-gray-800">{{ item.label }} ：</span>
-                  <div class="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min="0"
-                      :max="item.max"
-                      :value="selfItemDraft[itemIndex] ?? ''"
-                      @input="setSelfItemScore(itemIndex, $event)"
-                      placeholder="填写分数"
-                      class="w-24 rounded border border-gray-200 px-2 py-1 text-center text-sm outline-none focus:border-blue-500"
-                    />
-                    <span class="text-xs text-gray-400">/ {{ item.max }} 分</span>
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="text-xs text-gray-800">{{ item.label }} ：</span>
+                    <div class="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        :max="item.max"
+                        :value="selfItemDraft[itemIndex] ?? ''"
+                        @input="setSelfItemScore(itemIndex, $event)"
+                        placeholder="填写分数"
+                        class="w-24 rounded border border-gray-200 px-2 py-1 text-center text-sm outline-none focus:border-blue-500"
+                      />
+                      <span class="text-xs text-gray-400">/ {{ item.max }} 分</span>
+                    </div>
                   </div>
+                  <input
+                    type="text"
+                    :value="selfItemRemarks[itemIndex] ?? ''"
+                    @input="setSelfItemRemark(itemIndex, $event)"
+                    placeholder="备注（选填）"
+                    class="mt-1.5 w-full rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 outline-none focus:border-blue-400"
+                  />
                 </div>
                 <p v-if="validationErrors.self" class="text-xs text-brand-600">{{ validationErrors.self }}</p>
                 <p class="text-right text-xs font-medium text-gray-700">合计：{{ selfItemTotal }} 分</p>
@@ -83,9 +92,12 @@
               <!-- 教师/企业导师评价：查看 -->
               <div v-else-if="type === 'teacher' || type === 'mentor'" class="space-y-1.5">
                 <template v-if="record?.items?.length">
-                  <div v-for="(item, itemIndex) in record.items" :key="itemIndex" class="flex items-center justify-between text-xs">
-                    <span class="text-gray-700">{{ item.label }}：</span>
-                    <span class="font-medium text-gray-900">{{ item.score }} 分</span>
+                  <div v-for="(item, itemIndex) in record.items" :key="itemIndex" class="text-xs">
+                    <div class="flex items-center justify-between">
+                      <span class="text-gray-700">{{ item.label }}：</span>
+                      <span class="font-medium text-gray-900">{{ item.score }} 分</span>
+                    </div>
+                    <p v-if="item.remark" class="text-gray-400 pl-2 mt-0.5">备注：{{ item.remark }}</p>
                   </div>
                   <div class="flex items-center justify-between border-t border-brand-400/10 pt-1 text-xs font-semibold text-gray-800">
                     <span>合计</span>
@@ -112,21 +124,30 @@
                       <div
                         v-for="(item, itemIndex) in getEvalItemDefinitions(type)"
                         :key="itemIndex"
-                        class="flex items-center justify-between gap-3"
+                        class="rounded border border-gray-100 px-2 py-1.5"
                       >
-                        <span class="text-xs text-gray-700">{{ item.label }} ：</span>
-                        <div class="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min="0"
-                            :max="item.max"
-                            :value="getPeerItemScore(type, target.key, itemIndex)"
-                            @input="setPeerItemScore(type, target.key, itemIndex, $event)"
-                            placeholder="填写分数"
-                            class="w-24 rounded border border-gray-200 px-2 py-1 text-center text-xs outline-none focus:border-blue-500"
-                          />
-                          <span class="text-[11px] text-gray-400">/ {{ item.max }}</span>
+                        <div class="flex items-center justify-between gap-3">
+                          <span class="text-xs text-gray-700">{{ item.label }} ：</span>
+                          <div class="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              :max="item.max"
+                              :value="getPeerItemScore(type, target.key, itemIndex)"
+                              @input="setPeerItemScore(type, target.key, itemIndex, $event)"
+                              placeholder="填写分数"
+                              class="w-24 rounded border border-gray-200 px-2 py-1 text-center text-xs outline-none focus:border-blue-500"
+                            />
+                            <span class="text-[11px] text-gray-400">/ {{ item.max }}</span>
+                          </div>
                         </div>
+                        <input
+                          type="text"
+                          :value="getPeerItemRemark(type, target.key, itemIndex)"
+                          @input="setPeerItemRemark(type, target.key, itemIndex, $event)"
+                          placeholder="备注（选填）"
+                          class="mt-1 w-full rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 outline-none focus:border-blue-400"
+                        />
                       </div>
                       <p class="text-right text-[11px] font-medium text-gray-700">合计：{{ getPeerItemTotal(type, target.key) }} 分</p>
                     </div>
@@ -242,6 +263,8 @@ function openEvalModal(session: number) {
   store.autoLockPreviousSession(props.courseId, session)
   selfItemDraft.value = createEmptyEvalDraft('self')
   peerItemDrafts.value = {}
+  selfItemRemarks.value = []
+  peerItemRemarks.value = {}
   validationErrors.value = {}
   submitError.value = ''
   evalModalOpen.value = true
@@ -273,6 +296,8 @@ const modalAnomalies = computed(() => {
 // ===== 分项评分草稿 =====
 const selfItemDraft = ref<EvalScoreDraftValue[]>([])
 const peerItemDrafts = ref<Record<string, EvalScoreDraftValue[]>>({})
+const selfItemRemarks = ref<string[]>([])
+const peerItemRemarks = ref<Record<string, string[]>>({})
 
 function getPeerItemDraft(type: EvalType, key: string) {
   if (!peerItemDrafts.value[key]) {
@@ -288,6 +313,11 @@ function setSelfItemScore(index: number, e: Event) {
   selfItemDraft.value = selfItemDraft.value.map((value, i) => (i === index ? next : value))
 }
 
+function setSelfItemRemark(index: number, e: Event) {
+  const raw = (e.target as HTMLInputElement).value
+  selfItemRemarks.value = selfItemRemarks.value.map((value, i) => (i === index ? raw : value))
+}
+
 function getPeerItemScore(type: EvalType, key: string, index: number): EvalScoreDraftValue {
   return getPeerItemDraft(type, key)[index] ?? ''
 }
@@ -299,6 +329,24 @@ function setPeerItemScore(type: EvalType, key: string, index: number, e: Event) 
   const draft = getPeerItemDraft(type, key)
   draft[index] = next
   peerItemDrafts.value = { ...peerItemDrafts.value, [key]: draft }
+}
+
+function getPeerItemRemarks(type: EvalType, key: string): string[] {
+  if (!peerItemRemarks.value[key]) {
+    peerItemRemarks.value[key] = getEvalItemDefinitions(type).map(() => '')
+  }
+  return peerItemRemarks.value[key]
+}
+
+function getPeerItemRemark(type: EvalType, key: string, index: number): string {
+  return getPeerItemRemarks(type, key)[index] ?? ''
+}
+
+function setPeerItemRemark(type: EvalType, key: string, index: number, e: Event) {
+  const raw = (e.target as HTMLInputElement).value
+  const remarks = getPeerItemRemarks(type, key)
+  remarks[index] = raw
+  peerItemRemarks.value = { ...peerItemRemarks.value, [key]: remarks }
 }
 
 function getPeerItemTotal(type: EvalType, key: string) {
@@ -464,10 +512,11 @@ function handleModalSubmit() {
     for (const target of getPeerTargets(type)) {
       if (hasSubmittedPeerFor(target)) continue
       const draft = getPeerItemDraft(type, target.key)
+      const remarks = getPeerItemRemarks(type, target.key)
       if (type === 'intra_group' && target.studentId) {
-        submitPeerEval(target.studentId, session, type, draft)
+        submitPeerEval(target.studentId, session, type, draft, remarks)
       } else if (type === 'inter_group' && target.memberIds) {
-        submitGroupEval(target, session, draft)
+        submitGroupEval(target, session, draft, remarks)
       }
     }
   }
@@ -492,7 +541,7 @@ function getSessionEvals(session: number) {
 function handleSelfSubmit(sessionNumber: number) {
   const existing = getEvalForType(sessionNumber, 'self')
   const defs = getEvalItemDefinitions('self')
-  const items = evalItemsFromDraft(defs, selfItemDraft.value)
+  const items = evalItemsFromDraft(defs, selfItemDraft.value, selfItemRemarks.value)
   const score = scoreFromEvalDraft(defs, selfItemDraft.value)
   const ev: Evaluation = {
     id: existing ? existing.id : `ev-${Date.now()}`,
@@ -514,13 +563,13 @@ function handleSelfSubmit(sessionNumber: number) {
   store.markEvalReminderCompleted(props.courseId, props.studentId, sessionNumber)
 }
 
-function submitPeerEval(targetId: string, session: number, type: EvalType, draft: EvalScoreDraftValue[]) {
+function submitPeerEval(targetId: string, session: number, type: EvalType, draft: EvalScoreDraftValue[], remarks: string[]) {
   const existing = store.evaluations.find(
     (e) => e.courseId === props.courseId && e.studentId === targetId &&
       e.sessionNumber === session && e.type === type && e.evaluatorId === props.studentId
   )
   const defs = getEvalItemDefinitions(type)
-  const items = evalItemsFromDraft(defs, draft)
+  const items = evalItemsFromDraft(defs, draft, remarks)
   const score = scoreFromEvalDraft(defs, draft)
   const ev: Evaluation = {
     id: existing ? existing.id : `ev-peer-${Date.now()}-${targetId}`,
@@ -541,9 +590,9 @@ function submitPeerEval(targetId: string, session: number, type: EvalType, draft
   }
 }
 
-function submitGroupEval(target: PeerTarget, session: number, draft: EvalScoreDraftValue[]) {
+function submitGroupEval(target: PeerTarget, session: number, draft: EvalScoreDraftValue[], remarks: string[]) {
   const defs = getEvalItemDefinitions(target.type as EvalType)
-  const items = evalItemsFromDraft(defs, draft)
+  const items = evalItemsFromDraft(defs, draft, remarks)
   const score = scoreFromEvalDraft(defs, draft)
   target.memberIds!.forEach((mid) => {
     const existing = store.evaluations.find(

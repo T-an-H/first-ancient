@@ -394,21 +394,30 @@
               <div
                 v-for="(item, index) in getEvalItemDefinitions(evalCriteriaType)"
                 :key="index"
-                class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2"
+                class="rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2"
               >
-                <span class="text-sm text-gray-700">{{ item.label }} ：</span>
-                <div class="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min="0"
-                    :max="item.max"
-                    :value="evalCriteriaDraft[index] ?? ''"
-                    @input="setEvalCriteriaScore(index, $event)"
-                    placeholder="填写分数"
-                    class="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-center text-sm outline-none focus:border-blue-500"
-                  />
-                  <span class="text-xs text-gray-400">/ {{ item.max }}</span>
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-sm text-gray-700">{{ item.label }} ：</span>
+                  <div class="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="0"
+                      :max="item.max"
+                      :value="evalCriteriaDraft[index] ?? ''"
+                      @input="setEvalCriteriaScore(index, $event)"
+                      placeholder="填写分数"
+                      class="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-center text-sm outline-none focus:border-blue-500"
+                    />
+                    <span class="text-xs text-gray-400">/ {{ item.max }}</span>
+                  </div>
                 </div>
+                <input
+                  type="text"
+                  :value="evalCriteriaRemarks[index] ?? ''"
+                  @input="setEvalCriteriaRemark(index, $event)"
+                  placeholder="备注（选填）"
+                  class="mt-1.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-600 outline-none focus:border-blue-400"
+                />
               </div>
               <p class="text-right text-sm font-medium text-gray-800">合计：{{ evalCriteriaTotal }} 分</p>
               <p v-if="evalCriteriaError" class="text-right text-xs text-red-500">{{ evalCriteriaError }}</p>
@@ -429,7 +438,7 @@
       </Teleport>
     </div>
 
-    <!-- Tab: 课程管理（知识图谱） -->
+    <!-- Tab: 课程任务与评价 -->
     <div v-if="activeTab === 'course-mgmt'" class="space-y-6">
       <KnowledgeGraph :course-id="courseId" :students="kgStudents" :can-manage="canManageProjects" :eval-type="isMentor ? 'mentor' : 'teacher'" />
     </div>
@@ -886,6 +895,182 @@
       </div>
     </div>
 
+    <!-- Tab: 综合评价（课程级聚合，仿学生端） -->
+    <div v-if="activeTab === 'grade-overview'" class="space-y-6">
+      <!-- 班级/分组筛选 -->
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="relative w-56">
+          <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+          <input v-model="compStudentSearch" type="text" placeholder="搜索学号或姓名查看某学生情况..."
+            class="w-full pl-8 pr-3 py-1.5 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-xs" />
+        </div>
+        <select v-model="compFilterClass" class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:border-blue-500 outline-none bg-white">
+          <option value="">全部班级</option>
+          <option v-for="opt in gradeClassOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
+        <select v-model="compFilterGroup" class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:border-blue-500 outline-none bg-white">
+          <option value="">全部分组</option>
+          <option v-for="g in compGroupOptions" :key="g.id" :value="g.groupName">{{ g.groupName }}</option>
+        </select>
+        <span class="text-xs text-gray-400">参评学生 {{ compStudents.length }} 人</span>
+        <span v-if="compStudentSearch.trim()" class="text-xs text-blue-500">已按"{{ compStudentSearch.trim() }}"筛选</span>
+      </div>
+
+        <div v-if="compSessions.length === 0" class="bg-white rounded-xl border border-gray-100 shadow-sm p-10 text-center">
+          <BarChart3 class="w-12 h-12 text-gray-200 mx-auto mb-3" />
+          <p class="text-sm text-gray-400">暂无评价数据</p>
+        </div>
+
+        <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- 左列 -->
+          <div class="space-y-6">
+            <!-- 综合评分卡片 -->
+            <div class="bg-gradient-to-br from-blue-600 via-indigo-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg border border-blue-500/20">
+              <div class="flex items-center justify-between mb-5">
+                <div>
+                  <p class="text-blue-100/80 text-xs mb-2 tracking-wide">
+                    {{ compSelectedSession === null ? '最终综合评分' : `第 ${compSelectedSession} 次综合评分` }}
+                  </p>
+                  <p class="text-4xl font-bold leading-none">
+                    {{ compCurrentScore ?? '-' }}<span class="text-lg text-blue-200/80 ml-1 font-medium">分</span>
+                  </p>
+                  <p class="text-blue-100/60 text-xs mt-2">全班参评学生平均</p>
+                </div>
+                <div class="text-right bg-white/10 rounded-xl px-4 py-3 border border-white/10">
+                  <p class="text-blue-100/70 text-xs mb-1">参评人数</p>
+                  <p class="text-2xl font-semibold">{{ compStudents.length }}<span class="text-xs text-blue-200/80 ml-0.5">人</span></p>
+                </div>
+              </div>
+              <div class="relative h-2.5 bg-white/15 rounded-full overflow-hidden">
+                <div v-if="compCurrentScore !== null" class="h-full rounded-full bg-gradient-to-r from-emerald-300 to-emerald-400 transition-all"
+                  :style="{ width: Math.min(compCurrentScore, 100) + '%' }" />
+              </div>
+            </div>
+
+            <!-- 次数选择器 -->
+            <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+              <h3 class="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5">
+                <Calendar class="w-4 h-4 text-blue-500" /> 查看各次评价
+              </h3>
+              <div class="flex flex-wrap gap-2">
+                <button @click="compSelectedSession = null"
+                  class="px-4 py-2 rounded-full text-sm font-medium transition-all border"
+                  :class="compSelectedSession === null ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'">
+                  最终
+                  <span v-if="compFinalScore !== null" class="ml-1 font-bold">({{ compFinalScore }})</span>
+                </button>
+                <button v-for="s in compSessionScores" :key="s.session"
+                  @click="compSelectedSession = s.session"
+                  class="px-4 py-2 rounded-full text-sm font-medium transition-all border"
+                  :class="compSelectedSession === s.session ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'">
+                  第{{ s.session }}次
+                  <span v-if="s.score !== null" class="ml-1 font-bold">({{ s.score }})</span>
+                  <span v-else class="ml-1 text-gray-300">(-)</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 评价维度细分 -->
+            <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+              <h3 class="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-1.5">
+                <BarChart3 class="w-4 h-4 text-blue-500" /> 评价维度细分
+                <span class="text-xs font-normal text-gray-400 ml-1">· {{ compSelectedSession === null ? '全部平均' : `第 ${compSelectedSession} 次` }}</span>
+              </h3>
+              <div class="space-y-3">
+                <div v-for="dim in compDimensions" :key="dim.label" class="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50/50">
+                  <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-600/15">
+                    <component :is="dim.icon" class="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-900">{{ dim.label }}</p>
+                    <div class="flex items-center gap-2 mt-1.5">
+                      <div class="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                        <div class="h-full rounded-full bg-blue-600 transition-all duration-500" :style="{ width: dim.score + '%' }" />
+                      </div>
+                      <span class="text-xs font-bold text-blue-600 w-12 text-right">{{ dim.score }}<span class="text-gray-400 font-normal">/100</span></span>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="compDimensions.length === 0" class="text-center py-6 text-gray-400">暂无分项评价数据</div>
+              </div>
+            </div>
+
+            <!-- 能力雷达 -->
+            <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+              <h3 class="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-1.5">
+                <Network class="w-4 h-4 text-blue-500" /> 能力雷达
+              </h3>
+              <RadarChart :labels="compRadarData.labels" :values="compRadarData.values" :count="compRadarData.count" empty-text="暂无分项评价数据，评分后自动生成雷达图。" />
+            </div>
+
+            <!-- 成绩权重说明 -->
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-200 text-sm text-blue-800 shadow-sm">
+              <p class="font-semibold mb-2 flex items-center gap-1.5"><PieChart class="w-4 h-4 text-blue-600" /> 成绩构成</p>
+              <p>总成绩 = 平时成绩({{ gradeConfig.regularWeight }}%) + 期中成绩({{ gradeConfig.midtermWeight }}%) + 期末成绩({{ gradeConfig.finalWeight }}%)</p>
+              <p class="text-xs text-blue-700 mt-1.5 leading-relaxed">
+                平时成绩构成：个人自评({{ gradeConfig.selfEvalWeight }}%) + 小组内互评({{ gradeConfig.peerReviewWeight }}%) + 小组间互评({{ gradeConfig.interGroupEvalWeight }}%) + 教师评价({{ gradeConfig.teacherScoreWeight }}%) + 企业导师评价({{ gradeConfig.mentorScoreWeight }}%)
+              </p>
+            </div>
+          </div>
+
+          <!-- 右列：增值评价 -->
+          <div class="space-y-6">
+            <div class="bg-gradient-to-br from-blue-600 via-indigo-600 to-indigo-700 rounded-2xl p-5 border border-blue-500/20 text-white shadow-lg">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center border border-white/10">
+                  <TrendingUp class="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 class="text-lg font-semibold text-white">增值评价</h3>
+                  <p class="text-blue-100/70 text-xs mt-0.5">课程学业成长趋势</p>
+                </div>
+              </div>
+              <p class="text-blue-100/80 text-sm mt-3 leading-relaxed">基于本课程历次评价数据，分析全班学业进步趋势。</p>
+            </div>
+
+            <div v-if="compValueAdded.length > 0" class="space-y-6">
+              <div class="grid grid-cols-3 gap-4">
+                <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                  <p class="text-xs text-gray-400 mb-1.5">当前得分</p>
+                  <p class="text-2xl font-bold text-gray-900">{{ compValueAdded[compValueAdded.length - 1].score }}</p>
+                  <p class="text-xs text-gray-400 mt-1">第{{ compValueAdded.length }}次</p>
+                </div>
+                <div v-if="compValueAddedStats" class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                  <p class="text-xs text-gray-400 mb-1.5">相比上次</p>
+                  <p class="text-2xl font-bold" :class="compValueAddedStats.change > 0 ? 'text-emerald-600' : compValueAddedStats.change < 0 ? 'text-red-500' : 'text-gray-500'">
+                    {{ compValueAddedStats.change > 0 ? '+' : '' }}{{ compValueAddedStats.change.toFixed(1) }}
+                  </p>
+                  <p class="text-xs text-gray-400 mt-1">{{ compValueAddedStats.change > 0 ? '进步' : compValueAddedStats.change < 0 ? '退步' : '持平' }}</p>
+                </div>
+                <div v-if="compValueAddedStats" class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                  <p class="text-xs text-gray-400 mb-1.5">累计变化</p>
+                  <p class="text-2xl font-bold" :class="compValueAddedStats.totalChange > 0 ? 'text-emerald-600' : compValueAddedStats.totalChange < 0 ? 'text-red-500' : 'text-gray-500'">
+                    {{ compValueAddedStats.totalChange > 0 ? '+' : '' }}{{ compValueAddedStats.totalChange.toFixed(1) }}
+                  </p>
+                  <p class="text-xs text-gray-400 mt-1">共{{ compValueAdded.length }}次</p>
+                </div>
+              </div>
+              <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                <h3 class="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-1.5"><TrendingUp class="w-4 h-4 text-blue-500" /> 成绩趋势图</h3>
+                <svg :viewBox="`0 0 ${Math.max(compValueAdded.length * 80, 320)} 220`" class="w-full" style="min-height: 200px">
+                  <polyline fill="none" stroke="#3b82f6" stroke-width="2"
+                    :points="compValueAdded.map((d, i) => `${i * 80 + 40},${200 - d.score * 1.8}`).join(' ')" />
+                  <g v-for="(d, i) in compValueAdded" :key="i">
+                    <circle :cx="i * 80 + 40" :cy="200 - d.score * 1.8" r="4" fill="#3b82f6" />
+                    <text :x="i * 80 + 40" :y="215" text-anchor="middle" class="text-[10px]" fill="#9ca3af">第{{ d.session }}次</text>
+                    <text :x="i * 80 + 40" :y="200 - d.score * 1.8 - 10" text-anchor="middle" class="text-[10px]" fill="#3b82f6">{{ d.score }}</text>
+                  </g>
+                </svg>
+              </div>
+            </div>
+            <div v-else class="bg-white rounded-2xl p-10 border border-gray-100 shadow-sm text-center">
+              <TrendingUp class="w-10 h-10 text-gray-200 mx-auto mb-3" />
+              <p class="text-sm text-gray-400">完成至少一次评价后，系统将自动生成增值评价趋势图</p>
+            </div>
+          </div>
+        </div>
+    </div>
+
       <!-- 新建考试/项目弹窗 -->
       <Teleport to="body">
         <div v-if="showNewExamModal" class="fixed inset-0 z-50 flex items-center justify-center">
@@ -1073,7 +1258,7 @@
             </button>
           </div>
         </div>
-        <div v-if="!isViewOnly" class="flex gap-2 flex-wrap">
+        <div v-if="!isViewOnly && !isReadOnly" class="flex gap-2 flex-wrap">
           <button @click="openAddStudentModal"
             class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm">
             <UserPlus class="w-3.5 h-3.5" />
@@ -1119,7 +1304,7 @@
               </td>
               <td class="px-4 py-2.5 text-sm text-gray-600">{{ item.student.studentId || '-' }}</td>
               <td class="px-4 py-2.5">
-                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{{ item.student.className || '未分班' }}</span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{{ getStudentClassForCourse(item.student.id) || '未分班' }}</span>
               </td>
               <td class="px-4 py-2.5">
                 <span v-if="item.groupName" class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">{{ item.groupName }}</span>
@@ -1142,7 +1327,7 @@
                   <!-- 班级操作 -->
                   <div class="flex items-center gap-1.5">
                     <span class="text-[10px] text-gray-400 w-7 text-right">班级</span>
-                    <button v-if="item.student.className" @click="handleRemoveStudentFromClass(item.student.id)"
+                    <button v-if="getStudentClassForCourse(item.student.id)" @click="handleRemoveStudentFromClass(item.student.id)"
                       class="px-2 py-0.5 text-[11px] text-amber-700 bg-amber-50 hover:bg-amber-100 rounded transition-colors" title="移出当前班级">
                       移出班级
                     </button>
@@ -1182,7 +1367,7 @@
               {{ classData.className || '未分班' }}
               <span class="text-xs text-gray-400 font-normal">（{{ classData.students.length }}人）</span>
             </h3>
-            <div v-if="!isViewOnly && classData.className" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div v-if="!isViewOnly && !isReadOnly && classData.className" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button @click.stop="openAddStudentToClass(classData.className)" class="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded" title="添加学员到班级">
                 <UserPlus class="w-3.5 h-3.5" />
               </button>
@@ -1191,6 +1376,9 @@
               </button>
               <button @click.stop="handleImportGroupsForClass(classData.className)" class="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title="导入分组">
                 <Upload class="w-3.5 h-3.5" />
+              </button>
+              <button @click.stop="handleDownloadGroupTemplate" class="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded" title="下载分组模板">
+                <FileSpreadsheet class="w-3.5 h-3.5" />
               </button>
               <button @click.stop="openNewGroupForClass(classData.className)" class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="新建分组">
                 <Plus class="w-3.5 h-3.5" />
@@ -1217,7 +1405,7 @@
                     <p class="text-[11px] text-gray-400">{{ group.memberIds.length }} 名成员</p>
                   </div>
                 </div>
-                <div v-if="!isViewOnly" class="flex gap-1 opacity-0 group-hover/grp:opacity-100 transition-opacity">
+                <div v-if="!isViewOnly && !isReadOnly" class="flex gap-1 opacity-0 group-hover/grp:opacity-100 transition-opacity">
                   <button @click.stop="openAddMemberToGroup(group)" class="p-1 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded" title="添加本班级未分组学员">
                     <UserPlus class="w-3.5 h-3.5" />
                   </button>
@@ -1233,7 +1421,7 @@
                 <template v-for="sid in group.memberIds" :key="sid">
                   <span class="group/tag relative inline-flex items-center gap-1 text-[11px] pl-2 pr-1 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
                     {{ getStudentName(sid) }}
-                    <button v-if="!isViewOnly" @click.stop="openRemoveMemberModal(group.id, sid)"
+                    <button v-if="!isViewOnly && !isReadOnly" @click.stop="openRemoveMemberModal(group.id, sid)"
                       class="w-3.5 h-3.5 rounded-full flex items-center justify-center text-indigo-400 hover:text-white hover:bg-red-500 transition-colors" title="移除学员">
                       <X class="w-2.5 h-2.5" />
                     </button>
@@ -1246,14 +1434,32 @@
           <div v-else class="border border-dashed border-gray-200 rounded-lg p-6 text-center">
             <Users class="w-8 h-8 mx-auto mb-2 text-gray-200" />
             <p class="text-xs text-gray-400">该班级暂无分组</p>
-            <button v-if="!isViewOnly" @click="openNewGroupForClass(classData.className)"
+            <button v-if="!isViewOnly && !isReadOnly" @click="openNewGroupForClass(classData.className)"
               class="mt-3 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
               <Plus class="w-3 h-3" />新建分组
             </button>
           </div>
 
+          <!-- 本班未分组学生 -->
+          <div v-if="getUngroupedStudentsForClass(classData.className).length > 0" class="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+            <div class="flex items-center gap-2 mb-2">
+              <UserX class="w-3.5 h-3.5 text-amber-600" />
+              <span class="text-xs font-semibold text-amber-800">未分组</span>
+              <span class="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-800">{{ getUngroupedStudentsForClass(classData.className).length }}人</span>
+            </div>
+            <div class="flex flex-wrap gap-1">
+              <span v-for="stu in getUngroupedStudentsForClass(classData.className)" :key="stu.id"
+                class="text-[11px] px-2 py-0.5 rounded-full bg-white text-amber-700 border border-amber-200">
+                {{ stu.name }}
+              </span>
+            </div>
+          </div>
+          <div v-else-if="getGroupsForClassBlock(classData.className).length > 0 && classData.students.length > 0" class="mt-3 text-center">
+            <span class="text-[11px] text-gray-400">已全部分组</span>
+          </div>
+
           <!-- 一键分组按钮（每个班级内部） -->
-          <div v-if="!isViewOnly && classData.className && classData.students.length >= 2" class="mt-4 pt-3 border-t border-gray-100 flex gap-2 justify-end">
+          <div v-if="!isViewOnly && !isReadOnly && classData.className && classData.students.length >= 2" class="mt-4 pt-3 border-t border-gray-100 flex gap-2 justify-end">
             <button @click.stop="showOneClickGroupForClass(classData.className)"
               class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
               <RefreshCw class="w-3.5 h-3.5" />一键分组
@@ -1296,7 +1502,7 @@
                   <span v-if="getStudentGroupName(stu.id)" class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">{{ getStudentGroupName(stu.id) }}</span>
                   <span v-else class="text-xs text-gray-400">未分组</span>
                 </td>
-                <td v-if="!isViewOnly" class="px-3 py-2.5">
+                <td v-if="!isViewOnly && !isReadOnly" class="px-3 py-2.5">
                   <div class="flex flex-col gap-1.5 items-end">
                     <!-- 分组操作 -->
                     <div class="flex items-center gap-1.5">
@@ -1313,7 +1519,7 @@
                     <!-- 班级操作 -->
                     <div class="flex items-center gap-1.5">
                       <span class="text-[10px] text-gray-400 w-7 text-right">班级</span>
-                      <button v-if="stu.className" @click="handleRemoveStudentFromClass(stu.id)"
+                      <button v-if="getStudentClassForCourse(stu.id)" @click="handleRemoveStudentFromClass(stu.id)"
                         class="px-2 py-0.5 text-[11px] text-amber-700 bg-amber-50 hover:bg-amber-100 rounded transition-colors" title="移出当前班级">
                         移出班级
                       </button>
@@ -1449,6 +1655,10 @@
                   class="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm text-teal-700 bg-teal-50 hover:bg-teal-100 border border-dashed border-teal-300 rounded-lg transition-colors">
                   <Upload class="w-4 h-4" />
                   {{ addClassMembers.length > 0 ? `已解析 ${addClassMembers.length} 名成员，点击重新选择` : '一键导入班级成员信息（Excel）' }}
+                </button>
+                <button type="button" @click="handleDownloadAddClassTemplate"
+                  class="mt-1.5 inline-flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700">
+                  <FileSpreadsheet class="w-3 h-3" /> 下载导入模板
                 </button>
                 <p class="text-[11px] text-gray-400 mt-1.5">必填列：<b>学生学号 / 工号</b>、<b>手机号</b>、<b>身份证号</b>（三者至少有一列，用于精确匹配总库）；姓名可选填，不作为判定依据</p>
 
@@ -1709,7 +1919,7 @@
                   </div>
                   <span class="flex-1">{{ stu.name }}</span>
                   <span class="text-xs text-gray-400">{{ stu.studentId || stu.id }}</span>
-                  <span class="text-[10px] text-gray-400">当前：{{ stu.className || '未分班' }}</span>
+                  <span class="text-[10px] text-gray-400">当前：{{ getStudentClassForCourse(stu.id) || '未分班' }}</span>
                 </div>
                 <div v-if="candidateAddStudentsToClass.length === 0" class="text-center py-6 text-xs text-gray-400">
                   没有可添加的学员
@@ -1991,7 +2201,9 @@ import {
   EvalFrequencyDescs, getDefaultGradeConfig
 } from '@/types'
 import type { EvalTemplate, EvalType, Evaluation, EvalFrequency, Schedule, GradeWeightConfig, EvaluationConfig } from '@/types'
-import { AlertTriangle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, LogOut, Network, Info } from 'lucide-vue-next'
+import { AlertTriangle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, UserX, LogOut, Network, PieChart, Sparkles, MessageSquare, Award, Info } from 'lucide-vue-next'
+import RadarChart from '@/components/RadarChart.vue'
+import { computeRadarData } from '@/lib/evalRadar'
 import { getNow } from '@/lib/date'
 import {
   createEmptyEvalDraft,
@@ -2055,7 +2267,12 @@ const isViewOnly = computed(() => {
 const canManageEval = computed(() => !isViewOnly.value || isMentor.value)
 /** 能否添加/管理课程项目：企业导师可以添加项目；领导/其他教师仅查看 */
 const canManageProjects = computed(() => !isViewOnly.value || isMentor.value)
-const kgStudents = computed(() => enrolledStudents.value.map((item: any) => item.student).filter(Boolean))
+const kgStudents = computed(() =>
+  enrolledStudents.value
+    .map((item: any) => item.student)
+    .filter(Boolean)
+    .map((s: any) => ({ ...s, groupName: getStudentGroupName(s.id) }))
+)
 
 // 从数据库加载课程学员
 onMounted(async () => {
@@ -2162,11 +2379,12 @@ const completedCount = computed(() =>
 
 // ---- Tab 配置 ----
 const tabList = [
-  { key: 'students',     label: '学生管理', icon: Users },
-  { key: 'course-mgmt',  label: '课程管理', icon: Network },
-  { key: 'quality-eval', label: '素质评价', icon: UserCheck },
-  { key: 'grade-config', label: '成绩配置', icon: Settings },
-  { key: 'grade-entry',  label: '成绩管理', icon: TrendingUp },
+  { key: 'students',       label: '学生管理',       icon: Users },
+  { key: 'course-mgmt',    label: '课程任务与评价', icon: Network },
+  { key: 'quality-eval',   label: '素质评价',       icon: UserCheck },
+  { key: 'grade-config',   label: '权重分配',       icon: Settings },
+  { key: 'grade-entry',    label: '成绩管理',       icon: TrendingUp },
+  { key: 'grade-overview', label: '综合评价',       icon: BarChart3 },
 ]
 
 /** Tab 红点提醒：检测该 tab 下未处理的事务数量，支持红点一路溯源 */
@@ -2374,8 +2592,7 @@ async function saveAddClass() {
         const pk = String(hit.id)
         const existing = store.students.find(s => s.id === pk)
         if (existing) {
-          // 总库有、原本不在同班 → 归入本班级
-          store.updateStudent(pk, { className })
+          // 总库有、原本不在同班 → 归入本班级（按课程 enrollment 级别）
           student = { ...existing, id: pk }
           assignedCount++
         } else {
@@ -2383,7 +2600,6 @@ async function saveAddClass() {
             id: pk,
             name: hit.name || m.name || pk,
             studentId: hit.student_id || hit.id || undefined,
-            className,
             phone: '',
             email: '',
             avatar: '',
@@ -2423,10 +2639,14 @@ async function saveAddClass() {
         status: 'enrolled',
         progress: 0,
         enrollDate: getNow().toISOString().split('T')[0],
+        className,
       })
       try {
         await bulkImportEnrollments([{ id: enrId, studentId: student.id, courseId: courseId.value }])
       } catch {}
+    } else {
+      // 已选课但可能未分班到本班级 → 更新 enrollment.className
+      store.updateEnrollmentClassName(courseId.value, student.id, className)
     }
     try {
       await syncStudent(student.id, { className })
@@ -2544,6 +2764,7 @@ async function addRepoStudentToCourse(s: any) {
     status: 'enrolled',
     progress: 0,
     enrollDate: getNow().toISOString().split('T')[0],
+    className: '',
   })
   // 同步到 MySQL
   try {
@@ -2565,10 +2786,13 @@ function openEditClassModal(className: string) {
 async function handleSaveEditClass() {
   if (!editingOldClassName.value || !editClassName.value.trim()) return
   const newName = editClassName.value.trim()
-  // 更新该班级所有学生的 className
-  for (const stu of store.students) {
-    if (stu.className === editingOldClassName.value) {
-      store.updateStudent(stu.id, { className: newName })
+  // 更新该课程中属于此班级的所有 enrollment.className
+  for (const e of store.enrollments) {
+    if (e.courseId === courseId.value) {
+      const cn = (e.className ?? store.students.find((s) => s.id === e.studentId)?.className) || ''
+      if (cn === editingOldClassName.value) {
+        store.updateEnrollmentClassName(courseId.value, e.studentId, newName)
+      }
     }
   }
   showEditClassModal.value = false
@@ -2576,9 +2800,13 @@ async function handleSaveEditClass() {
 }
 async function handleDeleteClass(className: string) {
   if (!confirm(`确定删除班级"${className}"？该操作只会清空学生的班级信息，不会删除学生。`)) return
-  for (const stu of store.students) {
-    if (stu.className === className) {
-      store.updateStudent(stu.id, { className: '' })
+  // 清空该课程中属于此班级的 enrollment.className
+  for (const e of store.enrollments) {
+    if (e.courseId === courseId.value) {
+      const enrCn = (e.className ?? store.students.find((s) => s.id === e.studentId)?.className) || ''
+      if (enrCn === className) {
+        store.updateEnrollmentClassName(courseId.value, e.studentId, '')
+      }
     }
   }
   // 同步删除课程班级记录
@@ -2687,6 +2915,7 @@ const selectedStudentIds = ref<string[]>([])
 const evalScoreInputs = ref<Record<string, number>>({})
 const evalCriteriaDrafts = ref<Record<string, EvalScoreDraftValue[]>>({})
 const evalCriteriaDraft = ref<EvalScoreDraftValue[]>([])
+const evalCriteriaRemarks = ref<string[]>([])
 const evalCriteriaError = ref('')
 const showEvalCriteriaPopup = ref(false)
 const evalCriteriaStudentId = ref('')
@@ -3576,6 +3805,165 @@ function getStudentAvgScore(studentId: string): string | number {
   return Math.round(sum / relevantEvals.length)
 }
 
+// ====== 综合评价（课程级聚合，仿学生端） ======
+const compFilterClass = ref('')
+const compFilterGroup = ref('')
+const compStudentSearch = ref('')
+const compSelectedSession = ref<number | null>(null)
+
+const compGroupOptions = computed(() => {
+  if (!courseId.value) return []
+  let groups = store.studentGroups.filter((g) => g.courseId === courseId.value)
+  if (compFilterClass.value) {
+    groups = groups.filter((g) =>
+      g.memberIds.length > 0 && g.memberIds.every((sid) => getStudentClassForCourse(sid) === compFilterClass.value),
+    )
+  }
+  return groups.map((g) => ({ id: g.id, groupName: g.name }))
+})
+
+/** 按班级/分组/搜索筛选后的学生 */
+const compStudents = computed(() => {
+  if (!courseId.value) return []
+  let students = enrolledStudents.value
+    .filter(({ student }) => student)
+    .map(({ student }) => student!)
+  if (compFilterClass.value) {
+    students = students.filter((s) => getStudentClassForCourse(s.id) === compFilterClass.value)
+  }
+  if (compFilterGroup.value) {
+    const g = store.studentGroups.find((gg) => gg.courseId === courseId.value && gg.name === compFilterGroup.value)
+    if (g) {
+      const ids = new Set(g.memberIds)
+      students = students.filter((s) => ids.has(s.id))
+    }
+  }
+  const search = compStudentSearch.value.trim().toLowerCase()
+  if (search) {
+    students = students.filter((s) =>
+      s.name.toLowerCase().includes(search) || s.id.toLowerCase().includes(search),
+    )
+  }
+  return students
+})
+
+/** 所有出现过的评价轮次 */
+const compSessions = computed(() => {
+  if (!courseId.value) return []
+  const cid = courseId.value
+  const ids = new Set(compStudents.value.map((s) => s.id))
+  const sessions = new Set<number>()
+  store.evaluations.forEach((e) => {
+    if (e.courseId === cid && ids.has(e.studentId)) sessions.add(e.sessionNumber)
+  })
+  return Array.from(sessions).sort((a, b) => a - b)
+})
+
+const compEvalWeightKeyMap: Record<string, keyof GradeWeightConfig> = {
+  self: 'selfEvalWeight',
+  intra_group: 'peerReviewWeight',
+  inter_group: 'interGroupEvalWeight',
+  teacher: 'teacherScoreWeight',
+  mentor: 'mentorScoreWeight',
+}
+
+/** 某次 session 下，课程级综合分 = 各生该次综合分的平均 */
+function compSessionScore(session: number): number | null {
+  const cid = courseId.value
+  if (!cid) return null
+  const cfg = gradeConfig.value
+  const students = compStudents.value
+  const scores: number[] = []
+  for (const s of students) {
+    const evals = store.evaluations.filter(
+      (e) => e.courseId === cid && e.studentId === s.id && e.sessionNumber === session,
+    )
+    if (evals.length === 0) continue
+    let weightedSum = 0
+    let totalWeight = 0
+    for (const type of ALL_EVAL_TYPES) {
+      const filtered = evals.filter((e) => e.type === type)
+      if (filtered.length === 0) continue
+      const avg = filtered.reduce((a, e) => a + e.score, 0) / filtered.length
+      const w = (cfg[compEvalWeightKeyMap[type]] as number) || 0
+      weightedSum += avg * w
+      totalWeight += w
+    }
+    if (totalWeight > 0) scores.push(weightedSum / totalWeight)
+  }
+  if (scores.length === 0) return null
+  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+}
+
+const compSessionScores = computed(() =>
+  compSessions.value.map((sn) => ({ session: sn, score: compSessionScore(sn) })),
+)
+
+const compFinalScore = computed(() => {
+  const valid = compSessionScores.value.filter((s) => s.score !== null)
+  if (valid.length === 0) return null
+  return Math.round(valid.reduce((a, s) => a + (s.score as number), 0) / valid.length)
+})
+
+const compCurrentScore = computed(() => {
+  if (compSelectedSession.value === null) return compFinalScore.value
+  const found = compSessionScores.value.find((s) => s.session === compSelectedSession.value)
+  return found ? found.score : null
+})
+
+/** 评价维度细分：各 evalType 跨学生平均 */
+const compDimensionMeta: Record<string, { label: string; icon: any }> = {
+  self: { label: '个人自评', icon: UserCheck },
+  intra_group: { label: '小组内互评', icon: Users },
+  inter_group: { label: '小组间互评', icon: MessageSquare },
+  teacher: { label: '教师评价', icon: Award },
+  mentor: { label: '企业导师评价', icon: Sparkles },
+}
+
+const compDimensions = computed(() => {
+  const cid = courseId.value
+  if (!cid) return []
+  const ids = new Set(compStudents.value.map((s) => s.id))
+  const evals = store.evaluations.filter(
+    (e) => e.courseId === cid && ids.has(e.studentId) &&
+      (compSelectedSession.value === null || e.sessionNumber === compSelectedSession.value),
+  )
+  const dims: { label: string; icon: any; score: number }[] = []
+  for (const type of ALL_EVAL_TYPES) {
+    const filtered = evals.filter((e) => e.type === type)
+    if (filtered.length === 0) continue
+    const avg = Math.round(filtered.reduce((a, e) => a + e.score, 0) / filtered.length)
+    dims.push({ label: compDimensionMeta[type].label, icon: compDimensionMeta[type].icon, score: avg })
+  }
+  return dims
+})
+
+const compRadarData = computed(() => {
+  const cid = courseId.value
+  if (!cid) return { labels: [], values: [], count: 0 }
+  const ids = new Set(compStudents.value.map((s) => s.id))
+  const evals = store.evaluations.filter(
+    (e) => e.courseId === cid && ids.has(e.studentId) &&
+      (compSelectedSession.value === null || e.sessionNumber === compSelectedSession.value),
+  )
+  return computeRadarData(evals)
+})
+
+/** 增值评价趋势 */
+const compValueAdded = computed(() =>
+  compSessionScores.value
+    .filter((s) => s.score !== null)
+    .map((s) => ({ session: s.session, score: s.score as number })),
+)
+
+const compValueAddedStats = computed(() => {
+  const data = compValueAdded.value
+  if (data.length < 2) return null
+  const change = data[data.length - 1].score - data[data.length - 2].score
+  const totalChange = data[data.length - 1].score - data[0].score
+  return { change, totalChange }
+})
+
 function getStudentScoreForExam(studentId: string, examName: string): string | number {
   if (!courseId.value) return '-'
   const score = store.getExamScoresForCourse(courseId.value, examName)
@@ -3700,6 +4088,56 @@ async function handleDownloadTemplate() {
   }
 }
 
+/** 下载分组导入模板（组名 | 学生姓名/学号） */
+async function handleDownloadGroupTemplate() {
+  try {
+    const XLSX = await import('xlsx')
+    const data = [
+      { '组名': '第一组', '学生姓名/学号': '张三' },
+      { '组名': '第一组', '学生姓名/学号': '李四' },
+      { '组名': '第二组', '学生姓名/学号': '王五' },
+    ]
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '分组')
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([buf], { type: 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = '分组导入模板.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('下载分组模板失败:', err)
+    alert('下载模板失败')
+  }
+}
+
+/** 下载班级成员导入模板（学生姓名 | 学生学号 | 手机号 | 身份证号） */
+async function handleDownloadAddClassTemplate() {
+  try {
+    const XLSX = await import('xlsx')
+    const data = [
+      { '学生姓名': '张三', '学生学号': '20240001', '手机号': '13800000001', '身份证号': '110101200001011234' },
+    ]
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '班级成员')
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([buf], { type: 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = '班级成员导入模板.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('下载班级成员模板失败:', err)
+    alert('下载模板失败')
+  }
+}
+
 const enabledTypes = computed(() => baseEnabledTypes.value.filter((t) => {
   if ((t === 'intra_group' || t === 'inter_group') && !courseHasGroups.value) return false
   if (t === 'mentor' && !selectedConfig.value?.hasMentor) return false
@@ -3799,13 +4237,26 @@ async function loadCourseClasses() {
   } catch { courseClassNames.value = [] }
 }
 
+/** 获取学生在本课程的班级（优先 enrollment.className，回退 student.className 兼容旧数据） */
+function getStudentClassForCourse(studentId: string): string {
+  const enr = store.enrollments.find(
+    (e) => e.studentId === studentId && e.courseId === courseId.value,
+  )
+  const student = store.students.find((s) => s.id === studentId)
+  return (enr?.className ?? student?.className) || ''
+}
+
 /** 班级板块：按学生 className 分组 + 合并独立班级列表 */
 const classBlocks = computed(() => {
   if (!courseId.value) return []
   const classMap = new Map<string, typeof enrolledStudents.value>()
   for (const item of enrolledStudents.value) {
     if (!item.student) continue
-    const cn = item.student.className || ''
+    // 优先使用 enrollment.className（按课程分班），回退到 student.className（兼容旧数据）
+    const enr = store.enrollments.find(
+      (e) => e.studentId === item.student!.id && e.courseId === courseId.value,
+    )
+    const cn = (enr?.className ?? item.student.className) || ''
     if (!classMap.has(cn)) classMap.set(cn, [])
     classMap.get(cn)!.push(item)
   }
@@ -3859,7 +4310,7 @@ const searchedStudentList = computed(() => {
     }))
 })
 
-/** 获取某班级的分组（检查组内所有学生 className 是否匹配） */
+/** 获取某班级的分组（检查组内所有学生班级是否匹配，优先 enrollment.className） */
 function getGroupsForClassBlock(className: string) {
   if (!courseId.value) return []
   const allGroups = store.studentGroups.filter((g) => g.courseId === courseId.value)
@@ -3868,9 +4319,24 @@ function getGroupsForClassBlock(className: string) {
     // 检查组中所有成员是否都属于该班级
     return g.memberIds.every((sid) => {
       const student = store.students.find((s) => s.id === sid)
-      return student && (student.className || '') === className
+      if (!student) return false
+      const enr = store.enrollments.find(
+        (e) => e.studentId === sid && e.courseId === courseId.value,
+      )
+      const cn = (enr?.className ?? student.className) || ''
+      return cn === className
     })
   })
+}
+
+/** 获取某班级中未分入任何组的学生 */
+function getUngroupedStudentsForClass(className: string) {
+  const classBlock = classedBlocks.value.find((cb) => cb.className === className)
+  if (!classBlock) return []
+  const groupedIds = new Set(
+    getGroupsForClassBlock(className).flatMap((g) => g.memberIds),
+  )
+  return classBlock.students.filter((s) => !groupedIds.has(s.id))
 }
 
 /** 获取某班级的学生人数 */
@@ -3880,7 +4346,12 @@ function getClassStudentCount(className: string) {
 
 /** 获取某班级的学生列表 */
 function getClassStudents(className: string) {
-  return store.students.filter((s) => (s.className || '') === className && store.enrollments.some((e) => e.courseId === courseId.value && e.studentId === s.id && e.status !== 'dropped'))
+  return store.students.filter((s) => {
+    if (!store.enrollments.some((e) => e.courseId === courseId.value && e.studentId === s.id && e.status !== 'dropped')) return false
+    const enr = store.enrollments.find((e) => e.studentId === s.id && e.courseId === courseId.value)
+    const cn = (enr?.className ?? s.className) || ''
+    return cn === className
+  })
 }
 
 /** 点击班级内的"新建分组" */
@@ -4106,6 +4577,7 @@ function openEvalCriteria(student: { id: string; name: string }) {
     const saved = existing?.items?.[index]
     return saved && saved.score !== undefined ? saved.score : ''
   })
+  evalCriteriaRemarks.value = defs.map((item, index) => existing?.items?.[index]?.remark || '')
   evalScoreInputs.value = {}
   showEvalCriteriaPopup.value = true
 }
@@ -4115,14 +4587,21 @@ function closeEvalCriteriaPopup() {
   evalCriteriaStudentId.value = ''
   evalCriteriaStudentName.value = ''
   evalCriteriaDraft.value = []
+  evalCriteriaRemarks.value = []
   evalCriteriaError.value = ''
 }
 
 function setEvalCriteriaScore(index: number, e: Event) {
   const raw = (e.target as HTMLInputElement).value
   const parsed = Number(raw)
-  const next: EvalScoreDraftValue = raw === '' || Number.isNaN(parsed) ? '' : parsed
+  const max = getEvalItemDefinitions(evalCriteriaType.value)[index]?.max ?? 100
+  const next: EvalScoreDraftValue = raw === '' || Number.isNaN(parsed) ? '' : Math.min(max, Math.max(0, parsed))
   evalCriteriaDraft.value = evalCriteriaDraft.value.map((value, i) => (i === index ? next : value))
+}
+
+function setEvalCriteriaRemark(index: number, e: Event) {
+  const raw = (e.target as HTMLInputElement).value
+  evalCriteriaRemarks.value = evalCriteriaRemarks.value.map((value, i) => (i === index ? raw : value))
 }
 
 function saveEvalCriteria() {
@@ -4138,7 +4617,7 @@ function saveEvalCriteria() {
     return
   }
 
-  const items = evalItemsFromDraft(defs, evalCriteriaDraft.value)
+  const items = evalItemsFromDraft(defs, evalCriteriaDraft.value, evalCriteriaRemarks.value)
   const score = scoreFromEvalDraft(defs, evalCriteriaDraft.value)
   const existing = courseId.value
     ? store.evaluations.find(
@@ -4462,7 +4941,7 @@ function handleEditStudent(student: import('@/types').Student) {
   editingStudent.value = student
   editStudentName.value = student.name
   editStudentIdField.value = student.id
-  editStudentClass.value = student.className || ''
+  editStudentClass.value = getStudentClassForCourse(student.id)
   const group = store.studentGroups.find(g => g.courseId === courseId.value && g.memberIds.includes(student.id))
   editStudentGroupId.value = group?.id || ''
   showEditStudentModal.value = true
@@ -4478,7 +4957,9 @@ function handleSaveEditStudent() {
     return
   }
   const oldId = student.id
-  store.updateStudent(oldId, { name: editStudentName.value.trim(), id: newId, className: editStudentClass.value || '' })
+  store.updateStudent(oldId, { name: editStudentName.value.trim(), id: newId })
+  // 班级按课程更新 enrollment.className
+  store.updateEnrollmentClassName(courseId.value, newId, editStudentClass.value || '')
 
   if (newId !== oldId) {
     store.enrollments.forEach((e) => {
@@ -4604,6 +5085,7 @@ async function handleImportStudentsExcel(event: Event) {
         status: 'enrolled',
         progress: 0,
         enrollDate: getNow().toISOString().split('T')[0],
+        className: '',
       })
       enrollments.push({ id: enrId, studentId: student!.id, courseId: courseId.value })
       imported++
@@ -4771,8 +5253,6 @@ function confirmRemoveMemberFromGroup() {
 function confirmRemoveMemberFromClass() {
   const studentId = removeMemberStudentId.value
   store.updateStudent(studentId, { className: '' })
-  // 落库，否则刷新后学生又回到原班级
-  void syncStudent(studentId, { className: '' }).catch(() => {})
   for (const g of store.studentGroups) {
     if (g.courseId === courseId.value && g.memberIds.includes(studentId)) {
       store.updateStudentGroup(g.id, {
@@ -4823,7 +5303,7 @@ const quickAddGroupCandidates = computed(() => {
   if (!courseId.value || !quickAddGroupStudentId.value) return []
   const student = store.students.find((s) => s.id === quickAddGroupStudentId.value)
   if (!student) return []
-  const studentClass = student.className || ''
+  const studentClass = getStudentClassForCourse(quickAddGroupStudentId.value)
   if (!studentClass) return [] // 未分班不能加入分组
   return store.studentGroups
     .filter((g) => g.courseId === courseId.value)
@@ -4868,11 +5348,25 @@ const quickAddClassCandidates = computed(() => {
   if (!courseId.value || !quickAddClassStudentId.value) return []
   const student = store.students.find((s) => s.id === quickAddClassStudentId.value)
   if (!student) return []
-  const currentClass = student.className || ''
+  // 优先使用 enrollment.className（按课程分班），回退到 student.className
+  const enr = store.enrollments.find(
+    (e) => e.studentId === quickAddClassStudentId.value && e.courseId === courseId.value,
+  )
+  const currentClass = (enr?.className ?? student.className) || ''
   const classes = new Set<string>()
-  for (const item of enrolledStudents.value) {
-    if (item.student && item.student.className && item.student.className !== currentClass) {
-      classes.add(item.student.className)
+  // 首选：课程独立班级列表（含空班级），与 classBlocks 同源
+  for (const cn of courseClassNames.value) {
+    if (cn && cn !== currentClass) classes.add(cn)
+  }
+  // 兜底：若独立列表为空，回退到从已选课学生反推，避免接口未返回时回归
+  if (classes.size === 0) {
+    for (const item of enrolledStudents.value) {
+      if (item.student) {
+        const cn = getStudentClassForCourse(item.student.id)
+        if (cn && cn !== currentClass) {
+          classes.add(cn)
+        }
+      }
     }
   }
   return Array.from(classes).sort((a, b) => a.localeCompare(b, 'zh-CN'))
@@ -4894,8 +5388,7 @@ function confirmQuickAddToClass() {
       })
     }
   }
-  store.updateStudent(quickAddClassStudentId.value, { className: quickAddClassSelected.value })
-  void syncStudent(quickAddClassStudentId.value, { className: quickAddClassSelected.value }).catch(() => {})
+  store.updateEnrollmentClassName(courseId.value, quickAddClassStudentId.value, quickAddClassSelected.value)
   showQuickAddClassModal.value = false
 }
 
@@ -4913,10 +5406,14 @@ const candidateAddStudentsToClass = computed(() => {
     .map((e) => e.studentId)
   const search = addStudentToClassSearch.value.trim().toLowerCase()
   return store.students
-    .filter((s) =>
-      enrolledIds.includes(s.id) &&
-      (s.className || '') !== addStudentToClassName.value
-    )
+    .filter((s) => {
+      if (!enrolledIds.includes(s.id)) return false
+      const enr = store.enrollments.find(
+        (e) => e.studentId === s.id && e.courseId === courseId.value,
+      )
+      const cn = (enr?.className ?? s.className) || ''
+      return cn !== addStudentToClassName.value
+    })
     .filter((s) => {
       if (search) {
         return s.name.toLowerCase().includes(search) || (s.studentId || s.id).toLowerCase().includes(search)
@@ -4943,9 +5440,7 @@ function toggleAddStudentToClass(studentId: string) {
 
 function confirmAddStudentsToClass() {
   for (const sid of addStudentToClassSelected.value) {
-    store.updateStudent(sid, { className: addStudentToClassName.value })
-    // 落库，否则刷新后学生又回到原班级
-    void syncStudent(sid, { className: addStudentToClassName.value }).catch(() => {})
+    store.updateEnrollmentClassName(courseId.value, sid, addStudentToClassName.value)
   }
   showAddStudentToClassModal.value = false
   addStudentToClassSelected.value = []
@@ -4954,9 +5449,7 @@ function confirmAddStudentsToClass() {
 /** 从班级移除学员（将其设为未分班，同时从所有分组中移除） */
 function handleRemoveStudentFromClass(studentId: string) {
   if (!confirm('确定将该学员移出当前班级？（该学员将变为未分班状态，并从所有分组中移除）')) return
-  store.updateStudent(studentId, { className: '' })
-  // 落库，否则刷新后学生又回到原班级
-  void syncStudent(studentId, { className: '' }).catch(() => {})
+  store.updateEnrollmentClassName(courseId.value, studentId, '')
   // 从所有分组中移除
   for (const g of store.studentGroups) {
     if (g.courseId === courseId.value && g.memberIds.includes(studentId)) {
@@ -4990,7 +5483,11 @@ async function handleImportGroupsExcel(event: Event) {
     const targetClassName = classNameForImport.value
     const classStudentIds = targetClassName ? new Set(
       enrolledStudents.value
-        .filter(e => e.student!.className === targetClassName)
+        .filter(e => {
+          const enr = store.enrollments.find((en) => en.studentId === e.student!.id && en.courseId === courseId.value)
+          const cn = (enr?.className ?? e.student!.className) || ''
+          return cn === targetClassName
+        })
         .map(e => e.student!.id)
     ) : null
 

@@ -209,10 +209,6 @@
             <label class="block text-sm font-medium text-gray-700 mb-1">学院</label>
             <input v-model="addForm.department" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
           </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">班级</label>
-            <input v-model="addForm.className" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
-          </div>
           <p v-if="addError" class="text-sm text-red-500">{{ addError }}</p>
           <p v-if="addSuccess" class="text-sm text-green-600">{{ addSuccess }}</p>
         </div>
@@ -347,7 +343,7 @@ const showAddModal = ref(false)
 const adding = ref(false)
 const addError = ref('')
 const addSuccess = ref('')
-const addForm = ref({ name: '', phone: '', idCard: '', department: '', className: '' })
+const addForm = ref({ name: '', phone: '', idCard: '', department: '' })
 
 async function handleAddStudent() {
   addError.value = ''
@@ -363,10 +359,9 @@ async function handleAddStudent() {
       phone: addForm.value.phone.trim(),
       idCard: addForm.value.idCard.trim(),
       department: addForm.value.department.trim(),
-      className: addForm.value.className.trim(),
     })
     addSuccess.value = `入库成功！学号：${data.account.userNo}，初始密码：身份证后 6 位`
-    addForm.value = { name: '', phone: '', idCard: '', department: '', className: '' }
+    addForm.value = { name: '', phone: '', idCard: '', department: '' }
     await loadPageData()
   } catch (err: any) {
     addError.value = err instanceof Error ? err.message : '入库失败'
