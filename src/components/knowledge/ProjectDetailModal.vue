@@ -200,6 +200,9 @@
               <button @click="testFileInput?.click()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
                 <Upload class="w-3.5 h-3.5" /> 上传工单
               </button>
+              <button @click="downloadWorkorderTemplate" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium rounded-lg border border-gray-200">
+                <Download class="w-3.5 h-3.5" /> 下载模板
+              </button>
             </div>
           </div>
           <div v-if="files.test.length === 0" class="text-center py-8 text-gray-400 text-sm">暂无工单</div>
@@ -418,7 +421,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import * as echarts from 'echarts'
-import { X, FileText, Upload, CheckCircle, Clock, Plus, Pencil, GitBranch, BookOpen, ClipboardCheck, ListChecks, FileQuestion, Star, Wrench } from 'lucide-vue-next'
+import { X, FileText, Upload, CheckCircle, Clock, Plus, Pencil, GitBranch, BookOpen, ClipboardCheck, ListChecks, FileQuestion, Star, Wrench, Download } from 'lucide-vue-next'
 import { javaListProjectFiles, javaAddProjectFile, javaDeleteProjectFile, javaListProjectProgress, javaUpsertProjectProgress, javaGradeProjectProgress, javaGetQuestionnaire, javaSaveQuestionnaire, javaListEvalResponses, javaSubmitEvalResponse } from '@/api/knowledgeGraph'
 import { useAppStore } from '@/stores/app'
 import { getNow } from '@/lib/date'
@@ -507,6 +510,52 @@ async function deleteFile(type: string, f: any) {
     await loadFiles()
   } catch (err: any) {
     alert('删除失败：' + (err.message || err))
+  }
+}
+
+/**
+ * 下载工单模板（Excel）
+ *
+ * 列：序号 | 评价项 | 教师备注 | 满分 | 学生描述 | 证明材料
+ * - 学生填「学生描述」「证明材料」
+ * - 教师填「教师备注」，并按各项满分自主评分（不在表内填分，评分在平台里做）
+ *
+ * 评价项取当前评价类型的定义（教师端=教师评价各项，导师端=导师评价各项），
+ * 与「上传工单」旁的工单评价口径保持一致。
+ * 本模板仅供填写与流转，平台不解析回传内容。
+ */
+async function downloadWorkorderTemplate() {
+  try {
+    const XLSX = await import('xlsx')
+    const defs = getEvalItemDefinitions(activeEvalType.value)
+
+    const rows: any[][] = [
+      ['学生姓名', '', '', '学号', '', '', '课程', ''],
+      ['指导教师', '', '', '', '', '', '', ''],
+      [],
+      ['序号', '评价项', '教师备注', '满分', '学生描述', '证明材料', ''],
+    ]
+    defs.forEach((item, i) => {
+      rows.push([i + 1, item.label, '', item.max, '', '', ''])
+    })
+    rows.push([])
+    rows.push(['合计', '', '', defs.reduce((sum, d) => sum + d.max, 0), '', '', ''])
+    rows.push([])
+    rows.push(['说明：'])
+    rows.push(['1. 「学生描述」「证明材料」由学生填写（证明材料可填文件名、链接或简要说明）。'])
+    rows.push(['2. 「教师备注」由教师填写，学生请勿改动。'])
+    rows.push(['3. 教师按各项满分自主评分。'])
+
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols'] = [
+      { wch: 6 }, { wch: 28 }, { wch: 30 }, { wch: 6 }, { wch: 40 }, { wch: 40 }, { wch: 4 },
+    ]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '工单')
+    XLSX.writeFile(wb, `工单模板-${props.project?.title || '任务'}.xlsx`)
+  } catch (err: any) {
+    console.error('下载工单模板失败:', err)
+    alert('下载模板失败：' + (err.message || err))
   }
 }
 
