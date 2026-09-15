@@ -368,7 +368,8 @@ router.get('/:id/students', async (req, res) => {
          cls.department_id,
          COALESCE(dept.name, student.department) AS department_name,
          student.status,
-         student.created_at
+         student.created_at,
+         enrollment.class_name AS course_class_name
        FROM students AS student
        LEFT JOIN classes AS cls ON cls.id = student.class_id
        LEFT JOIN departments AS dept ON dept.id = cls.department_id

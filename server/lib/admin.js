@@ -171,6 +171,9 @@ export function mapStudentRow(row) {
     status: row.status || 'active',
     joinDate: formatDate(row.created_at),
     avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
+    // 课程内分班：仅当查询显式带出本字段时返回（enrollments.class_name）。
+    // undefined 时前端会回退到 className（学籍班级），保持旧行为。
+    courseClassName: row.course_class_name == null ? undefined : String(row.course_class_name),
   };
 }
 

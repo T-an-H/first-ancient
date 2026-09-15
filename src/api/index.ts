@@ -247,6 +247,30 @@ export async function bulkImportEnrollments(enrollments: any) {
   })
 }
 
+/**
+ * 设置「学生在本课程内的班级」（课程内分班的权威写入点）
+ *
+ * 空字符串表示移出班级/未分班。
+ */
+export async function setEnrollmentClass(
+  courseId: string,
+  studentId: string,
+  className: string,
+): Promise<void> {
+  await request('/teaching/enrollments/class', {
+    method: 'PUT',
+    body: JSON.stringify({ courseId, studentId, className }),
+  })
+}
+
+/** 拉取某课程「学生 → 本课程班级」的映射（课程内分班的权威来源） */
+export async function fetchEnrollmentClassMap(courseId: string): Promise<Record<string, string>> {
+  const res = await request(
+    `/teaching/enrollments/class-map?courseId=${encodeURIComponent(courseId)}`,
+  )
+  return (res.map ?? {}) as Record<string, string>
+}
+
 export async function updateStudent(studentId: string, data: any) {
   return request(`/teaching/students/${studentId}`, {
     method: 'PUT',

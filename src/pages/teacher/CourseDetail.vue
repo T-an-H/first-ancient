@@ -2221,6 +2221,7 @@ import {
   fetchStudentsPool,
   resolveStudent,
   fetchCourseClasses,
+  fetchEnrollmentClassMap,
   createCourseClass,
   deleteCourseClass,
   fetchCourseStudents,
@@ -2304,20 +2305,28 @@ onMounted(async () => {
       }
       // 同步 enrollments（避免重复）
       for (const s of remoteStudents) {
-        const hasCurrentCourseEnrollment = store.enrollments.some(
-          (e) => e.courseId === courseId.value && e.studentId === s.id && e.status !== 'dropped'
+        // 课程内分班以服务器为权威：接口带回 courseClassName 时，就地覆盖本地值。
+        // 此前这条分支只在「本地没有记录」时才补一条，且补的那条不带 className，
+        // 导致课程分班只活在本机、换电脑或切角色就被抹掉。
+        const existing = store.enrollments.find(
+          (e) => e.courseId === courseId.value && e.studentId === s.id,
         )
-        if (!hasCurrentCourseEnrollment) {
-          store.enrollments.push({
-            id: `enr-db-${s.id}-${courseId.value}`,
-            studentId: s.id,
-            courseId: courseId.value,
-            scheduleId: '',
-            enrollDate: '',
-            progress: 0,
-            status: 'enrolled',
-          })
+        if (existing) {
+          if (s.courseClassName !== undefined && existing.className !== s.courseClassName) {
+            existing.className = s.courseClassName
+          }
+          continue
         }
+        store.enrollments.push({
+          id: `enr-db-${s.id}-${courseId.value}`,
+          studentId: s.id,
+          courseId: courseId.value,
+          scheduleId: '',
+          enrollDate: '',
+          progress: 0,
+          status: 'enrolled',
+          ...(s.courseClassName !== undefined ? { className: s.courseClassName } : {}),
+        })
       }
     }
   } catch (e) {
@@ -3284,10 +3293,13 @@ const gradeClassBlocks = computed(() => {
   }
 
   // 按班级分组（'' 表示未分班，与学生管理 classBlocks 保持同一口径）
+  // 班级统一取「学生在本课程的班级」（enrollment.className，回退 student.className）——
+  // 此前直接用 student.className（学生自身班级），学生在本课程内被调班后
+  // 成绩录入仍显示旧班级，与学生管理对不上。
   const classMap = new Map<string, typeof list>()
   for (const item of list) {
     if (!item.student) continue
-    const cn = item.student.className || ''
+    const cn = getStudentClassForCourse(item.student.id)
     if (!classMap.has(cn)) classMap.set(cn, [])
     classMap.get(cn)!.push(item)
   }
@@ -3306,8 +3318,8 @@ const gradeClassBlocks = computed(() => {
     const memberToGroup = new Map<string, string>()
     for (const g of groups) {
       for (const mid of g.memberIds) {
-        const student = store.students.find(s => s.id === mid)
-        if (student && (student.className || '') === className) {
+        // 与上面的分组口径一致：按「本课程的班级」判断组员归属
+        if (getStudentClassForCourse(mid) === className) {
           memberToGroup.set(mid, g.name)
         }
       }
@@ -4235,6 +4247,15 @@ async function loadCourseClasses() {
     const data = await fetchCourseClasses(courseId.value)
     courseClassNames.value = data.classes || []
   } catch { courseClassNames.value = [] }
+
+  // 同步「学生 → 本课程班级」映射（服务器为权威源）。
+  // 缺了这一步，课程分班就只活在本机，换电脑/切角色会回退成学籍班级。
+  try {
+    const map = await fetchEnrollmentClassMap(courseId.value)
+    store.applyEnrollmentClassMap(courseId.value, map)
+  } catch (e) {
+    console.warn('同步课程分班映射失败，沿用本地缓存:', e)
+  }
 }
 
 /** 获取学生在本课程的班级（优先 enrollment.className，回退 student.className 兼容旧数据） */

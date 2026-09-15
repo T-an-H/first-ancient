@@ -23,6 +23,24 @@ async function detectCollation(connection) {
   return String(rows[0]?.collation || '') || 'utf8mb4_unicode_ci';
 }
 
+/**
+ * 补列：enrollments.class_name（「学生在这门课里属于哪个班」）
+ *
+ * 为什么放这里自愈而不是让运维手跑 SQL：该列是「课程内分班」的唯一权威存储，
+ * 此前只写在前端 localStorage，导致换电脑/切角色就丢、多老师之间不共享。
+ * 用 information_schema 探测后再 ALTER，重复启动安全。
+ */
+async function ensureEnrollmentClassColumn(connection) {
+  const [rows] = await connection.query(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enrollments' AND COLUMN_NAME = 'class_name'`
+  );
+  if (rows.length > 0) return;
+  await connection.query(
+    "ALTER TABLE enrollments ADD COLUMN class_name VARCHAR(64) DEFAULT '' COMMENT '本课程内所属班级（空=未分班）'"
+  );
+}
+
 export default function ensureTierSchema() {
   if (schemaReadyPromise) return schemaReadyPromise;
 
@@ -30,6 +48,9 @@ export default function ensureTierSchema() {
     const connection = await pool.getConnection();
     try {
       const COLLATION = await detectCollation(connection);
+
+      // 课程内分班的权威存储（补列，重复启动安全）
+      await ensureEnrollmentClassColumn(connection);
 
       // 题库：一门课一套，全课程共用（不区分学生）
       await connection.query(`

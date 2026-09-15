@@ -21,6 +21,8 @@ import {
   submitQualityEvaluation as apiSubmitQualityEvaluation,
   scoreQualityEvaluation as apiScoreQualityEvaluation,
   submitTierTest,
+  setEnrollmentClass,
+  fetchEnrollmentClassMap,
 } from '@/api'
 import type {
   Course, Category, Student, Schedule, Enrollment, Teacher, Grade,
@@ -669,6 +671,13 @@ export const useAppStore = defineStore('app', () => {
   }
 
   /** 按课程更新学生的班级（enrollment 级别，非全局 student） */
+  /**
+   * 设置「学生在本课程内的班级」
+   *
+   * 本地立即生效（界面不等网络），同时写回服务器 —— 这是课程内分班的权威存储。
+   * 此前只写 localStorage，导致换电脑/切角色丢分班、多老师之间不共享。
+   * 写服务器失败不阻断本地操作，但要留日志便于排查。
+   */
   function updateEnrollmentClassName(courseId: string, studentId: string, className: string) {
     enrollments.value = enrollments.value.map((e) =>
       e.courseId === courseId && e.studentId === studentId
@@ -676,6 +685,29 @@ export const useAppStore = defineStore('app', () => {
         : e,
     )
     saveToStorage('enrollments', enrollments.value)
+
+    void setEnrollmentClass(courseId, studentId, className).catch((error) => {
+      console.warn('课程内分班写回服务器失败（本地已生效）:', error)
+    })
+  }
+
+  /**
+   * 用服务器返回的「学生 → 本课程班级」映射覆盖本地
+   *
+   * 课程内分班的权威源在服务器（enrollments.class_name）。本地只作缓存，
+   * 每次进入课程页都以服务器为准，避免换电脑/切角色后显示回退成学籍班级。
+   */
+  function applyEnrollmentClassMap(courseId: string, map: Record<string, string>) {
+    if (!map || Object.keys(map).length === 0) return
+    let touched = false
+    enrollments.value = enrollments.value.map((e) => {
+      if (e.courseId !== courseId) return e
+      const remote = map[e.studentId]
+      if (remote === undefined || remote === e.className) return e
+      touched = true
+      return { ...e, className: remote }
+    })
+    if (touched) saveToStorage('enrollments', enrollments.value)
   }
 
   function deleteEnrollment(id: string) {
@@ -2914,7 +2946,7 @@ export const useAppStore = defineStore('app', () => {
     addCourse, updateCourse, deleteCourse, assignMentorToCourse,
     addCategory, updateCategory, deleteCategory,
     addSchedule, updateSchedule, deleteSchedule,
-    addEnrollment, updateEnrollment, updateEnrollmentClassName, deleteEnrollment,
+    addEnrollment, updateEnrollment, updateEnrollmentClassName, applyEnrollmentClassMap, deleteEnrollment,
     addGrade, updateGrade, deleteGrade,
     addCloudFile, updateCloudFile, deleteCloudFile,
     addTodo, updateTodo, deleteTodo,

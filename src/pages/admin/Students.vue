@@ -147,7 +147,12 @@
             </div>
             <div>
               <label class="mb-1.5 block text-xs font-medium text-gray-500">班级</label>
-              <input v-model="editForm.className" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500" />
+              <!-- 班级按「课程」由授课教师设定（见课程详情 → 学生管理），
+                   管理员端不再提供修改入口，仅展示当前值。 -->
+              <div class="w-full rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm text-gray-500">
+                {{ editForm.className || '未设置' }}
+                <span class="ml-1 text-xs text-gray-400">（由授课教师在课程内设定）</span>
+              </div>
             </div>
             <div>
               <label class="mb-1.5 block text-xs font-medium text-gray-500">手机号</label>

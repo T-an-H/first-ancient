@@ -114,12 +114,41 @@ router.post('/enrollments/bulk', async (req, res) => {
       );
       if (exist.length > 0) { skipped++; continue; }
       await pool.execute(
-        'INSERT INTO enrollments (id, student_id, course_id, schedule_id, enroll_date, progress, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [e.id || `enr-${Date.now()}-${inserted}`, e.studentId, e.courseId, e.scheduleId || '', e.enrollDate || '', e.progress || 0, e.status || 'enrolled']
+        'INSERT INTO enrollments (id, student_id, course_id, schedule_id, enroll_date, progress, status, class_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [e.id || `enr-${Date.now()}-${inserted}`, e.studentId, e.courseId, e.scheduleId || '', e.enrollDate || '', e.progress || 0, e.status || 'enrolled', String(e.className ?? '').trim()]
       );
       inserted++;
     }
     res.json({ success: true, message: `导入 ${inserted} 条选课${skipped ? `，跳过 ${skipped} 条` : ''}${rejected ? `，拒绝 ${rejected} 条（不在总库）` : ''}`, inserted, skipped, rejected });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+/**
+ * PUT /api/teaching/enrollments/class - 设置「学生在本课程内的班级」
+ *
+ * body: { courseId, studentId, className }
+ *
+ * 这是课程内分班的唯一权威写入点。此前 courseDetail 只写前端 localStorage，
+ * 导致换电脑/切角色丢分班、多老师之间不共享、管理员改了学籍班级也不联动。
+ * 空字符串表示「移出班级 / 未分班」。
+ */
+router.put('/enrollments/class', async (req, res) => {
+  try {
+    const courseId = String(req.body?.courseId ?? '').trim();
+    const studentId = String(req.body?.studentId ?? '').trim();
+    const className = String(req.body?.className ?? '').trim();
+    if (!courseId || !studentId) {
+      return res.status(400).json({ success: false, message: '缺少 courseId 或 studentId' });
+    }
+
+    const [result] = await pool.execute(
+      'UPDATE enrollments SET class_name = ? WHERE course_id = ? AND student_id = ?',
+      [className, courseId, studentId]
+    );
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '该学生在此课程下没有选课记录' });
+    }
+    res.json({ success: true, courseId, studentId, className });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
@@ -411,6 +440,28 @@ const COURSE_CLASSES_DDL = `CREATE TABLE IF NOT EXISTS course_classes (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uniq_course_class (course_id, class_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`;
+
+/** GET /api/teaching/enrollments/class-map?courseId=xxx — 本课程全部学生的分班映射 */
+router.get('/enrollments/class-map', async (req, res) => {
+  try {
+    const courseId = String(req.query.courseId || '').trim();
+    if (!courseId) return res.json({ success: true, map: {} });
+    // 个别老库可能还没补上 class_name 列，缺失时返回空映射交由前端回退
+    const [rows] = await pool.execute(
+      `SELECT student_id, TRIM(COALESCE(class_name, '')) AS class_name
+       FROM enrollments
+       WHERE course_id = ? AND TRIM(COALESCE(class_name, '')) <> ''`,
+      [courseId]
+    );
+    const map = {};
+    for (const r of rows) map[r.student_id] = r.class_name;
+    res.json({ success: true, map });
+  } catch (e) {
+    // 列不存在时不报错，返回空映射（前端回退到学生班级）
+    if (e?.code === 'ER_BAD_FIELD_ERROR') return res.json({ success: true, map: {} });
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
 
 /** GET /api/teaching/course-classes?courseId=xxx */
 router.get('/course-classes', async (req, res) => {
