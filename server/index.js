@@ -25,6 +25,7 @@ import qualityEvaluationRoutes from './routes/qualityEvaluations.js';
 import ensureAdminSchema from './bootstrap/ensureAdminSchema.js';
 import ensureProjectSchema from './bootstrap/ensureProjectSchema.js';
 import ensureGradeSchema from './bootstrap/ensureGradeSchema.js';
+import ensureTierSchema from './bootstrap/ensureTierSchema.js';
 import projectRoutes from './routes/projects.js';
 import gradeRoutes from './routes/grades.js';
 import accountRoutes from './routes/accounts.js';
@@ -118,6 +119,7 @@ async function start() {
   await ensureAdminSchema();
   await ensureProjectSchema();
   await ensureGradeSchema();
+  await ensureTierSchema();
 
   app.listen(PORT, () => {
     void warmAssistantModel();

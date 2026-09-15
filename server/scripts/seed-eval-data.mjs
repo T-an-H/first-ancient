@@ -35,8 +35,16 @@ const TARGET_DEPARTMENT = '计算机学院';
 /** 演示教师（已存在于线上 teachers 表） */
 const TEACHER = '钱老师';
 const SEMESTER = '2026秋季学期';
-const START = '2026-09-08';
-const END = '2026-12-31';
+/**
+ * 学期起止日期（**必须是周边界**）
+ *
+ * 排课按「起始/结束日期所在的那一周」展开成具体课次（见 src/lib/schedule.ts），
+ * 所以 START 取周一、END 取周日。否则课次会溢出到学期之外：
+ *   原 START=2026-09-08(周二) → 展开出 09-07(周一)，比开学日还早一天，
+ *   连带把 AI 分层测试窗口也提前了一天。
+ */
+const START = '2026-09-14';  // 周一
+const END   = '2026-12-20';  // 周日
 
 /**
  * 课程定义（title 尽量对齐 courseCareerMap.ts，保证职业推荐命中有意义）。

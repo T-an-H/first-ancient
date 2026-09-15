@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { getNow, getTodayStart, parseLocalDate } from '@/lib/date'
 import { buildCourseScheduleOccurrences } from '@/lib/schedule'
+import { matchStudentFromSession } from '@/lib/studentSession'
 import {
   API_BASE,
   fetchCourseEvaluationState,
@@ -24,7 +25,7 @@ import type {
   Course, Category, Student, Schedule, Enrollment, Teacher, Grade,
   CloudFile, TodoItem, OnlineDoc, Note, Evaluation, EvaluationConfig,
   StudentGroup, EvalAnomaly, EvalReminder, GradeWeightConfig, DetailedGrade,
-  Mentor, Leader, AITierQuestion, StudentTierRecord, EvalType,
+  Mentor, Leader, AITierQuestion, StudentTierRecord, EvalType, LearningTier,
   Homework, HomeworkSubmission, Department, QualityEvaluation, QualityEvalFile, QualityEvalSubmission
 } from '@/types'
 import { getDefaultGradeConfig, TEMPLATE_EVAL_TYPES } from '@/types'
@@ -299,6 +300,17 @@ export const useAppStore = defineStore('app', () => {
   const isLoggedIn = ref<boolean>(!!__initialSession)
   const currentUser = ref<string | null>(__initialSession?.userInfo?.name ?? null)
   const currentRole = ref<UserRole>((__initialSession?.role as UserRole) ?? null)
+
+  /**
+   * 当前登录学生对应的 students 记录
+   *
+   * 统一按「会话 id（学号）→ 会话 studentId → 姓名」匹配，姓名只作为兜底。
+   * 不要直接用 `students.find(s => s.name === currentUser)` —— 同名同姓会取错人。
+   */
+  function getCurrentStudent(): Student | null {
+    if (currentRole.value !== 'student') return null
+    return matchStudentFromSession(students.value, currentUser.value)
+  }
 
   // 临时预览解锁：测试评价填写/查看流程时忽略锁定、时间与已提交限制
   const EVAL_PREVIEW_UNLOCKED = true
@@ -775,7 +787,7 @@ export const useAppStore = defineStore('app', () => {
 
   function getCourseCloudFiles(courseId: string): CloudFile[] {
     // 当前学生身份（仅学生端调用，需结合班级可见性过滤）
-    const student = students.value.find((s) => s.name === currentUser.value)
+    const student = getCurrentStudent()
     const myClassName = student?.className
 
     return cloudFiles.value.filter((f) => {
@@ -848,11 +860,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function syncStudentHomeworkTodos(courseId?: string, studentId?: string) {
-    const resolvedStudentId = studentId || (
-      currentRole.value === 'student' && currentUser.value
-        ? students.value.find((s) => s.name === currentUser.value)?.id
-        : null
-    )
+    const resolvedStudentId = studentId || (currentRole.value === 'student' ? getCurrentStudent()?.id : null) || null
     if (!resolvedStudentId) return []
 
     const courseIds = courseId
@@ -1721,7 +1729,8 @@ export const useAppStore = defineStore('app', () => {
   function autoLockPreviousSession(courseId: string, currentSession: number, className = '') {
     for (let s = 1; s < currentSession; s++) {
       if (!isSessionLocked(courseId, s, className)) {
-        processSessionOverdue(courseId, s, className)
+        // 逾期处理按选课（全课程学生）执行，与班级无关，故不传 className
+        processSessionOverdue(courseId, s)
         markSessionEvalRemindersCompleted(courseId, s)
         lockSession(courseId, s, className)
       }
@@ -1883,12 +1892,16 @@ export const useAppStore = defineStore('app', () => {
    * 获取某课程的评价次数 — 基于实际排课数量计算
    * 每 2 节课对应 1 次评价，确保不会产生无对应排课的幻影场次
    */
-  function getEvalSessions(courseId: string): number {
+  function getEvalSessions(courseId: string, className = ''): number {
     const course = courses.value.find((c) => c.id === courseId)
     if (!course) return 1
 
+    // 按班级过滤：同一门课挂多个班时，各自算各自的轮次；
+    // 不传班级（教师查看整门课）时统计全部课次。
+    const normalizedClassName = String(className).trim()
     const scheduleCount = schedules.value
       .filter((s) => s.courseId === courseId)
+      .filter((s) => !normalizedClassName || String(s.className ?? '').trim() === normalizedClassName)
       .length
 
     // 无排课 → 1 次默认评价
@@ -1980,40 +1993,40 @@ export const useAppStore = defineStore('app', () => {
     const oneWeekLater = new Date(now)
     oneWeekLater.setDate(oneWeekLater.getDate() + 7)
 
-    const isTeacher = currentRole.value === 'teacher'
-    const isStudent = currentRole.value === 'student'
+    const closingTodos: TodoItem[] = []
+    for (const r of evalReminders.value) {
+      if (r.status === 'completed') continue
 
-    const pendingReminders = evalReminders.value.filter((r) => {
-      if (r.status === 'completed') return false
-      if (isTeacher && r.studentId === currentUser.value) {
-        const deadline = new Date(r.deadline)
-        return deadline >= now && deadline <= oneWeekLater
+      let assignedToCurrentUser = false
+      if (currentRole.value === 'teacher') {
+        // 教师提醒直接以姓名作为目标 id
+        assignedToCurrentUser = r.studentId === currentUser.value
+      } else if (currentRole.value === 'student') {
+        const student = getCurrentStudent()
+        assignedToCurrentUser = !!student && r.studentId === student.id
       }
-      if (isStudent) {
-        const student = students.value.find((s) => s.name === currentUser.value)
-        if (student && r.studentId === student.id) {
-          const deadline = new Date(r.deadline)
-          return deadline >= now && deadline <= oneWeekLater
-        }
-      }
-      return false
-    })
+      if (!assignedToCurrentUser) continue
 
-    const existingTodoKeys = new Set(todos.value.map((t) => t.title))
-    let newCount = 0
+      const deadline = new Date(r.deadline)
+      if (deadline < now || deadline > oneWeekLater) continue
 
-    for (const r of pendingReminders) {
-      const todoTitle = `📋 评价提醒：${r.courseTitle} 第${r.sessionNumber}次评价即将截止（${r.deadline}）`
-      if (existingTodoKeys.has(todoTitle)) continue
-      todos.value.push({
-        id: `todo-eval-${Date.now()}-${r.id}`,
-        title: todoTitle,
+      closingTodos.push({
+        id: `todo-eval-${r.id}`,
+        title: `📋 评价提醒：${r.courseTitle} 第${r.sessionNumber}次评价即将截止（${r.deadline}）`,
         completed: false,
         createdAt: now.toISOString().split('T')[0],
         dueDate: r.deadline,
         createdBy: currentUser.value || 'system',
       })
-      existingTodoKeys.add(todoTitle)
+    }
+
+    const existingTodoKeys = new Set(todos.value.map((t) => t.title))
+    let newCount = 0
+
+    for (const t of closingTodos) {
+      if (existingTodoKeys.has(t.title)) continue
+      todos.value.push(t)
+      existingTodoKeys.add(t.title)
       newCount++
     }
 
@@ -2306,18 +2319,39 @@ export const useAppStore = defineStore('app', () => {
 
   // ====== 配置提醒 ======
 
-  /** 第一节课是否已经开始（配置锁定期） */
+  /**
+   * 第一节课是否已经开始（配置锁定期）
+   * 注意：这里用 occurrences[0].end 判断，AI 分层的可测起点同样以它为准
+   */
   function isFirstClassStarted(courseId: string, className = ''): boolean {
     const occurrences = getCourseScheduleOccurrences(courseId, className)
     if (occurrences.length === 0) return false
     return getNow().getTime() >= occurrences[0].end.getTime()
   }
 
-  /** 第二节课是否已经开始（AI 分层测试截止点） */
-  function isSecondClassStarted(courseId: string, className = ''): boolean {
+  /** 第一节课当天 23:59:59.999（AI 分层测试的截止时刻） */
+  function getFirstClassDayEnd(courseId: string, className = ''): Date | null {
     const occurrences = getCourseScheduleOccurrences(courseId, className)
-    if (occurrences.length < 2) return false
-    return getNow().getTime() >= occurrences[1].start.getTime()
+    if (occurrences.length === 0) return null
+    const dayEnd = new Date(occurrences[0].end)
+    dayEnd.setHours(23, 59, 59, 999)
+    return dayEnd
+  }
+
+  /**
+   * AI 分层测试窗口是否已关闭
+   *
+   * 窗口 = 第一节课结束后 ~ 第一节课当天 23:59:59
+   * 当天未完成 → 关闭并自动分配基础层。
+   * 只有当天的课次晚于 23:59 结束（如 23:00-23:59 后拖到次日）时，
+   * 以第一节课结束时刻兜底，避免窗口倒挂。
+   */
+  function isAITierTestClosed(courseId: string, className = ''): boolean {
+    const occurrences = getCourseScheduleOccurrences(courseId, className)
+    if (occurrences.length === 0) return false
+    const dayEnd = getFirstClassDayEnd(courseId, className)
+    const deadline = Math.max(dayEnd ? dayEnd.getTime() : 0, occurrences[0].end.getTime())
+    return getNow().getTime() >= deadline
   }
 
   /** 获取某学生所有未完成的 AI 分层测试（测试窗口已开但未超时） */
@@ -2335,32 +2369,27 @@ export const useAppStore = defineStore('app', () => {
       if (studentTiers.value[tierKey]) continue
 
       const occurrences = getCourseScheduleOccurrences(enr.courseId, className)
-      if (occurrences.length < 2) continue
+      if (occurrences.length === 0) continue
       if (now < occurrences[0].end.getTime()) continue
-      if (now >= occurrences[1].start.getTime()) continue
+      if (isAITierTestClosed(enr.courseId, className)) continue
 
       result.push({
         courseId: enr.courseId,
         courseTitle: course.title,
-        deadline: formatDateOnly(occurrences[1].start),
+        deadline: formatDateOnly(occurrences[0].end),
       })
     }
 
     return result
   }
 
-  /** 间隔到第二节课后自动分配基础层 */
+  /** 第一节课当天未完成测试 → 自动分配基础层（当天 23:59:59 之后触发） */
   function autoAssignOverdueBasicTier(courseId: string, studentId: string, fallbackClassName = '') {
     const key = `${courseId}||${studentId}`
     const className = resolveStudentClassName(studentId, fallbackClassName)
     if (studentTiers.value[key]) return
-
-    const occurrences = getCourseScheduleOccurrences(courseId, className)
-    if (occurrences.length < 2) return
-
-    const now = getNow().getTime()
-    if (now < occurrences[0].end.getTime()) return
-    if (now < occurrences[1].start.getTime()) return
+    // 以第一节课当天 23:59:59 为截止；当天无有效课次时无从判定，直接跳过
+    if (!isAITierTestClosed(courseId, className)) return
 
     const record: StudentTierRecord = {
       courseId,
@@ -2591,14 +2620,17 @@ export const useAppStore = defineStore('app', () => {
     return 'basic'
   }
 
-  /** 提交 AI 分层测试结果 */
-  function submitAITierTest(courseId: string, studentId: string, score: number) {
+  /**
+   * 提交 AI 分层测试结果，写入本地缓存
+   *
+   * @param tier 后端权威判定的层级。不传则在本地按 score 判定（离线兜底）。
+   */
+  function submitAITierTest(courseId: string, studentId: string, score: number, tier?: LearningTier) {
     const resultKey = `${courseId}||${studentId}`
-    const tier = determineTier(score)
     const record: StudentTierRecord = {
       courseId,
       studentId,
-      tier,
+      tier: tier ?? determineTier(score),
       score,
       createdAt: getNow().toISOString().split('T')[0],
     }
@@ -2617,12 +2649,9 @@ export const useAppStore = defineStore('app', () => {
    */
   function generateAutoTodos() {
     const now = getNow()
-    const currentStudentId = (() => {
-      if (currentRole.value !== 'student' || !currentUser.value) return null
-      return students.value.find((s) => s.name === currentUser.value)?.id ?? null
-    })()
+    const student = getCurrentStudent()
     // 当前用户在评价提醒中的目标 id：学生用学生 id，其余角色用姓名（领导教师/导师的提醒直接指向其姓名）
-    const myTargetId = currentStudentId || currentUser.value || ''
+    const myTargetId = student?.id ?? (currentUser.value || '')
     // 是否教师身份（普通教师 或 领导 asTeacher 在教师部分有专属授课课程）
     const isTeacherLike = !!currentUser.value && (
       currentRole.value === 'teacher' ||
@@ -2696,14 +2725,14 @@ export const useAppStore = defineStore('app', () => {
     }
 
     // ── 3. AI 分层测试待办（仅学生） ──
-    if (currentRole.value === 'student' && currentStudentId) {
-      const pendingAITests = getPendingAITierTests(currentStudentId)
+    if (student?.id) {
+      const pendingAITests = getPendingAITierTests(student.id)
       for (const test of pendingAITests) {
-        const todoId = `auto-ai-tier-${test.courseId}-${currentStudentId}`
+        const todoId = `auto-ai-tier-${test.courseId}-${student.id}`
         if (hasAutoTodo(todoId)) continue
         newTodos.push({
           id: todoId,
-          title: `[AI分层] ${test.courseTitle} - 请在第二节课前完成分层测试`,
+          title: `[AI分层] ${test.courseTitle} - 请在第一节课当天完成分层测试`,
           completed: false,
           createdAt: now.toISOString().split('T')[0],
           dueDate: test.deadline,
@@ -2714,10 +2743,10 @@ export const useAppStore = defineStore('app', () => {
     }
 
     // ── 4. 作业待办（仅学生） ──
-    if (currentRole.value === 'student' && currentStudentId) {
+    if (student?.id) {
       const pendingHomework = getPendingStudentHomeworkSummaries()
       for (const hw of pendingHomework) {
-        const todoId = `auto-homework-${hw.id}-${currentStudentId}`
+        const todoId = `auto-homework-${hw.id}-${student.id}`
         if (hasAutoTodo(todoId)) continue
         newTodos.push({
           id: todoId,
@@ -2875,8 +2904,9 @@ export const useAppStore = defineStore('app', () => {
     getTeacherCoursesForUser, getCourseTeacherTargets, getCourseMentorTargets,
     // 待处理事务统计（红点提醒）
     hasPendingEvalForCourse, isCourseConfigPending, getMyPendingCourseIds,
+    getCurrentStudent,
     getStudentTier, determineTier, submitAITierTest,
-    isSecondClassStarted, getPendingAITierTests, autoAssignOverdueBasicTier,
+    isAITierTestClosed, getPendingAITierTests, autoAssignOverdueBasicTier,
     // department actions
     setSelectedDepartment, getSelectedDepartment,
     addDepartment, updateDepartment, deleteDepartment,

@@ -575,3 +575,47 @@ export async function exportTeachers() {
     timeoutMs: 30000,
   })
 }
+
+// ==================== AI 分层测试 ====================
+
+/** 后端返回的分层题目（不含正确答案） */
+export interface TierTestQuestionDTO {
+  id: string
+  questionType: 'single_choice' | 'true_false'
+  questionText: string
+  options: string[]
+  score: number
+  orderIndex: number
+}
+
+export interface TierTestSubmitResult {
+  score: number
+  tier: 'basic' | 'advanced' | 'excellent'
+  tierLabel: string
+  alreadySubmitted?: boolean
+}
+
+/** 获取某课程的分层测试题（首次调用会触发生成，耗时较长） */
+export async function fetchTierTestQuestions(courseId: string): Promise<TierTestQuestionDTO[]> {
+  const res = await request(`/tier-test/${encodeURIComponent(courseId)}/questions`, {
+    timeoutMs: 60000,
+  })
+  return (res.questions ?? []) as TierTestQuestionDTO[]
+}
+
+/**
+ * 提交分层测试答案
+ *
+ * 注意：answerText 必须传「选项原文」，后端按文本比对判分。
+ */
+export async function submitTierTest(
+  courseId: string,
+  studentId: string,
+  answers: { questionId: string; answerText: string }[],
+): Promise<TierTestSubmitResult> {
+  return request(`/tier-test/${encodeURIComponent(courseId)}/submit`, {
+    method: 'POST',
+    timeoutMs: 20000,
+    body: JSON.stringify({ studentId, answers }),
+  }) as Promise<TierTestSubmitResult>
+}

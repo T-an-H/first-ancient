@@ -132,7 +132,7 @@
                   borderColor: card.border
                 }">
                 <p class="font-semibold truncate text-[12px] leading-tight" :style="{ color: card.text }">{{ card.courseName }}</p>
-                <p class="text-[10px] mt-0.5 font-medium truncate" :style="{ color: card.text, opacity: 0.8 }">{{ card.teacher }}</p>
+                <p class="text-[10px] mt-0.5 font-medium truncate" :style="{ color: card.text, opacity: 0.8 }">{{ cardTeacherLine(card) }}</p>
                 <p class="text-[9px] mt-0.5 truncate" :style="{ color: card.text, opacity: 0.6 }">{{ card.room }} · {{ card.timeSlot }}</p>
               </div>
             </div>
@@ -143,11 +143,13 @@
 
     <!-- 图例 -->
     <div v-if="courseColors.length > 0" class="flex flex-wrap gap-2 text-xs">
+      <!-- 导师端：在课程名后面标出「我带的」 -->
+      <span v-if="isMentorView" class="w-full text-[11px] text-gray-400">标注「我带的」的课程由你负责</span>
       <span v-for="cc in courseColors" :key="cc.label"
         class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border"
         :style="{ background: cc.cardBg, borderColor: cc.border, color: cc.text }">
         <span class="w-2.5 h-2.5 rounded-sm" :style="{ background: cc.border }" />
-        {{ cc.label }}
+        {{ cc.label }}<template v-if="isMentorView && cc.mentor">（我带的）</template>
       </span>
     </div>
   </div>
@@ -283,6 +285,11 @@ const weekNumber = computed(() => {
 })
 
 // ---- 课表数据 ----
+/** 当前是否在「导师」身份的课表页（/mentor 段，或角色为导师） */
+const isMentorView = computed(() =>
+  store.currentRole === 'mentor' || route.path.startsWith('/mentor')
+)
+
 /** 根据当前路由身份获取课程安排（领导在教师段→教师课程，导师段→导师课程，领导段→管辖课程） */
 const userSchedules = computed(() => {
   const currentUser = store.currentUser || ''
@@ -362,6 +369,8 @@ interface CoursePattern {
   timeSlot: string
   title: string
   teacher: string
+  /** 企业导师（导师端课表用于显示「我是这门课的导师」） */
+  mentor: string
   room: string
 }
 
@@ -374,7 +383,7 @@ const coursePatterns = computed(() => {
     if (!map.has(s.courseId)) map.set(s.courseId, [])
     const list = map.get(s.courseId)!
     if (!list.some(p => p.dayOfWeek === dow && p.timeSlot === s.timeSlot)) {
-      list.push({ dayOfWeek: dow, timeSlot: s.timeSlot, title: s.title, teacher: s.teacher, room: s.room })
+      list.push({ dayOfWeek: dow, timeSlot: s.timeSlot, title: s.title, teacher: s.teacher, mentor: s.mentor ?? '', room: s.room })
     }
   })
   return map
@@ -442,6 +451,7 @@ function getDayCourseCards(day: Date): CardItem[] {
           id: `${courseId}-${p.dayOfWeek}`,
           courseName: p.title,
           teacher: p.teacher,
+          mentor: p.mentor,
           room: p.room,
           timeSlot: p.timeSlot,
           ...c,
@@ -491,6 +501,7 @@ interface CardItem extends CourseColor {
   id: string
   courseName: string
   teacher: string
+  mentor: string
   room: string
   timeSlot: string
 }
@@ -518,13 +529,26 @@ const hasCards = computed(() => {
 })
 
 const courseColors = computed(() => {
-  const map = new Map<string, { label: string; cardBg: string; border: string; text: string }>()
+  const map = new Map<string, { label: string; mentor: string; cardBg: string; border: string; text: string }>()
   coursePatterns.value.forEach((patterns, courseId) => {
     if (!map.has(courseId)) {
       const c = getCourseColor(courseId)
-      map.set(courseId, { label: patterns[0]?.title || '', cardBg: c.cardBg, border: c.border, text: c.text })
+      map.set(courseId, { label: patterns[0]?.title || '', mentor: patterns[0]?.mentor || '', cardBg: c.cardBg, border: c.border, text: c.text })
     }
   })
   return Array.from(map.values())
 })
+
+/**
+ * 课表卡片第二行显示的"人员"文案
+ *
+ * - 导师端：显示「张导师 · 授课：钱老师」，让导师一眼看到自己负责的课及授课教师
+ * - 其他端：只显示授课教师
+ */
+function cardTeacherLine(card: CardItem): string {
+  if (isMentorView.value && card.mentor) {
+    return `${card.mentor} · 授课：${card.teacher}`
+  }
+  return card.teacher
+}
 </script>

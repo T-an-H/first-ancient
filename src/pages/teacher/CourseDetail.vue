@@ -502,6 +502,12 @@
             <Slider label="企业导师评价" :val="gradeConfig.mentorScoreWeight" @change="(v) => updateGradeConfig('mentorScoreWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly || !isEvalTypeEnabled('mentor')" />
           </Section>
 
+          <!-- 切换模板自动归零的提示：避免老师以为已生效就离开 -->
+          <div v-if="templateWeightNotice" class="flex items-start gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+            <Info class="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+            <span>{{ templateWeightNotice }}</span>
+          </div>
+
           <Section title="期中成绩构成" :hint="`合计：${midtermSubTotal}%${midtermSubTotal !== 100 ? '（须等于 100%）' : ''}`" :valid="midtermSubTotal === 100">
             <Slider label="期中考试" :val="gradeConfig.midtermExamWeight" @change="(v) => updateGradeConfig('midtermExamWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
             <Slider label="项目成绩" :val="gradeConfig.midtermProjectWeight" @change="(v) => updateGradeConfig('midtermProjectWeight', v)" :disabled="isReadOnly || isWeightLocked || isViewOnly" />
@@ -558,6 +564,14 @@
           </select>
           <span v-if="gradeEntrySearch.trim()" class="text-xs text-gray-400">
             搜索 "{{ gradeEntrySearch.trim() }}"：匹配 {{ filteredGradeClassBlocks.length }} 个班级
+          </span>
+        </div>
+
+        <!-- 未分班提示：与学生管理面板口径一致，未分班学生不作为一个班级展示 -->
+        <div v-if="unclassedStudents.length > 0" class="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5">
+          <AlertTriangle class="w-4 h-4 text-amber-500 flex-shrink-0" />
+          <span class="text-xs text-amber-700">
+            另有 {{ unclassedStudents.length }} 名未分班学员不在下方班级列表中，请先到「学生管理」把他们加入班级后再录入成绩。
           </span>
         </div>
 
@@ -1171,6 +1185,9 @@
             <div v-if="!isViewOnly && classData.className" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button @click.stop="openAddStudentToClass(classData.className)" class="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded" title="添加学员到班级">
                 <UserPlus class="w-3.5 h-3.5" />
+              </button>
+              <button @click.stop="openEditClassModal(classData.className)" class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="重命名班级">
+                <Pencil class="w-3.5 h-3.5" />
               </button>
               <button @click.stop="handleImportGroupsForClass(classData.className)" class="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title="导入分组">
                 <Upload class="w-3.5 h-3.5" />
@@ -1974,7 +1991,7 @@ import {
   EvalFrequencyDescs, getDefaultGradeConfig
 } from '@/types'
 import type { EvalTemplate, EvalType, Evaluation, EvalFrequency, Schedule, GradeWeightConfig, EvaluationConfig } from '@/types'
-import { AlertTriangle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, LogOut, Network } from 'lucide-vue-next'
+import { AlertTriangle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, LogOut, Network, Info } from 'lucide-vue-next'
 import { getNow } from '@/lib/date'
 import {
   createEmptyEvalDraft,
@@ -2545,7 +2562,7 @@ function openEditClassModal(className: string) {
   editClassName.value = className
   showEditClassModal.value = true
 }
-function handleSaveEditClass() {
+async function handleSaveEditClass() {
   if (!editingOldClassName.value || !editClassName.value.trim()) return
   const newName = editClassName.value.trim()
   // 更新该班级所有学生的 className
@@ -2557,7 +2574,7 @@ function handleSaveEditClass() {
   showEditClassModal.value = false
   alert(`班级"${editingOldClassName.value}"已重命名为"${newName}"`)
 }
-function handleDeleteClass(className: string) {
+async function handleDeleteClass(className: string) {
   if (!confirm(`确定删除班级"${className}"？该操作只会清空学生的班级信息，不会删除学生。`)) return
   for (const stu of store.students) {
     if (stu.className === className) {
@@ -2606,13 +2623,23 @@ const updateGradeConfig = (key: keyof GradeWeightConfig, val: number) => {
   gradeConfig.value = { ...gradeConfig.value, [key]: Math.max(0, Math.min(100, val || 0)) }
 }
 
-const evalTypeWeightKeyMap: Record<EvalType, keyof GradeWeightConfig> = {
+/**
+ * 评价类型 → 平时成绩权重字段
+ *
+ * 必须排除 `courseId`：它虽是 GradeWeightConfig 的键，但类型是 string，
+ * 归零时写数值 0 会被 TS 收窄成 never 而报错。
+ */
+type EvalWeightKey = Exclude<keyof GradeWeightConfig, 'courseId'>
+const evalTypeWeightKeyMap: Record<EvalType, EvalWeightKey> = {
   self: 'selfEvalWeight',
   intra_group: 'peerReviewWeight',
   inter_group: 'interGroupEvalWeight',
   teacher: 'teacherScoreWeight',
   mentor: 'mentorScoreWeight',
 }
+
+/** 切换评价模板后，自动归零权重的提示（提示老师需要重新配平并保存） */
+const templateWeightNotice = ref('')
 
 function isEvalTypeEnabled(type: EvalType) {
   return TEMPLATE_EVAL_TYPES[activeEvalConfig.value.template].includes(type)
@@ -2644,6 +2671,8 @@ function handleSaveGradeConfig() {
   normalizeGradeConfigForTemplate()
   store.saveGradeConfig({ ...gradeConfig.value, courseId: courseId.value })
   store.markConfigCompleted(courseId.value, 'weights')
+  // 已保存 → 归零提示不再需要
+  templateWeightNotice.value = ''
 }
 const newExamName = ref('')
 const newExamFullScore = ref(100)
@@ -3015,7 +3044,9 @@ const filteredGradeStudents = computed(() => {
 
 const gradeClassBlocks = computed(() => {
   if (!courseId.value || !selectedExam.value) return []
-  const search = gradeSearch.value.trim().toLowerCase()
+  // 用本面板（成绩录入）的搜索词，而非「成绩查询」面板的 gradeSearch，
+  // 否则在成绩查询框里打字会静默改动这里的班级列表。
+  const search = gradeEntrySearch.value.trim().toLowerCase()
   let list = enrolledStudents.value
   if (search) {
     list = list.filter(({ student }) =>
@@ -3023,13 +3054,19 @@ const gradeClassBlocks = computed(() => {
     )
   }
 
-  // 按班级分组
+  // 按班级分组（'' 表示未分班，与学生管理 classBlocks 保持同一口径）
   const classMap = new Map<string, typeof list>()
   for (const item of list) {
     if (!item.student) continue
-    const cn = item.student.className || '未分班'
+    const cn = item.student.className || ''
     if (!classMap.has(cn)) classMap.set(cn, [])
     classMap.get(cn)!.push(item)
+  }
+  // 补入课程班级表中的空班级（与学生管理面板一致，否则两边班级数量对不上）
+  if (!search) {
+    for (const cn of courseClassNames.value) {
+      if (!classMap.has(cn)) classMap.set(cn, [])
+    }
   }
 
   // 按分组组织
@@ -3041,7 +3078,7 @@ const gradeClassBlocks = computed(() => {
     for (const g of groups) {
       for (const mid of g.memberIds) {
         const student = store.students.find(s => s.id === mid)
-        if (student && (student.className || '未分班') === className) {
+        if (student && (student.className || '') === className) {
           memberToGroup.set(mid, g.name)
         }
       }
@@ -3072,9 +3109,9 @@ const gradeClassBlocks = computed(() => {
   return result
 })
 
-/** 成绩管理 - 班级选项 */
+/** 成绩管理 - 班级选项（未分班不作为班级展示，与 filteredGradeClassBlocks 一致） */
 const gradeClassOptions = computed(() => {
-  const names = new Set(gradeClassBlocks.value.map(s => s.className))
+  const names = new Set(gradeClassBlocks.value.map(s => s.className).filter((n) => n !== ''))
   return Array.from(names).map(n => ({ label: n, value: n }))
 })
 
@@ -3088,7 +3125,9 @@ const gradeGroupOptions = computed(() => {
 
 /** 成绩管理 - 过滤后的数据 */
 const filteredGradeClassBlocks = computed(() => {
-  let blocks = gradeClassBlocks.value
+  // 与学生管理面板一致：未分班（className '') 不作为一个班级展示，
+  // 否则两边班级数量对不上。
+  let blocks = gradeClassBlocks.value.filter(s => s.className !== '')
   if (gradeFilterClass.value) {
     blocks = blocks.filter(s => s.className === gradeFilterClass.value)
   }
@@ -4032,12 +4071,19 @@ const handleSetConfig = (updates: Partial<import('@/types').EvaluationConfig>) =
   if (updates.template) {
     const enabledTypes = TEMPLATE_EVAL_TYPES[updates.template]
     const zeroed: Partial<GradeWeightConfig> = {}
+    const zeroedLabels: string[] = []
     for (const type of ALL_EVAL_TYPES) {
       if (!enabledTypes.includes(type)) {
         zeroed[evalTypeWeightKeyMap[type]] = 0
+        zeroedLabels.push(EvalTypeLabels[type])
       }
     }
     gradeConfig.value = { ...gradeConfig.value, ...zeroed }
+    // 归零会让「平时成绩构成」合计掉到 100% 以下，保存按钮随之置灰。
+    // 这里必须给出提示，否则老师会以为切换模板已生效就离开了。
+    if (zeroedLabels.length > 0) {
+      templateWeightNotice.value = `已自动将「${zeroedLabels.join('、')}」权重归零，合计低于 100%，请重新配平后再点「保存配置」`
+    }
   }
   store.setEvalConfig(config)
   store.markConfigCompleted(courseId.value, 'evalConfig')
@@ -4725,6 +4771,8 @@ function confirmRemoveMemberFromGroup() {
 function confirmRemoveMemberFromClass() {
   const studentId = removeMemberStudentId.value
   store.updateStudent(studentId, { className: '' })
+  // 落库，否则刷新后学生又回到原班级
+  void syncStudent(studentId, { className: '' }).catch(() => {})
   for (const g of store.studentGroups) {
     if (g.courseId === courseId.value && g.memberIds.includes(studentId)) {
       store.updateStudentGroup(g.id, {
@@ -4847,6 +4895,7 @@ function confirmQuickAddToClass() {
     }
   }
   store.updateStudent(quickAddClassStudentId.value, { className: quickAddClassSelected.value })
+  void syncStudent(quickAddClassStudentId.value, { className: quickAddClassSelected.value }).catch(() => {})
   showQuickAddClassModal.value = false
 }
 
@@ -4895,6 +4944,8 @@ function toggleAddStudentToClass(studentId: string) {
 function confirmAddStudentsToClass() {
   for (const sid of addStudentToClassSelected.value) {
     store.updateStudent(sid, { className: addStudentToClassName.value })
+    // 落库，否则刷新后学生又回到原班级
+    void syncStudent(sid, { className: addStudentToClassName.value }).catch(() => {})
   }
   showAddStudentToClassModal.value = false
   addStudentToClassSelected.value = []
@@ -4904,6 +4955,8 @@ function confirmAddStudentsToClass() {
 function handleRemoveStudentFromClass(studentId: string) {
   if (!confirm('确定将该学员移出当前班级？（该学员将变为未分班状态，并从所有分组中移除）')) return
   store.updateStudent(studentId, { className: '' })
+  // 落库，否则刷新后学生又回到原班级
+  void syncStudent(studentId, { className: '' }).catch(() => {})
   // 从所有分组中移除
   for (const g of store.studentGroups) {
     if (g.courseId === courseId.value && g.memberIds.includes(studentId)) {

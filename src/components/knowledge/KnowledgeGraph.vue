@@ -5,7 +5,6 @@
       <div class="flex items-center justify-between flex-wrap gap-3">
         <div class="flex items-center gap-2">
           <Network class="w-5 h-5 text-indigo-500" />
-          <h2 class="font-semibold text-gray-900">知识图谱</h2>
           <span class="text-xs text-gray-400">{{ displayProjects.length }} 个任务 · 每 2 学时一个任务</span>
         </div>
         <div v-if="canManage" class="flex items-center gap-2">

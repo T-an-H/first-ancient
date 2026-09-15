@@ -29,12 +29,12 @@
               <p class="text-xs text-brand-400 mt-1">届时将根据第一节课内容生成 10 道测试题，依据得分判定学习层级</p>
             </div>
 
-            <!-- 测试窗口期（第一节课后～第二节课前） -->
+            <!-- 测试窗口期（第一节课结束后 ~ 第一节课当天 23:59） -->
             <div v-else-if="firstClassEnded && !secondClassStarted && !tierFinalized" class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-8 text-center">
               <Sparkles class="w-12 h-12 mx-auto mb-3 text-blue-500" />
               <h3 class="text-lg font-semibold text-blue-800 mb-2">AI 分层测试已开放</h3>
               <p class="text-sm text-blue-600 mb-2">完成 10 道测试题（单选+判断），系统将根据得分判定你的学习层级</p>
-              <p class="text-xs text-brand-600 mb-6">⚠ 测试窗口：第一节课结束后 ~ 第二节课开始前，逾期将自动分配到基础层</p>
+              <p class="text-xs text-brand-600 mb-6">⚠ 测试窗口：第一节课结束后 ~ 当天 23:59，逾期将自动分配到基础层</p>
               <button @click="openAITest"
                 class="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors shadow-lg shadow-blue-500/25 inline-flex items-center gap-2">
                 <HelpCircle class="w-5 h-5" />
@@ -46,7 +46,7 @@
             <div v-else-if="secondClassStarted && !tierFinalized" class="bg-red-50 border border-red-200 rounded-xl p-8 text-center">
               <XCircle class="w-12 h-12 mx-auto mb-3 text-red-400" />
               <h3 class="text-lg font-semibold text-red-700 mb-2">测试窗口已关闭</h3>
-              <p class="text-sm text-red-600 mb-4">第二节课已开始，AI 分层测试逾期未完成，已自动分配到基础层</p>
+              <p class="text-sm text-red-600 mb-4">第一节课当天已结束，AI 分层测试逾期未完成，已自动分配到基础层</p>
               <div class="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm">
                 <Layers class="w-4 h-4 text-brand-600" />
                 <span class="text-sm font-bold text-gray-800">基础层</span>
@@ -74,7 +74,7 @@
                     <div class="text-right">
                       <p class="text-xs text-gray-400">分层测试得分</p>
                       <p class="text-2xl font-bold text-blue-600">{{ myTierScore }}</p>
-                      <p class="text-xs text-gray-400">/ {{ totalQuestions * 10 }}分</p>
+                      <p class="text-xs text-gray-400">/ {{ tierTestFullScore }}分</p>
                     </div>
                   </div>
 
@@ -109,48 +109,73 @@
           <Modal :is-open="aiTestOpen" :on-close="closeAITest"
             title="AI 分层测试" max-width="max-w-2xl">
             <template v-if="!testSubmitted">
-              <div class="space-y-6">
-                <!-- 进度 -->
-                <div class="flex items-center justify-between">
-                  <span class="text-sm text-gray-400">已答 {{ answeredCount }}/{{ totalQuestions }} 题</span>
-                  <span class="text-xs text-gray-400">每题 10 分，满分 {{ totalQuestions * 10 }} 分</span>
-                </div>
-                <div class="w-full h-1.5 bg-brand-400/10 rounded-full overflow-hidden">
-                  <div class="h-full bg-blue-500 rounded-full transition-all"
-                    :style="{ width: (answeredCount / totalQuestions * 100) + '%' }" />
+              <!-- 加载中 -->
+              <div v-if="testLoading" class="py-16 text-center">
+                <div class="w-10 h-10 mx-auto mb-3 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                <p class="text-sm text-gray-500">正在准备测试题…</p>
+                <p class="text-xs text-gray-400 mt-1">首次为本课程生成题目可能需要几秒</p>
+              </div>
+
+              <!-- 加载失败 -->
+              <div v-else-if="testLoadError" class="py-12 text-center">
+                <XCircle class="w-10 h-10 mx-auto mb-3 text-red-400" />
+                <p class="text-sm text-red-600 mb-4">{{ testLoadError }}</p>
+                <button @click="openAITest"
+                  class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+                  重新加载
+                </button>
+              </div>
+
+              <template v-else>
+                <div class="space-y-6">
+                  <!-- 进度 -->
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-400">已答 {{ answeredCount }}/{{ totalQuestions }} 题</span>
+                    <span class="text-xs text-gray-400">每题 10 分，满分 {{ totalQuestions * 10 }} 分</span>
+                  </div>
+                  <div class="w-full h-1.5 bg-brand-400/10 rounded-full overflow-hidden">
+                    <div class="h-full bg-blue-500 rounded-full transition-all"
+                      :style="{ width: (answeredCount / totalQuestions * 100) + '%' }" />
+                  </div>
+
+                  <!-- 题目列表 -->
+                  <div v-for="(q, i) in testQuestions" :key="q.id"
+                    class="p-4 rounded-lg border"
+                    :class="testAnswers[q.id] !== undefined ? 'border-blue-200 bg-blue-50/30' : 'border-brand-400/20'">
+                    <p class="text-sm font-medium text-gray-900 mb-3">
+                      <span class="text-blue-600 font-bold">{{ i + 1 }}.</span>
+                      {{ q.question }}
+                      <span class="ml-1 text-[10px] text-gray-400">({{ q.type === 'true_false' ? '判断题' : '单选题' }})</span>
+                    </p>
+                    <div class="space-y-1.5">
+                      <button v-for="(opt, oi) in q.options" :key="oi"
+                        @click="selectAnswer(q.id, q.type === 'true_false' ? (oi === 0) : oi)"
+                        class="w-full text-left px-3 py-2 rounded-lg text-sm border transition-all"
+                        :class="testAnswers[q.id] === (q.type === 'true_false' ? (oi === 0) : oi)
+                          ? 'border-blue-400 bg-blue-100 text-blue-700 font-medium'
+                          : 'border-brand-400/30 hover:border-brand-400/60 text-gray-800'">
+                        {{ opt }}
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
-                <!-- 题目列表 -->
-                <div v-for="(q, i) in testQuestions" :key="q.id"
-                  class="p-4 rounded-lg border"
-                  :class="testAnswers[q.id] !== undefined ? 'border-blue-200 bg-blue-50/30' : 'border-brand-400/20'">
-                  <p class="text-sm font-medium text-gray-900 mb-3">
-                    <span class="text-blue-600 font-bold">{{ i + 1 }}.</span>
-                    {{ q.question }}
-                    <span class="ml-1 text-[10px] text-gray-400">({{ q.type === 'true_false' ? '判断题' : '单选题' }})</span>
-                  </p>
-                  <div class="space-y-1.5">
-                    <button v-for="(opt, oi) in q.options" :key="oi"
-                      @click="selectAnswer(q.id, q.type === 'true_false' ? (oi === 0) : oi)"
-                      class="w-full text-left px-3 py-2 rounded-lg text-sm border transition-all"
-                      :class="testAnswers[q.id] === (q.type === 'true_false' ? (oi === 0) : oi)
-                        ? 'border-blue-400 bg-blue-100 text-blue-700 font-medium'
-                        : 'border-brand-400/30 hover:border-brand-400/60 text-gray-800'">
-                      {{ opt }}
+                <div class="mt-6 pt-4 border-t border-brand-400/20">
+                  <div v-if="testSubmitError" class="mb-3 text-xs text-red-500 flex items-center gap-1">
+                    <XCircle class="w-3 h-3" />{{ testSubmitError }}
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span v-if="!allAnswered" class="text-xs text-brand-600">请完成所有题目后再提交</span>
+                    <span v-else class="text-xs text-emerald-500">所有题目已作答</span>
+                    <button @click="submitAITest" :disabled="!allAnswered || testSubmitting"
+                      class="px-6 py-2 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-2"
+                      :class="allAnswered && !testSubmitting ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-brand-400/10 text-gray-400 cursor-not-allowed'">
+                      <span v-if="testSubmitting" class="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      {{ testSubmitting ? '提交中…' : '提交并判定层级' }}
                     </button>
                   </div>
                 </div>
-              </div>
-
-              <div class="flex items-center justify-between mt-6 pt-4 border-t border-brand-400/20">
-                <span v-if="!allAnswered" class="text-xs text-brand-600">请完成所有题目后再提交</span>
-                <span v-else class="text-xs text-emerald-500">所有题目已作答</span>
-                <button @click="submitAITest" :disabled="!allAnswered"
-                  class="px-6 py-2 rounded-lg text-sm font-medium transition-colors"
-                  :class="allAnswered ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-brand-400/10 text-gray-400 cursor-not-allowed'">
-                  提交并判定层级
-                </button>
-              </div>
+              </template>
             </template>
 
             <!-- 结果展示 -->
@@ -168,7 +193,7 @@
                   <span class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-base font-bold"
                     :class="tierBadgeClass">
                     <Layers class="w-5 h-5" />
-                    {{ store.determineTier(testScore) === 'excellent' ? '卓越层' : store.determineTier(testScore) === 'advanced' ? '进阶层' : '基础层' }}
+                    {{ tierLabelMap[testTier] }}
                   </span>
                 </div>
                 <p class="text-xs text-gray-400">本次分层结果已在系统中锁定，本学期不可修改</p>
@@ -784,38 +809,22 @@ import KnowledgeGraph from '@/components/knowledge/KnowledgeGraph.vue'
 import RadarChart from '@/components/RadarChart.vue'
 import type { AITierQuestion, LearningTier, CloudFile, QualityEvalFile, Schedule } from '@/types'
 import Modal from '@/components/Modal.vue'
-import { fetchSchedules } from '@/api'
+import { fetchSchedules, fetchTierTestQuestions, submitTierTest } from '@/api'
 import { getNow, parseLocalDate } from '@/lib/date'
 import { computeRadarData } from '@/lib/evalRadar'
-import { getStoredStudentSession } from '@/lib/studentSession'
 
 const route = useRoute()
 const router = useRouter()
 const store = useAppStore()
 const courseId = route.params.id as string
-const studentSession = computed(() => getStoredStudentSession())
-const myStudent = computed(() => {
-  const session = studentSession.value
-  return (
-    store.students.find((student) => session.id && student.id === session.id) ||
-    store.students.find((student) => session.studentId && student.studentId === session.studentId) ||
-    store.students.find((student) => session.name && student.name === session.name) ||
-    store.students.find((student) => student.name === store.currentUser) ||
-    null
-  )
-})
+// 当前登录学生：与 store 内统一口径一致（会话 id/学号优先，姓名仅兜底）
+const myStudent = computed(() => store.getCurrentStudent())
 const homeworkStudentId = computed(() =>
-  studentSession.value.studentId ||
   myStudent.value?.studentId ||
   myStudent.value?.id ||
-  studentSession.value.id ||
   '',
 )
-const currentClassName = computed(() =>
-  myStudent.value?.className ||
-  studentSession.value.className ||
-  '',
-)
+const currentClassName = computed(() => myStudent.value?.className || '')
 
 // 支持 ?tab=xxx 直达对应模块（用于红点溯源跳转）
 const VALID_TABS = ['ai_tier', 'course-mgmt', 'course_standard', 'tasks', 'resources', 'homework', 'evaluations', 'eval_overview']
@@ -933,8 +942,10 @@ const myTier = computed<LearningTier>(() => tierRecord.value?.tier ?? 'basic')
 const myTierScore = computed(() => tierRecord.value?.score ?? 0)
 const tierFinalized = computed(() => tierRecord.value !== null)
 const firstClassEnded = computed(() => store.isFirstClassStarted(courseId, currentClassName.value))
-const secondClassStarted = computed(() => store.isSecondClassStarted(courseId, currentClassName.value))
-// 是否逾期自动分配（score=0 且第二节课已开始）
+const secondClassStarted = computed(() => store.isAITierTestClosed(courseId, currentClassName.value))
+// 本课程分层测试满分：按题目配置固定计算，不依赖弹窗是否打开
+const tierTestFullScore = 100
+// 是否逾期自动分配（score=0 且第一节课当天已结束）
 const isAutoAssigned = computed(() =>
   tierFinalized.value && secondClassStarted.value && myTierScore.value === 0
 )
@@ -943,6 +954,12 @@ const tierLabel = computed(() => {
   const map = { basic: '基础层', advanced: '进阶层', excellent: '卓越层' }
   return tierFinalized.value ? map[myTier.value] : '未分层'
 })
+
+const tierLabelMap: Record<LearningTier, string> = {
+  basic: '基础层',
+  advanced: '进阶层',
+  excellent: '卓越层',
+}
 
 const tierBadgeClass = computed(() => {
   if (!tierFinalized.value) return 'bg-brand-400/10 text-brand-700 border border-brand-400'
@@ -1044,62 +1061,84 @@ const testQuestions = ref<AITierQuestion[]>([])
 const testAnswers = ref<Record<string, number | boolean>>({})
 const testSubmitted = ref(false)
 const testScore = ref(0)
+/** 后端判定的层级（结果页显示用） */
+const testTier = ref<LearningTier>('basic')
+const testLoading = ref(false)
+const testSubmitting = ref(false)
+const testLoadError = ref('')
+const testSubmitError = ref('')
 
-function getMockAITierQuestions(courseId: string): AITierQuestion[] {
-  const questionSets: Record<string, AITierQuestion[]> = {
-    'course-1': [
-      { id: 'q1', type: 'single_choice', question: 'React 中 JSX 最终会被编译成什么？', options: ['原生 HTML', 'JavaScript 函数调用', 'CSS 代码', 'XML 标记'], answer: 1, score: 10 },
-      { id: 'q2', type: 'single_choice', question: '以下哪个 Hook 用于管理副作用？', options: ['useState', 'useEffect', 'useContext', 'useReducer'], answer: 1, score: 10 },
-      { id: 'q3', type: 'true_false', question: 'React 组件名必须大写字母开头', options: ['正确', '错误'], answer: true, score: 10 },
-      { id: 'q4', type: 'single_choice', question: 'Props 在组件间是？', options: ['可变的', '只读的', '异步的', '全局的'], answer: 1, score: 10 },
-      { id: 'q5', type: 'true_false', question: 'useState 的更新是同步的', options: ['正确', '错误'], answer: false, score: 10 },
-      { id: 'q6', type: 'single_choice', question: '以下哪个不是 React 生命周期方法？', options: ['componentDidMount', 'componentWillUnmount', 'componentRendered', 'componentDidUpdate'], answer: 2, score: 10 },
-      { id: 'q7', type: 'true_false', question: '虚拟 DOM 可以提高页面渲染性能', options: ['正确', '错误'], answer: true, score: 10 },
-      { id: 'q8', type: 'single_choice', question: 'React 中列表渲染需要使用什么属性？', options: ['id', 'key', 'ref', 'index'], answer: 1, score: 10 },
-      { id: 'q9', type: 'single_choice', question: '以下哪个是受控组件的特征？', options: ['由 DOM 控制状态', '由 React state 控制表单值', '使用 ref 获取值', '无需事件处理'], answer: 1, score: 10 },
-      { id: 'q10', type: 'true_false', question: 'React.Fragment 可以包含 key 属性', options: ['正确', '错误'], answer: true, score: 10 },
-    ],
-    'course-2': [
-      { id: 'q1', type: 'single_choice', question: 'Python 中列表使用什么符号？', options: ['()', '[]', '{}', '<>'], answer: 1, score: 10 },
-      { id: 'q2', type: 'single_choice', question: 'NumPy 数组相比 Python 列表的主要优势是？', options: ['支持更多数据类型', '向量化运算速度快', '占用更少内存', '以上都是'], answer: 3, score: 10 },
-      { id: 'q3', type: 'true_false', question: 'Pandas 的 DataFrame 是二维数据结构', options: ['正确', '错误'], answer: true, score: 10 },
-      { id: 'q4', type: 'single_choice', question: '以下哪个不是数据可视化的常用库？', options: ['Matplotlib', 'Seaborn', 'NumPy', 'Plotly'], answer: 2, score: 10 },
-      { id: 'q5', type: 'true_false', question: '数据清洗是数据分析中最耗时的环节之一', options: ['正确', '错误'], answer: true, score: 10 },
-      { id: 'q6', type: 'single_choice', question: '描述性统计不包括以下哪项？', options: ['均值', '标准差', '回归系数', '中位数'], answer: 2, score: 10 },
-      { id: 'q7', type: 'true_false', question: '机器学习属于监督学习的一种方法', options: ['正确', '错误'], answer: false, score: 10 },
-      { id: 'q8', type: 'single_choice', question: '特征工程的目的是什么？', options: ['增加数据量', '提升模型性能', '减少计算资源', '简化算法'], answer: 1, score: 10 },
-      { id: 'q9', type: 'single_choice', question: '以下哪个是降维算法？', options: ['K-Means', 'PCA', '线性回归', '决策树'], answer: 1, score: 10 },
-      { id: 'q10', type: 'true_false', question: '交叉验证可以有效防止过拟合', options: ['正确', '错误'], answer: true, score: 10 },
-    ],
-  }
-  return questionSets[courseId] || questionSets['course-1']
-}
-
-function openAITest() {
-  testQuestions.value = getMockAITierQuestions(courseId)
+// 题目来自后端（无 key 时后端用本地题库兜底）；选择题存选项原文作为答案
+async function openAITest() {
+  testQuestions.value = []
   testAnswers.value = {}
   testSubmitted.value = false
   testScore.value = 0
+  testLoadError.value = ''
+  testLoading.value = true
   aiTestOpen.value = true
+
+  try {
+    const remote = await fetchTierTestQuestions(courseId)
+    testQuestions.value = remote.map((q) => {
+      const options = Array.isArray(q.options) && q.options.length ? q.options : ['正确', '错误']
+      return {
+        id: q.id,
+        type: q.questionType === 'true_false' ? 'true_false' : 'single_choice',
+        question: q.questionText,
+        options,
+        // 正确答案由后端判分，前端不持有，置 -1 仅满足类型
+        answer: -1,
+        score: q.score || 10,
+      } as AITierQuestion
+    })
+  } catch (error) {
+    testLoadError.value = error instanceof Error ? error.message : '获取测试题失败，请稍后重试'
+  } finally {
+    testLoading.value = false
+  }
 }
 
+/** 选择题存选项下标，判断题存布尔值 */
 function selectAnswer(questionId: string, answer: number | boolean) {
   testAnswers.value = { ...testAnswers.value, [questionId]: answer }
 }
 
-function submitAITest() {
-  let score = 0
-  for (const q of testQuestions.value) {
-    const userAnswer = testAnswers.value[q.id]
-    if (userAnswer === q.answer) {
-      score += q.score
-    }
-  }
-  testScore.value = score
-  testSubmitted.value = true
+/** 把选择结果转成后端需要的「选项原文」 */
+function toAnswerText(q: AITierQuestion): string {
+  const picked = testAnswers.value[q.id]
+  if (picked === undefined) return ''
+  if (q.type === 'true_false') return picked ? '正确' : '错误'
+  return q.options?.[picked as number] ?? ''
+}
 
-  if (myStudent.value) {
-    store.submitAITierTest(courseId, myStudent.value.id, score)
+async function submitAITest() {
+  const student = myStudent.value
+  if (!student) {
+    // 静默 return 会让用户以为按钮坏了，明确提示
+    testSubmitError.value = '未识别到你的学生身份，请重新登录后再试'
+    return
+  }
+
+  testSubmitting.value = true
+  testSubmitError.value = ''
+
+  const answers = testQuestions.value.map((q) => ({
+    questionId: q.id,
+    answerText: toAnswerText(q),
+  }))
+
+  try {
+    const result = await submitTierTest(courseId, student.id, answers)
+    testScore.value = result.score
+    testTier.value = result.tier
+    testSubmitted.value = true
+    // 后端是权威源，同时回写本地缓存，供作业过滤/图谱可见性等读取
+    store.submitAITierTest(courseId, student.id, result.score, result.tier)
+  } catch (error) {
+    testSubmitError.value = error instanceof Error ? error.message : '提交失败，请稍后重试'
+  } finally {
+    testSubmitting.value = false
   }
 }
 

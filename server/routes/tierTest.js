@@ -12,6 +12,19 @@ import { generateTierTestQuestions } from '../deepseek.js';
 const router = Router();
 
 /**
+ * 归一化答案文本：去空格、去标点、统一大小写。
+ * AI 生成的正确答案可能带「。」或全角/半角标点，前端提交的是选项原文，
+ * 直接字符串相等会误判为错。
+ */
+function normalizeAnswer(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[，,。.!！？?；;：:、"'‘’“”()（）【】\[\]-]/g, '');
+}
+
+/**
  * GET /api/tier-test/:courseId/questions
  * 获取分层测试题目（课程共用）
  * - 有缓存 → 直接返回
@@ -137,16 +150,16 @@ router.post('/:courseId/submit', async (req, res) => {
       return res.status(400).json({ success: false, message: '还没有分层测试题目' });
     }
 
-    // 判分（选择题/判断题直接比对，忽略空格和大小写）
+    // 判分（选择题/判断题直接比对，忽略空格、大小写与标点，避免「正确。」这类差异误判）
     let totalScore = 0;
     const details = questions.map(q => {
       const studentAns = answers.find(a => a.questionId === q.id);
-      const studentText = (studentAns?.answerText || '').trim();
-      const correctText = (q.answer || '').trim();
-      const isCorrect = studentText === correctText;
+      const studentText = normalizeAnswer(studentAns?.answerText);
+      const correctText = normalizeAnswer(q.answer);
+      const isCorrect = Boolean(studentText) && studentText === correctText;
       const score = isCorrect ? (q.score || 10) : 0;
       totalScore += score;
-      return { questionId: q.id, isCorrect, score, correctAnswer: correctText, studentAnswer: studentText };
+      return { questionId: q.id, isCorrect, score, correctAnswer: q.answer, studentAnswer: studentAns?.answerText || '' };
     });
 
     // 判定层级
@@ -154,10 +167,10 @@ router.post('/:courseId/submit', async (req, res) => {
     if (totalScore >= 80) tier = 'excellent';
     else if (totalScore >= 60) tier = 'advanced';
 
-    // 存结果
-    const resultId = `tr-${courseId}-${studentId}-${Date.now()}`;
+    // 存结果（唯一键 course_id+student_id：并发/重复提交时用 REPLACE，避免 ER_DUP_ENTRY）
+    const resultId = `tr-${courseId}-${studentId}`;
     await pool.execute(
-      'INSERT INTO tier_test_results (id, course_id, student_id, score, tier) VALUES (?, ?, ?, ?, ?)',
+      'REPLACE INTO tier_test_results (id, course_id, student_id, score, tier) VALUES (?, ?, ?, ?, ?)',
       [resultId, courseId, studentId, totalScore, tier]
     );
 
