@@ -249,6 +249,10 @@ router.post('/bulk', async (req, res) => {
 
 /**
  * PUT /api/schedules/:id - 更新一条排课
+ *
+ * ⚠️ class_name 采用「仅在显式传参时才覆盖」：整行 UPDATE 会把请求里没带的字段写成
+ * NULL，而班级语义是「空 = 全班级」——管理端编辑弹窗本就不含班级字段，
+ * 于是「只想改个教室」会把班级专属排课静默升级为对全校生效。
  */
 router.put('/:id', async (req, res) => {
   const connection = await pool.getConnection();
@@ -265,9 +269,39 @@ router.put('/:id', async (req, res) => {
       [id]
     );
 
+    // 只有请求里明确带了 className 这个键，才改动班级；否则保留库中原值
+    const hasClassName = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'className');
+    const setClauses = [
+      'title = ?',
+      'teacher = ?',
+      'mentor = ?',
+      'semester = ?',
+      'room = ?',
+      'day = ?',
+      'start_date = ?',
+      'end_date = ?',
+      'time_slot = ?',
+    ];
+    const setParams = [
+      title,
+      normalizedTeacher,
+      normalizedMentor || null,
+      normalizedSemester || null,
+      normalizedRoom,
+      normalizedDay || null,
+      startDate,
+      endDate || startDate,
+      timeSlot,
+    ];
+    if (hasClassName) {
+      setClauses.push('class_name = ?');
+      setParams.push(String(className ?? '').trim() || null);
+    }
+    setParams.push(id);
+
     await connection.execute(
-      'UPDATE schedules SET title = ?, teacher = ?, mentor = ?, semester = ?, room = ?, class_name = ?, day = ?, start_date = ?, end_date = ?, time_slot = ? WHERE id = ?',
-      [title, normalizedTeacher, normalizedMentor || null, normalizedSemester || null, normalizedRoom, className || null, normalizedDay || null, startDate, endDate || startDate, timeSlot, id]
+      `UPDATE schedules SET ${setClauses.join(', ')} WHERE id = ?`,
+      setParams
     );
 
     if (normalizedMentor && scheduleRows[0]?.course_id) {

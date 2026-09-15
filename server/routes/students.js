@@ -535,14 +535,17 @@ router.get('/:id/courses', async (req, res) => {
     const enrolledCourseIds = [...enrollmentByCourse.keys()];
 
     // ---- 来源二（兜底）：学生所在班级的排课 ----
-    // ⚠️ 班级语义：class_name 为空 = 全班级，对该课程所有学生生效，因此一并取上。
+    // ⚠️ 这里刻意 **不** 纳入「全班级排课」（class_name 为空）。
+    // 全班级只表示「排课对哪个班生效」，不等于「学生选了这门课」。
+    // 一旦纳入，任何一门有全班级排课的课程都会出现在全校学生的课程列表里
+    // （实测虚增 95%），学生能看到甚至作答自己根本没选的课。
+    // 学生的课程归属只认「来源一：教师端在课程内导入的选课记录」。
     let classScheduleRows = [];
     if (className) {
       const [rows] = await connection.query(
         `SELECT id, course_id, title, teacher, mentor, room, class_name, day, start_date, end_date, time_slot
          FROM schedules
          WHERE TRIM(COALESCE(class_name, '')) = ?
-            OR TRIM(COALESCE(class_name, '')) = ''
          ORDER BY start_date ASC, time_slot ASC, id ASC`,
         [className]
       );

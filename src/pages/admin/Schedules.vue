@@ -221,6 +221,11 @@
 
       <input ref="fileInput" type="file" accept=".xlsx,.xls" class="hidden" @change="handleFileChange" />
 
+      <!-- 排课导入与班级维护职责的说明：班级不由管理端指定 -->
+      <div class="rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
+        导入的排课为<strong>全班级</strong>（对该课程所有已选课学生生效）。课程下的<strong>班级划分与学员名单</strong>请由授课教师在「课程详情 → 班级管理」中维护，排课表格中的「班级」列会被忽略。
+      </div>
+
       <div v-if="importMsg" :class="`rounded-lg p-3 text-sm ${importMsg.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`">
         {{ importMsg.text }}
       </div>
@@ -1304,6 +1309,7 @@ async function handleFileChange(event: Event) {
   if (!file || !selectedCourse.value) return
 
   importMsg.value = null
+  let ignoredClassColumn = false
 
   try {
     const data = await file.arrayBuffer()
@@ -1326,7 +1332,12 @@ async function handleFileChange(event: Event) {
         const startDate = fmtExcelDate(row['日期'] || row['startDate'] || row['上课日期'] || '')
         const endDate = fmtExcelDate(row['结束日期'] || row['endDate'] || '') || startDate
         const timeSlot = String(row['时间段'] || row['timeSlot'] || row['时间'] || '').trim()
-        const className = String(row['班级'] || row['className'] || row['class_name'] || '').trim()
+        // 班级不由管理端指定：导入的排课一律为「全班级」（不写 className）。
+        // 课程与班级/学员的关系由授课教师在课程内维护（见 teacher/CourseDetail 班级管理）。
+        // 即使表格里带了「班级」列也一律忽略，避免误把课程收窄到某一个班。
+        if (String(row['班级'] || row['className'] || row['class_name'] || '').trim()) {
+          ignoredClassColumn = true
+        }
 
         if (!title || !timeSlot || !startDate) return null
 
@@ -1336,7 +1347,6 @@ async function handleFileChange(event: Event) {
           teacher,
           mentor,
           room,
-          className,
           day,
           startDate,
           endDate,
@@ -1352,7 +1362,10 @@ async function handleFileChange(event: Event) {
 
     await bulkImportSchedules(schedules)
     await reloadPageData()
-    importMsg.value = { success: true, text: `成功导入 ${schedules.length} 条排课记录` }
+    importMsg.value = {
+      success: true,
+      text: `成功导入 ${schedules.length} 条排课记录（均为全班级）${ignoredClassColumn ? '；已忽略表格中的「班级」列，班级与学员请在课程内由授课教师维护' : ''}`,
+    }
   } catch (error: any) {
     importMsg.value = { success: false, text: '导入失败：' + (error?.message || '未知错误') }
   } finally {
