@@ -525,6 +525,21 @@ const openDetail = (enr: Enrollment) => {
   }
 }
 
+/**
+ * 学生在本课程的班级（与 CourseDetail 的 getStudentClassForCourse 同一口径）
+ *
+ * 优先 enrollment.className（按课程分班），回退 student.className（旧数据兼容）。
+ * 此前成绩页直接取 student.className（学生自身班级），学生在本课程内被调班后
+ * 这里仍显示旧班级，与课程「学生管理」对不上。
+ */
+function getStudentClassForCourse(studentId: string, courseId: string): string {
+  const enr = store.enrollments.find(
+    (e) => e.studentId === studentId && e.courseId === courseId,
+  )
+  const student = store.students.find((s) => s.id === studentId)
+  return (enr?.className ?? student?.className) || ''
+}
+
 /** 按班级+分组组织成绩数据（用于具体课程视图） */
 const gradeClassBlocks = computed(() => {
   if (selectedCourse.value === 'all') return []
@@ -543,8 +558,7 @@ const gradeClassBlocks = computed(() => {
   // 按班级分组
   const classMap = new Map<string, Enrollment[]>()
   for (const enr of enrolled) {
-    const student = store.students.find(s => s.id === enr.studentId)
-    const cn = student?.className || '未分班'
+    const cn = getStudentClassForCourse(enr.studentId, cId) || '未分班'
     if (!classMap.has(cn)) classMap.set(cn, [])
     classMap.get(cn)!.push(enr)
   }
@@ -557,8 +571,8 @@ const gradeClassBlocks = computed(() => {
     const memberToGroup = new Map<string, string>()
     for (const g of groups) {
       for (const mid of g.memberIds) {
-        const student = store.students.find(s => s.id === mid)
-        if (student && (student.className || '未分班') === className) {
+        // 与上面的分组口径一致：按「本课程的班级」判断组员归属
+        if ((getStudentClassForCourse(mid, cId) || '未分班') === className) {
           memberToGroup.set(mid, g.name)
         }
       }
@@ -631,8 +645,7 @@ function getCourseEnrollmentsGrouped(courseId: string): { groupName: string; ite
   // 按班级分组
   const classMap = new Map<string, Enrollment[]>()
   for (const enr of enrolled) {
-    const student = store.students.find(s => s.id === enr.studentId)
-    const cn = student?.className || '未分班'
+    const cn = getStudentClassForCourse(enr.studentId, courseId) || '未分班'
     if (!classMap.has(cn)) classMap.set(cn, [])
     classMap.get(cn)!.push(enr)
   }
@@ -645,8 +658,8 @@ function getCourseEnrollmentsGrouped(courseId: string): { groupName: string; ite
     const memberToGroup = new Map<string, string>()
     for (const g of groups) {
       for (const mid of g.memberIds) {
-        const student = store.students.find(s => s.id === mid)
-        if (student && (student.className || '未分班') === className) {
+        // 与上面的分组口径一致：按「本课程的班级」判断组员归属
+        if ((getStudentClassForCourse(mid, courseId) || '未分班') === className) {
           memberToGroup.set(mid, g.name)
         }
       }
