@@ -1,0 +1,68 @@
+name: Migrate schedule classes
+
+# 手动触发：把「计算机2101班」专属排课改为「全班级」。
+#
+# 背景：线上 16 行排课（id 12-27，8 门课各 2 个时段）的 class_name 写死「计算机2101班」，
+# 由 server/scripts/seed-eval-data.mjs 灌入（该脚本已同步修正，不再写班级）。
+# 其中 12 名计算机2101班学生是种子灌进来的选课，另外几门课还含跨班选课学生
+# （Python 课含人工智能2101/数据科学2101班；数据可视化与商业分析含物联网工程2101/
+# 计算机2102班；机器学习基础含物联网工程2101班）。这些学生已选课却被班级限制挡住，
+# 无法进入 AI 分层测试。
+#
+# 语义：class_name 为空 = 全班级，对本课程所有已选课学生生效。
+# 课程归属只由选课记录（enrollments）决定，班级维度不参与推导。
+# 迁移不减少任何人的可见课程（那 12 名学生本就在选课名单里）。
+#
+# 幂等：条件为「class_name 非空」，重复执行不会再有可改的行。
+#
+# ⚠️ 回滚：UPDATE schedules SET class_name = '计算机2101班' WHERE id BETWEEN 12 AND 27;
+#
+# 说明：SQL 里刻意不用字符串字面量（用 CHAR_LENGTH 判空），
+# 免得在 YAML → bash → node -e 的层层引号里转义出错。
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '仅打印将改动的行，不写库'
+        type: boolean
+        default: true
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH key
+        env:
+          SSH_KEY_B64: ${{ secrets.ALIYUN_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Run migration
+        env:
+          DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
+          DEPLOY_USER: ${{ secrets.ALIYUN_USER }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -e
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << REMOTE
+            set -e
+            cd /var/www/first-ancient/server
+
+            echo "== 执行前：待迁移的班级专属行 =="
+            node -e "import('./db.js').then(async ({default:p})=>{const [rows]=await p.query('SELECT id, title, class_name, day, time_slot FROM schedules WHERE id BETWEEN 12 AND 27 AND class_name IS NOT NULL AND CHAR_LENGTH(TRIM(class_name)) > 0 ORDER BY id');console.log('共 '+rows.length+' 行');rows.forEach(r=>console.log('  id='+r.id+'  '+r.class_name+'  '+r.day+' '+r.time_slot+'  | '+r.title));await p.end()})"
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "DRY RUN：跳过实际写入"
+            else
+              echo "== 执行迁移 =="
+              node -e "import('./db.js').then(async ({default:p})=>{const [r]=await p.query('UPDATE schedules SET class_name = NULL WHERE id BETWEEN 12 AND 27 AND class_name IS NOT NULL AND CHAR_LENGTH(TRIM(class_name)) > 0');console.log('已改动 '+r.affectedRows+' 行');await p.end()})"
+            fi
+
+            echo "== 执行后：剩余班级专属行（应为 0） =="
+            node -e "import('./db.js').then(async ({default:p})=>{const [r]=await p.query('SELECT COUNT(*) c FROM schedules WHERE id BETWEEN 12 AND 27 AND class_name IS NOT NULL');console.log('remaining = '+r[0].c);await p.end()})"
+          REMOTE

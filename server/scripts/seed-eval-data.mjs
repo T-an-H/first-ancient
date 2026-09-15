@@ -2,22 +2,30 @@
  * 评价/成绩种子数据（幂等，可重复执行）
  *
  * 解决的问题：线上库有 81 学生但只有 1 门课、3 条评价，导致
- *   ① 学生端「我的课程」读不到课程（排课 class_name 为空）
+ *   ① 学生端「我的课程」读不到课程
  *   ② 平时成绩（综合评价）没有后端权威源（无 grade_config / detailed_grade）
  *   ③ 职业方向推荐没有足够的课程/成绩可对照
  *
  * 本脚本补齐：
  *   1. 若干门课程（标题对齐 src/data/courseCareerMap.ts，便于职业推荐命中）
- *   2. 每门课的排课（**填 class_name**，恢复学生端课程可见）
+ *   2. 每门课的排课（class_name 留空 = **全班级**）
  *   3. 选课 enrollments（教师端名单）
  *   4. 多轮 evaluations（self/intra_group/inter_group/teacher）
  *   5. 部分课的期中/期末 exam_scores（验证「有期中期末则替换」分支）
  *   6. 每门课 grade_config
  *   7. 由 evaluations 聚合回填 detailed_grade
  *
+ * ⚠️ 排课不再写 class_name。
+ *  历史上这里写死「计算机2101班」，本意是「让按班级查排课的学生能查到」，
+ *  但那把课程收窄成了只对一个班生效，导致已选课的其他班学生被挡在
+ *  AI 分层测试之外（线上 16 行就是这么来的，已由
+ *  scripts/migrate-schedule-classes-20260916.sql 清理）。
+ *  现在语义为「class_name 为空 = 全班级，对本课程所有学生生效」，
+ *  课程归属只由下面的选课记录（enrollments）决定。
+ *
  * 幂等策略：
  *   - 课程按 title 查重（已存在则复用其 id，不新建）
- *   - 排课按 (course_id, class_name, day, time_slot) 查重
+ *   - 排课按 (course_id, day, start_date, time_slot) 查重（不含 class_name）
  *   - 选课按 (student_id, course_id) 查重
  *   - 评价用固定 id（`seed-ev-...`）REPLACE，重跑覆盖自己但不碰真实评价
  *   - exam_scores 用固定 id REPLACE
@@ -29,7 +37,7 @@ import '../load-env.js';
 import pool from '../db.js';
 import { syncDetailedGradesFromEvaluations } from '../lib/detailedGrades.js';
 
-/** 目标班级：学生端按 schedules.class_name 匹配，统一用它 */
+/** 演示学生来源班级：仅用于挑选「灌哪些演示学生」，不再写进排课 */
 const TARGET_CLASS = '计算机2101班';
 const TARGET_DEPARTMENT = '计算机学院';
 /** 演示教师（已存在于线上 teachers 表） */
@@ -158,25 +166,27 @@ async function main() {
         summary.courses += 1;
       }
 
-      // ---- 2. 排课（关键：class_name 必填） ----
+      // ---- 2. 排课（class_name 留空 = 全班级，对本课程所有学生生效） ----
       const slots = [
         { day: '周一', timeSlot: '08:00-10:00', room: 'A101' },
         { day: '周三', timeSlot: '10:15-12:15', room: 'A102' },
       ];
       for (const slot of slots) {
+        // 查重不含 class_name：与迁移后（class_name 为 NULL）的既有行能对上，避免重复插入
         const [dup] = await connection.query(
           `SELECT id FROM schedules
-           WHERE course_id = ? AND TRIM(COALESCE(class_name,'')) = ?
+           WHERE course_id = ?
              AND TRIM(COALESCE(day,'')) = ? AND TRIM(COALESCE(time_slot,'')) = ?
+             AND TRIM(COALESCE(start_date,'')) = ?
            LIMIT 1`,
-          [courseId, TARGET_CLASS, slot.day, slot.timeSlot]
+          [courseId, slot.day, slot.timeSlot, START]
         );
         if (dup.length > 0) continue;
         await connection.query(
           `INSERT INTO schedules
              (course_id, title, teacher, mentor, semester, room, class_name, day, start_date, end_date, time_slot)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [courseId, def.title, TEACHER, '', SEMESTER, slot.room, TARGET_CLASS, slot.day, START, END, slot.timeSlot]
+           VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+          [courseId, def.title, TEACHER, '', SEMESTER, slot.room, slot.day, START, END, slot.timeSlot]
         );
         summary.schedules += 1;
       }
