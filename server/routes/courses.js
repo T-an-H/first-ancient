@@ -346,41 +346,16 @@ router.get('/department/:dept', async (req, res) => {
 
 router.get('/:id/students', async (req, res) => {
   try {
-    // 课程排课的班级分布。
-    // ⚠️ class_name 为空 = 全班级：该排课对所有学生生效，无法从它反推「哪些班在上这门课」，
-    // 因此不能计入 classNames（下面仍按 IS NOT NULL 排除）；但只要存在任意全班级排课，
-    // 就完全跳过班级限制，退化为「已选课学生」—— 否则条件会膨胀成 OR TRUE。
-    const [scheduleRows] = await pool.query(
-      `SELECT DISTINCT class_name
-       FROM schedules
-       WHERE course_id = ?
-         AND class_name IS NOT NULL
-         AND TRIM(class_name) <> ''`,
-      [req.params.id]
-    );
-
-    const [globalRows] = await pool.query(
-      `SELECT 1 FROM schedules
-       WHERE course_id = ?
-         AND (class_name IS NULL OR TRIM(class_name) = '')
-       LIMIT 1`,
-      [req.params.id]
-    );
-    const hasGlobalSchedule = globalRows.length > 0;
-
-    const classNames = scheduleRows
-      .map((row) => normalizeText(row.class_name))
-      .filter(Boolean);
-
-    const conditions = ['enrollment.id IS NOT NULL'];
-    const params = [req.params.id];
-
-    if (classNames.length > 0 && !hasGlobalSchedule) {
-      const placeholders = classNames.map(() => '?').join(', ');
-      conditions.push(`TRIM(COALESCE(cls.name, student.class_name, '')) IN (${placeholders})`);
-      params.push(...classNames);
-    }
-
+    // 课程学员 = 教师在本课程内导入的选课记录（enrollments），这是唯一权威源。
+    //
+    // 此前这里还会「排课班级反推」：取 schedules.class_name 去匹配学生所在班级，
+    // 再用 OR 拼进条件（不是 AND），于是名单实际是
+    //   「已选课的」∪「班级名恰好匹配排课班级的」
+    // 结果与选课记录不一致，还会诱发两个问题：
+    //   1. 排课填了「计算机2101班」时，该班全部学生都进了名单，与其是否选课无关
+    //   2. 该比较跨表比 collation（classes.name / students.class_name），
+    //      线上实测触发 ER_CANT_AGGREGATE_2COLLATIONS，接口直接 500
+    // 班级维度改由教师端「班级管理」维护，不再用于推导课程归属。
     const [rows] = await pool.query(
       `SELECT DISTINCT
          student.id,
@@ -397,13 +372,12 @@ router.get('/:id/students', async (req, res) => {
        FROM students AS student
        LEFT JOIN classes AS cls ON cls.id = student.class_id
        LEFT JOIN departments AS dept ON dept.id = cls.department_id
-       LEFT JOIN enrollments AS enrollment
+       INNER JOIN enrollments AS enrollment
          ON enrollment.student_id = student.id
         AND enrollment.course_id = ?
         AND enrollment.status <> 'dropped'
-       WHERE ${conditions.map((condition) => `(${condition})`).join(' OR ')}
        ORDER BY class_name, student.name`,
-      params
+      [req.params.id]
     );
 
     res.json({
