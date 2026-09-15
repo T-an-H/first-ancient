@@ -177,14 +177,29 @@ router.get('/:courseId/questions', async (req, res) => {
  * POST /api/tier-test/:courseId/submit
  * 提交分层测试答案，自动判分返回层级
  * body: { studentId, answers: [{ questionId, answerText }] }
+ *
+ * answers 为空数组时表示「逾期自动分配」：不判分，直接落基础层（0 分）。
+ * 学生端 autoAssignOverdueBasicTier 依赖这条路径把结果写回后端，
+ * 否则分层结果只存在于该学生的浏览器本地缓存里。
  */
 router.post('/:courseId/submit', async (req, res) => {
   try {
     const { courseId } = req.params;
     const { studentId, answers } = req.body;
+    const submittedAnswers = Array.isArray(answers) ? answers : [];
+    const isAutoAssign = submittedAnswers.length === 0;
 
-    if (!studentId || !answers?.length) {
-      return res.status(400).json({ success: false, message: '学生ID和答案为必填' });
+    if (!studentId) {
+      return res.status(400).json({ success: false, message: '学生ID为必填' });
+    }
+
+    // 学生必须真实存在：写接口已鉴权，但这里防畸形请求写入无主结果行
+    const [studentRows] = await pool.execute(
+      'SELECT student_id FROM students WHERE student_id = ? OR id = ? LIMIT 1',
+      [studentId, studentId]
+    );
+    if (studentRows.length === 0) {
+      return res.status(404).json({ success: false, message: '学生不存在' });
     }
 
     // 检查是否已提交过
@@ -207,15 +222,16 @@ router.post('/:courseId/submit', async (req, res) => {
       'SELECT * FROM tier_test_questions WHERE course_id = ? ORDER BY order_index',
       [courseId]
     );
-    if (questions.length === 0) {
+    // 自动分配不需要题目（课程可能还没生成过题库）；真实提交没题则无从判分
+    if (!isAutoAssign && questions.length === 0) {
       return res.status(400).json({ success: false, message: '还没有分层测试题目' });
     }
 
     // 判分：选择题/判断题比对答案原文，忽略空格、大小写与标点，
     // 且判断题在「正确/错误」「对/错」「true/false」「T/F」之间互相等价
     let totalScore = 0;
-    const details = questions.map(q => {
-      const studentAns = answers.find(a => a.questionId === q.id);
+    const details = isAutoAssign ? [] : questions.map(q => {
+      const studentAns = submittedAnswers.find(a => a.questionId === q.id);
       const studentKey = studentAns?.answerText ? answerKey(studentAns.answerText) : '';
       const rawCorrect = String(q.answer ?? '').trim();
 
