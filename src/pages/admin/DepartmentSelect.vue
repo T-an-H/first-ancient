@@ -127,13 +127,46 @@
     <!-- Delete Confirmation -->
     <Teleport to="body">
       <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/50" @click="showDeleteConfirm = false" />
-        <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">确认删除</h3>
-          <p class="text-sm text-gray-500 mb-5">确定要删除「{{ deleteTarget?.name }}」吗？如果该学院下已有专业、课程、班级或学生数据，将无法删除。</p>
+        <div class="absolute inset-0 bg-black/50" @click="closeDeleteConfirm" />
+        <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">确认删除学院</h3>
+
+          <!-- 有数据：列出具体会删掉什么 -->
+          <template v-if="deleteImpact">
+            <p class="text-sm text-gray-600 mb-3">
+              删除「<strong>{{ deleteTarget?.name }}</strong>」将<strong class="text-red-600">永久删除</strong>以下数据：
+            </p>
+            <ul class="text-xs text-gray-600 bg-red-50 border border-red-200 rounded-lg p-3 space-y-1 mb-3 max-h-48 overflow-y-auto">
+              <li v-for="line in deleteImpactLines" :key="line">· {{ line }}</li>
+            </ul>
+            <p class="text-xs text-red-600 mb-4">此操作不可撤销，且无法恢复。</p>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">
+              请输入学院名称以确认：<span class="text-gray-400">{{ deleteTarget?.name }}</span>
+            </label>
+            <input
+              v-model="deleteConfirmInput"
+              type="text"
+              :placeholder="deleteTarget?.name"
+              class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-red-400 outline-none text-sm mb-4"
+            />
+          </template>
+
+          <!-- 无数据：普通确认 -->
+          <p v-else class="text-sm text-gray-500 mb-5">
+            确定要删除「{{ deleteTarget?.name }}」吗？该学院下没有关联数据。
+          </p>
+
           <div class="flex gap-3">
-            <button @click="handleDelete" class="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors">确认删除</button>
-            <button @click="showDeleteConfirm = false" class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-colors">取消</button>
+            <button
+              @click="handleDelete"
+              :disabled="Boolean(deleteImpact) && deleteConfirmInput.trim() !== deleteTarget?.name"
+              class="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+            >
+              确认删除
+            </button>
+            <button @click="closeDeleteConfirm" class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-colors">
+              取消
+            </button>
           </div>
         </div>
       </div>
@@ -142,9 +175,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { createDepartment, deleteDepartment as apiDeleteDepartment, fetchDepartments, updateDepartment as apiUpdateDepartment } from '@/api'
+import { createDepartment, deleteDepartment as apiDeleteDepartment, fetchDepartments, updateDepartment as apiUpdateDepartment, fetchDepartmentUsage } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { GraduationCap, Plus, ArrowRight, LogOut, Trash2, Pencil } from 'lucide-vue-next'
 import type { Department } from '@/types'
@@ -163,6 +196,61 @@ const form = ref({ name: '', color: '#3b82f6' })
 
 const showDeleteConfirm = ref(false)
 const deleteTarget = ref<Department | null>(null)
+/** 有数据时的删除影响面统计（来自后端 409 的 details），null 表示无关联数据 */
+const deleteImpact = ref<Record<string, number> | null>(null)
+const deleteConfirmInput = ref('')
+
+/** 影响面 → 人类可读的行；只列出数量大于 0 的项 */
+const deleteImpactLines = computed(() => {
+  const d = deleteImpact.value
+  if (!d) return []
+  const map: [string, string][] = [
+    ['courseCount', '门课程'],
+    ['classCount', '个班级'],
+    ['studentCount', '名学生'],
+    ['teacherCount', '名教师'],
+    ['categoryCount', '个专业分类'],
+    ['scheduleCount', '条排课'],
+    ['enrollmentCount', '条选课记录'],
+    ['evaluationCount', '条评价记录'],
+    ['detailedGradeCount', '条成绩明细'],
+    ['examScoreCount', '条考试成绩'],
+  ]
+  return map
+    .filter(([key]) => Number(d[key] || 0) > 0)
+    .map(([key, unit]) => `${d[key]} ${unit}`)
+})
+
+function closeDeleteConfirm() {
+  showDeleteConfirm.value = false
+  deleteImpact.value = null
+  deleteConfirmInput.value = ''
+}
+
+/**
+ * 卡片上的「删除」入口
+ *
+ * 先拉取该学院的影响面（不执行删除）：
+ *   - 有数据 → 列出会删掉什么，并要求输入学院名称才能确认（防误删）
+ *   - 无数据 → 普通二次确认
+ * 这样空学院也需要点「确认删除」，不会一点就没。
+ */
+async function openDeleteConfirm(dept: Department) {
+  deleteTarget.value = dept
+  deleteImpact.value = null
+  deleteConfirmInput.value = ''
+  showDeleteConfirm.value = true
+
+  try {
+    const res: any = await fetchDepartmentUsage(dept.id)
+    if (res?.hasData && res?.usage) {
+      deleteImpact.value = res.usage
+    }
+  } catch (error: any) {
+    // 拉取失败不阻断：按无数据处理，删除时后端仍会拦
+    console.warn('获取学院影响面失败:', error)
+  }
+}
 
 onMounted(() => {
   void loadDepartments()
@@ -204,12 +292,6 @@ function openEditModal(dept: Department) {
   showModal.value = true
 }
 
-/** 卡片上的「删除」入口：直接弹确认框（不必先进编辑弹窗） */
-function openDeleteConfirm(dept: Department) {
-  deleteTarget.value = dept
-  showDeleteConfirm.value = true
-}
-
 async function handleSave() {
   if (!form.value.name.trim()) return
 
@@ -233,10 +315,12 @@ async function handleSave() {
   }
 }
 
+/** 编辑弹窗里的「删除此学院」入口：转为走同一套影响面确认流程 */
 function confirmDeleteDept() {
   if (editingDept.value) {
-    deleteTarget.value = editingDept.value
-    showDeleteConfirm.value = true
+    const target = editingDept.value
+    showModal.value = false
+    void openDeleteConfirm(target)
   }
 }
 
@@ -245,15 +329,15 @@ async function handleDelete() {
   const deletedId = deleteTarget.value.id
 
   try {
-    await apiDeleteDepartment(deletedId)
+    // force=true：已在上一步展示过影响面并要求输入名称确认，这里执行级联删除
+    await apiDeleteDepartment(deletedId, true)
     await loadDepartments()
     // 删掉的正是当前选定学院时清空选择，否则后续进入「专业」页会带上已失效的 id
     if (store.selectedDepartmentId === deletedId) {
       store.setSelectedDepartment(null)
     }
-    showDeleteConfirm.value = false
+    closeDeleteConfirm()
     deleteTarget.value = null
-    showModal.value = false
   } catch (error: any) {
     window.alert(error?.message || '删除学院失败')
   }

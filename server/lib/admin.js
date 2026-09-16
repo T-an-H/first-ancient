@@ -33,6 +33,10 @@ export function handleRouteError(res, error) {
   if (code) {
     payload.code = code;
   }
+  // 允许错误对象附带结构化数据（如删除学院前的影响面统计），供前端展示
+  if (error?.details) {
+    payload.details = error.details;
+  }
 
   res.status(statusCode).json(payload);
 }

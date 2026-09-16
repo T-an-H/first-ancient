@@ -48,13 +48,18 @@ async function request(url: string, options: RequestOptions = {}) {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok || data.success === false) {
+      // 结构化附加信息（如删除学院前的影响面统计）一并带出，供调用方展示
+      const attachDetails = (error: RequestError) => {
+        if (data.details !== undefined) (error as any).details = data.details
+        return error
+      }
       if (typeof data.code === 'string') {
         const error = new Error(data.message || `Request failed (${response.status})`) as RequestError
         error.code = data.code
         error.status = response.status
-        throw error
+        throw attachDetails(error)
       }
-      throw new Error(data.message || `请求失败 (${response.status})`)
+      throw attachDetails(new Error(data.message || `请求失败 (${response.status})`) as RequestError)
     }
 
     return data
@@ -134,8 +139,19 @@ export async function updateDepartment(id: string, data: any) {
   })
 }
 
-export async function deleteDepartment(id: string) {
-  return request(`/departments/${id}`, {
+/** 删除学院前的影响面预览（不执行删除） */
+export async function fetchDepartmentUsage(id: string) {
+  return request(`/departments/${id}/usage`)
+}
+
+/**
+ * 删除学院
+ *
+ * @param force 传 true 时级联删除该学院下的课程/班级/学生/评价/成绩等全部数据（不可逆）。
+ *              不传则仅在该学院无关联数据时删除，否则后端返回 409 + details（影响面统计）。
+ */
+export async function deleteDepartment(id: string, force = false) {
+  return request(`/departments/${id}${force ? '?force=true' : ''}`, {
     method: 'DELETE',
   })
 }
