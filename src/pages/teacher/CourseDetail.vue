@@ -4441,10 +4441,15 @@ function getClassStudents(className: string) {
 /** 点击班级内的"新建分组" */
 function openNewGroupForClass(className: string) {
   groupFormClassName.value = className
-  // 自动建议该班级的下一个组号
+  // 自动建议该班级的下一个组号。
+  // 注意用「已有组名中的最大编号 + 1」而不是「组数 + 1」——
+  // 删掉中间某个组后再新建，按组数算会与既有组重名（线上曾出现 5 个「第1组」）。
   const existingGroups = getGroupsForClassBlock(className)
-  const nextNum = existingGroups.length + 1
-  groupFormName.value = `第${nextNum}组`
+  const maxNum = existingGroups.reduce((max, g) => {
+    const m = String(g.name || '').match(/^第(\d+)组$/)
+    return m ? Math.max(max, Number(m[1])) : max
+  }, 0)
+  groupFormName.value = `第${maxNum + 1}组`
   groupFormMembers.value = []
   editingGroup.value = null
   showGroupModal.value = true
@@ -5214,6 +5219,19 @@ function handleSaveGroup() {
     return
   }
   const name = groupFormName.value.trim()
+  // 同一门课程内禁止分组重名（跨班级也不允许）：
+  // 组名在课程内需唯一，学生端互评列表才区分得清哪个是别组的、哪个是自己组的。
+  // 注意判定范围是「整门课」而非「当前班级」——重名分组会让按名查找的逻辑出错。
+  const duplicate = store.studentGroups.some(
+    (g) =>
+      g.courseId === courseId.value &&
+      g.id !== editingGroup.value?.id &&
+      String(g.name || '').trim() === name,
+  )
+  if (duplicate) {
+    alert(`本课程下已存在名为「${name}」的分组，请换一个名字`)
+    return
+  }
   if (editingGroup.value) {
     store.updateStudentGroup(editingGroup.value.id, {
       name,

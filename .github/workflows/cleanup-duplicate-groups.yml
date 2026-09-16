@@ -1,0 +1,64 @@
+name: Cleanup duplicate empty groups
+
+# 手动触发：清理「同一课程内重名」的空分组。
+#
+# 背景：线上建分组时，组名按「已有组数 + 1」自动生成，删掉中间的组后再新建就会重名，
+# 导致同一门课出现多个「第1组」（算法与数据结构最多有 8 个）。
+# 重名会让学生的组间互评列表里出现与自己组同名的对象，看起来像在评自己的组。
+#
+# 本次只删「空且重名」的分组 —— 空组没有任何成员，也没有评价数据挂在上面，
+# 删除不影响任何学生与成绩。有成员的重名组一律保留（需人工决定留哪个或改名）。
+#
+# 幂等：清理后再跑一次，结果为空。
+#
+# 关联改动（已上线）：
+#   - 学生端组间互评目标排除空组，并剔除自己组成员（含提交时的二次过滤）
+#   - 教师端新建/重命名分组时，同一课程内禁止重名
+#   - 自动组号改为「已有组名最大编号 + 1」，避免删组后再建即重名
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '仅打印将删除的分组，不写库'
+        type: boolean
+        default: true
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH key
+        env:
+          SSH_KEY_B64: ${{ secrets.ALIYUN_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Run cleanup
+        env:
+          DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
+          DEPLOY_USER: ${{ secrets.ALIYUN_USER }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -e
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << REMOTE
+            set -e
+            cd /var/www/first-ancient/server
+
+            echo "== 执行前：重名的空分组 =="
+            node -e "import('./db.js').then(async ({default:p})=>{const [rows]=await p.query('SELECT g.id, g.course_id, g.name FROM student_groups g JOIN (SELECT course_id, name FROM student_groups GROUP BY course_id, name HAVING COUNT(*) > 1) d ON d.course_id = g.course_id AND d.name = g.name WHERE COALESCE(JSON_LENGTH(g.member_ids), 0) = 0 ORDER BY g.course_id, g.name, g.id');console.log('共 '+rows.length+' 个');rows.forEach(r=>console.log('  '+r.course_id+'  '+r.name+'  '+r.id));await p.end()})"
+
+            if [ "\$DRY_RUN" = "true" ]; then
+              echo "DRY RUN：跳过实际删除"
+            else
+              echo "== 执行清理 =="
+              node -e "import('./db.js').then(async ({default:p})=>{const [r]=await p.query('DELETE g FROM student_groups g JOIN (SELECT course_id, name FROM student_groups GROUP BY course_id, name HAVING COUNT(*) > 1) d ON d.course_id = g.course_id AND d.name = g.name WHERE COALESCE(JSON_LENGTH(g.member_ids), 0) = 0');console.log('已删除 '+r.affectedRows+' 个空的分组');await p.end()})"
+            fi
+
+            echo "== 执行后：仍是重名的分组（应为 0，或有成员需人工处理） =="
+            node -e "import('./db.js').then(async ({default:p})=>{const [rows]=await p.query('SELECT course_id, name, COUNT(*) c FROM student_groups GROUP BY course_id, name HAVING COUNT(*) > 1');console.log('remaining = '+rows.length);rows.forEach(r=>console.log('  '+r.course_id+'  '+r.name+'  仍有 '+r.c+' 个'));await p.end()})"
+          REMOTE

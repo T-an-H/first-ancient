@@ -392,8 +392,16 @@ function getPeerTargets(type: EvalType): PeerTarget[] {
   }
   if (type === 'inter_group' && myGroup.value) {
     const myClass = getGroupClass(myGroup.value.id)
+    const myMemberIds = new Set(myGroup.value.memberIds)
     return groups.value
       .filter((g) => g.id !== myGroup.value!.id && (myClass ? getGroupClass(g.id) === myClass : true))
+      // 排除空组：没有成员就没有可评价的内容；且线上存在重名分组（如多个「第1组」），
+      // 空组会出现同名对象，让学生误以为自己组出现在待评列表里。
+      .filter((g) => g.memberIds.length > 0)
+      // 安全网：即使数据里存在重名/错乱分组，也绝不让「自己组的人」出现在组间互评对象里。
+      // 组间互评是对「别的小组」打分，评到自己组成员属于数据错误。
+      .map((g) => ({ ...g, memberIds: g.memberIds.filter((id) => !myMemberIds.has(id)) }))
+      .filter((g) => g.memberIds.length > 0)
       .map((g) => ({
         key: g.id,
         label: g.name,
@@ -594,7 +602,13 @@ function submitGroupEval(target: PeerTarget, session: number, draft: EvalScoreDr
   const defs = getEvalItemDefinitions(target.type as EvalType)
   const items = evalItemsFromDraft(defs, draft, remarks)
   const score = scoreFromEvalDraft(defs, draft)
-  target.memberIds!.forEach((mid) => {
+  // 安全网：组间互评只写「别组成员」。若数据异常导致目标里混入自己组成员，
+  // 这里再过滤一次，避免把自己的组评了（写入侧是与界面独立的最后一道防线）。
+  const myMemberIds = new Set(myGroup.value?.memberIds || [])
+  const targets = target.memberIds!.filter((mid) => !myMemberIds.has(mid))
+  if (targets.length === 0) return
+
+  targets.forEach((mid) => {
     const existing = store.evaluations.find(
       (e) => e.courseId === props.courseId && e.studentId === mid &&
         e.sessionNumber === session && e.type === target.type && e.evaluatorId === props.studentId
