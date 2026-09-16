@@ -71,13 +71,43 @@ function subjectsForCourse(course: CareerInputCourse): Set<string> {
 }
 
 /**
- * 由学生高考分课程（平时成绩最高，或期中/期末替代）产出推荐职业。
- * 候选 = 全部 careers；某职业被 ≥minMatchCourses 门课覆盖即入选；不足自动降门槛；取前 maxResults。
+ * 命中职业不足最小条数时补齐，保证「有数据即出 minResults 个」。
+ *
+ * 补齐优先级：与被命中职业同 category 的优先（相关性更高），其余按 CAREERS 原顺序，
+ * 保证结果稳定可复现。补齐项 matchedCourseIds 为空，UI 据此不显示「覆盖 N 门」徽标。
+ */
+function padCareerMatches(existing: CareerMatchItem[], minResults: number): CareerMatchItem[] {
+  if (existing.length >= minResults) return existing
+  const used = new Set(existing.map((m) => m.career.name))
+  const preferredCategories = new Set(existing.map((m) => m.career.category))
+  const pool = CAREERS.filter((c) => !used.has(c.name))
+  const ordered = [
+    ...pool.filter((c) => preferredCategories.has(c.category)),
+    ...pool.filter((c) => !preferredCategories.has(c.category)),
+  ]
+
+  const padded = [...existing]
+  for (const career of ordered) {
+    if (padded.length >= minResults) break
+    padded.push({ career, matchedCourseIds: [], matchedSubjects: [], score: 0 })
+  }
+  return padded
+}
+
+/**
+ * 由学生高分课程（平时成绩最高，或期中/期末替代）产出推荐职业。
+ *
+ * 结果数量契约：**只要有输入课程，返回条数恒在 [minResults, maxResults] 内**
+ *   - 数据丰富（命中职业多）→ 取分数最高的前 maxResults 条
+ *   - 命中职业不足 minResults → 按类目相关性补齐到 minResults
+ * 门槛递减：先生效「≥minMatchCourses 门课命中」，不足则依次降 1
+ * （demand §5.5.2 的「对比课程个数往下调」）。
  */
 export function recommendCareers(
   inputs: CareerInputCourse[],
   minMatchCourses = 3,
   maxResults = 6,
+  minResults = 3,
 ): CareerMatchItem[] {
   if (inputs.length === 0) return []
 
@@ -87,7 +117,7 @@ export function recommendCareers(
   }))
 
   // 对每条职业统计命中门数与命中科目
-  const matches: { career: Career; matchedCourseIds: string[]; matchedSubjects: string[]; score: number }[] = []
+  const matches: CareerMatchItem[] = []
   for (const career of CAREERS) {
     const matchedCourseIds = new Set<string>()
     const matchedSubjects = new Set<string>()
@@ -107,16 +137,20 @@ export function recommendCareers(
       })
     }
   }
+  matches.sort((a, b) => b.score - a.score)
 
-  // 门槛递减：先按 minMatchCourses 过滤，空则依次降 1（demand §5.5.2 的「对比课程个数往下调」）
+  // 门槛递减：取「能满足最少条数」的最高档位；都不满足时退到最低档（全部 ≥1 门命中的职业）
+  let picked: CareerMatchItem[] = []
   for (let threshold = minMatchCourses; threshold >= 1; threshold--) {
-    const hit = matches
-      .filter((m) => m.matchedCourseIds.length >= threshold)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, maxResults)
-    if (hit.length > 0) return hit
+    const hit = matches.filter((m) => m.matchedCourseIds.length >= threshold)
+    if (hit.length === 0) continue
+    picked = hit
+    if (hit.length >= minResults) break
   }
 
-  // 极端兜底：仍无任何 ≥1 门覆盖（几乎不可能），返回得分最高的几个
-  return matches.slice(0, maxResults)
+  // 仍不足最少条数 → 补齐，保证输出恒在 [minResults, maxResults]
+  if (picked.length < minResults) {
+    picked = padCareerMatches(picked, minResults)
+  }
+  return picked.slice(0, maxResults)
 }

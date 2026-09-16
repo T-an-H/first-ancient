@@ -1389,6 +1389,16 @@
             </div>
           </div>
 
+          <!-- 班级无成员时的引导 -->
+          <div v-if="classData.students.length === 0" class="mb-4 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5">
+            <p class="text-xs text-blue-800">
+              该班级还没有成员，点击右上角「加入班级」把学员添加进来。
+            </p>
+            <p class="mt-1 text-[11px] text-blue-600">
+              班级成员保存在服务器，换电脑或切换角色后依然保留。
+            </p>
+          </div>
+
           <!-- 该班级的分组列表 -->
           <div v-if="getGroupsForClassBlock(classData.className).length > 0" class="space-y-3">
             <div

@@ -97,17 +97,29 @@
                     <div class="font-medium text-gray-900 truncate">{{ item.career.name }}</div>
                     <div class="text-[11px] text-gray-400 mt-0.5">{{ item.career.category }}</div>
                   </div>
-                  <span class="flex-shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-brand-100 text-brand-700">
+                  <span
+                    v-if="item.matchedCourseIds.length > 0"
+                    class="flex-shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-brand-100 text-brand-700"
+                  >
                     覆盖 {{ item.matchedCourseIds.length }} 门
                   </span>
+                  <span
+                    v-else
+                    class="flex-shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500"
+                  >
+                    参考
+                  </span>
                 </div>
-                <div class="mt-1.5 text-[11px] text-gray-500">
+                <div v-if="item.matchedSubjects.length > 0" class="mt-1.5 text-[11px] text-gray-500">
                   命中科目：{{ item.matchedSubjects.slice(0, 5).join('、') }}{{ item.matchedSubjects.length > 5 ? '…' : '' }}
+                </div>
+                <div v-else class="mt-1.5 text-[11px] text-gray-400">
+                  与本专业方向相关的常见去向，供参考
                 </div>
               </div>
             </div>
             <p class="mt-3 text-[11px] text-gray-300 leading-relaxed">
-              说明：按平时成绩（综合评价）最高的 {{ careerCourses.length }} 门课程与《1000职业与要求对照表》科目对照生成；课程若已出期末/期中成绩，则以期末/期中成绩参与对照。仅作参考。
+              说明：按平时成绩（综合评价）最高的 {{ careerCourses.length }} 门课程与《1000职业与要求对照表》科目对照生成；课程若已出期末/期中成绩，则以期末/期中成绩参与对照。结果稳定为 3~6 个职业，其中标注「覆盖 N 门」的可直接对照课程，标注「参考」的为相关方向补充。仅作参考。
             </p>
           </div>
         </div>
@@ -771,7 +783,8 @@ const careerCourses = computed<CareerCourse[]>(() => {
   return rows.sort((a, b) => b.compareScore - a.compareScore).slice(0, CAREER_COURSE_COUNT)
 })
 
-/** 推荐职业（§5.5.2：≥3 门课程命中同一职业即推荐，取前 6；不足自动降门槛） */
+/** 推荐职业（§5.5.2：≥3 门课程命中同一职业即推荐；**结果恒为 3~6 条**） */
+const CAREER_MIN_RESULTS = 3
 const recommendedCareers = computed(() =>
   recommendCareers(
     careerCourses.value.map((c) => ({
@@ -782,6 +795,7 @@ const recommendedCareers = computed(() =>
     })),
     3,
     CAREER_RESULT_COUNT,
+    CAREER_MIN_RESULTS,
   ),
 )
 
