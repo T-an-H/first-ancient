@@ -276,6 +276,7 @@ import { EvalTemplateLabels, EvalTemplateDescs, TEMPLATE_EVAL_TYPES, EvalTypeLab
   EvalFrequencyLabels, EvalFrequencyDescs, OverdueRuleLabels } from '@/types'
 import type { EvalTemplate, EvalType, Evaluation, EvalFrequency, OverdueRule } from '@/types'
 import { getNow } from '@/lib/date'
+import { makeEvalItemsForTotal } from '@/lib/evalStandards'
 
 const store = useAppStore()
 
@@ -377,13 +378,16 @@ const handleBatchEval = (type: EvalType, level: string) => {
       sessionNumber: session,
       type,
       score,
+      // 批量档次评价没有分项输入，按总分等比拆成各项明细，
+      // 以便再次打开评价界面时能回显（回显读的是 items）
+      items: makeEvalItemsForTotal(type, score),
       evaluatorId: store.currentUser || 'teacher',
       evaluatorName: store.currentUser || '教师',
       comment: level,
       createdAt: getNow().toISOString().split('T')[0],
     }
     if (existing) {
-      store.updateEvaluation(ev.id, { score, comment: level, createdAt: ev.createdAt })
+      store.updateEvaluation(ev.id, { score, items: makeEvalItemsForTotal(type, score), comment: level, createdAt: ev.createdAt })
     } else {
       store.addEvaluation(ev)
     }

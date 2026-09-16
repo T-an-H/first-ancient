@@ -261,13 +261,92 @@ function openEvalModal(session: number) {
   editingSession.value = session
   // 当第 N 次评价开启时，自动锁定第 1 ~ N-1 次
   store.autoLockPreviousSession(props.courseId, session)
-  selfItemDraft.value = createEmptyEvalDraft('self')
-  peerItemDrafts.value = {}
-  selfItemRemarks.value = []
-  peerItemRemarks.value = {}
+  // 回填上次填写的内容：已保存过评价时，把各项分数/备注还原到草稿里，
+  // 便于查看与修改；没有评价则维持空白。
+  selfItemDraft.value = draftFromEvaluation(session, 'self')
+  selfItemRemarks.value = remarksFromEvaluation(session, 'self')
+  peerItemDrafts.value = buildPeerDraftsFromSaved(session)
+  peerItemRemarks.value = buildPeerRemarksFromSaved(session)
   validationErrors.value = {}
   submitError.value = ''
   evalModalOpen.value = true
+}
+
+/** 取某学生某轮次某类型的已保存评价 */
+function findSavedEval(session: number, type: EvalType) {
+  return store.evaluations.find(
+    (e) => e.courseId === props.courseId && e.studentId === props.studentId &&
+      e.sessionNumber === session && e.type === type
+  )
+}
+
+/** 用已保存评价的明细生成草稿；无评价时为空白草稿 */
+function draftFromEvaluation(session: number, type: EvalType): EvalScoreDraftValue[] {
+  const defs = getEvalItemDefinitions(type)
+  const saved = findSavedEval(session, type)
+  return defs.map((item, index) => {
+    const detail = saved?.items?.[index]
+    return detail && detail.score !== undefined ? detail.score : ''
+  })
+}
+
+/** 用已保存评价的明细生成备注数组；无评价时为空 */
+function remarksFromEvaluation(session: number, type: EvalType): string[] {
+  const defs = getEvalItemDefinitions(type)
+  const saved = findSavedEval(session, type)
+  return defs.map((item, index) => saved?.items?.[index]?.remark || '')
+}
+
+/**
+ * 互评回填：key 规则与 getPeerTargets 保持一致——
+ * 组内互评 key = 被评同学 id；组间互评 key = 被评小组 id。
+ * 组间互评提交时会给组内每个成员各写一条，取首条成员的评价作为回填来源。
+ */
+function buildPeerDraftsFromSaved(session: number): Record<string, EvalScoreDraftValue[]> {
+  const drafts: Record<string, EvalScoreDraftValue[]> = {}
+  for (const type of ['intra_group', 'inter_group'] as EvalType[]) {
+    const defs = getEvalItemDefinitions(type)
+    for (const target of getPeerTargets(type)) {
+      const saved = target.groupId
+        ? store.evaluations.find(
+            (e) => e.courseId === props.courseId && e.sessionNumber === session &&
+              e.type === type && e.evaluatorId === props.studentId &&
+              target.memberIds?.includes(e.studentId)
+          )
+        : store.evaluations.find(
+            (e) => e.courseId === props.courseId && e.studentId === target.studentId &&
+              e.sessionNumber === session && e.type === type && e.evaluatorId === props.studentId
+          )
+      if (!saved) continue
+      drafts[target.key] = defs.map((item, index) => {
+        const detail = saved.items?.[index]
+        return detail && detail.score !== undefined ? detail.score : ''
+      })
+    }
+  }
+  return drafts
+}
+
+function buildPeerRemarksFromSaved(session: number): Record<string, string[]> {
+  const remarks: Record<string, string[]> = {}
+  for (const type of ['intra_group', 'inter_group'] as EvalType[]) {
+    const defs = getEvalItemDefinitions(type)
+    for (const target of getPeerTargets(type)) {
+      const saved = target.groupId
+        ? store.evaluations.find(
+            (e) => e.courseId === props.courseId && e.sessionNumber === session &&
+              e.type === type && e.evaluatorId === props.studentId &&
+              target.memberIds?.includes(e.studentId)
+          )
+        : store.evaluations.find(
+            (e) => e.courseId === props.courseId && e.studentId === target.studentId &&
+              e.sessionNumber === session && e.type === type && e.evaluatorId === props.studentId
+          )
+      if (!saved) continue
+      remarks[target.key] = defs.map((item, index) => saved.items?.[index]?.remark || '')
+    }
+  }
+  return remarks
 }
 
 function closeEvalModal() {

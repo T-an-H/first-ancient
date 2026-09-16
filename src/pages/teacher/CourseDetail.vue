@@ -2307,6 +2307,8 @@ const kgStudents = computed(() =>
     .map((item: any) => item.student)
     .filter(Boolean)
     .map((s: any) => ({ ...s, groupName: getStudentGroupName(s.id) }))
+    // 与学员管理页保持一致：按姓名稳定排序，避免顺序随同步变化
+    .sort((a: any, b: any) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN'))
 )
 
 // 从数据库加载课程学员
@@ -4253,6 +4255,10 @@ const studentSections = computed(() => {
     ? enrolled.filter(({ student }) => student.name.toLowerCase().includes(search) || student.id.includes(search))
     : enrolled
 
+  // 按姓名稳定排序（zh-CN 拼音序）。此前顺序取决于选课记录的加入先后，
+  // 换设备/重新同步后可能变化，导致同一份名单顺序对不上。
+  filtered.sort((a, b) => a.student.name.localeCompare(b.student.name, 'zh-CN'))
+
   const groups = store.studentGroups.filter((g) => g.courseId === courseId.value)
   const memberToGroup = new Map<string, string>()
   const groupIdMap = new Map<string, string>()
@@ -4789,6 +4795,8 @@ function handleSaveEvalScores() {
     const existing = store.evaluations.find(
       (e) => e.courseId === courseId.value && e.studentId === studentId && e.type === type && e.sessionNumber === session
     )
+    // 手动输入的是总分，按比例拆成各项明细，以便再次打开时回显
+    const items = makeEvalItemsForTotal(type, clampedScore)
     const ev: Evaluation = {
       id: existing ? existing.id : `ev-manual-${Date.now()}-${studentId}-${type}`,
       courseId: courseId.value,
@@ -4796,12 +4804,13 @@ function handleSaveEvalScores() {
       sessionNumber: session,
       type,
       score: clampedScore,
+      items: items.map((item) => ({ ...item })),
       evaluatorId: store.currentUser || '',
       evaluatorName: store.currentUser || (isMentor.value ? '企业导师' : '教师'),
       createdAt: getNow().toISOString().split('T')[0],
     }
     if (existing) {
-      store.updateEvaluation(ev.id, { score: clampedScore, createdAt: ev.createdAt })
+      store.updateEvaluation(ev.id, { score: clampedScore, items: items.map((item) => ({ ...item })), createdAt: ev.createdAt })
     } else {
       store.addEvaluation(ev)
     }
@@ -4938,6 +4947,17 @@ watch(showEvalPopup, (show) => {
   if (!show) {
     evalScoreInputs.value = {}
   }
+})
+
+// 切换班级或评价轮次后，输入框里的分数要跟着换成对应批次已保存的值，
+// 否则会残留上一批的分数或显示空白。
+watch([selectedEvalClass, selectedBatchSession], () => {
+  if (showEvalPopup.value) prefillEvalInputs()
+})
+
+// 分项评价弹窗：打开时由 openEvalCriteria 自行回填，这里只在关闭时清理。
+watch(showEvalCriteriaPopup, (show) => {
+  if (!show) evalCriteriaDraft.value = []
 })
 
 function prefillEvalInputs() {

@@ -72,6 +72,7 @@ import { useAppStore } from '@/stores/app'
 import type { Evaluation, EvalType } from '@/types'
 import { EvalTypeLabels } from '@/types'
 import { getNow } from '@/lib/date'
+import { makeEvalItemsForTotal } from '@/lib/evalStandards'
 
 const props = defineProps<{
   record: Evaluation | undefined
@@ -177,6 +178,8 @@ const handleSubmitPeerEval = (targetId: string) => {
   const score = peerScores.value[targetId]
   if (score === undefined || score < 0 || score > 100) return
   const existing = getExistingEval(targetId)
+  // 互评只填总分，按比例拆成各项明细落库，保证再次打开能回显
+  const items = makeEvalItemsForTotal(props.type as EvalType, score)
   const ev = {
     id: existing ? existing.id : `ev-peer-${Date.now()}-${targetId}`,
     courseId: props.courseId,
@@ -184,12 +187,13 @@ const handleSubmitPeerEval = (targetId: string) => {
     sessionNumber: props.sessionNumber,
     type: props.type as EvalType,
     score,
+    items,
     evaluatorId: props.studentId,
     evaluatorName: props.studentName,
     createdAt: getNow().toISOString().split('T')[0],
   }
   if (existing) {
-    store.updateEvaluation(ev.id, { score, createdAt: ev.createdAt })
+    store.updateEvaluation(ev.id, { score, items, createdAt: ev.createdAt })
   } else {
     store.addEvaluation(ev)
   }
@@ -204,6 +208,7 @@ const handleSubmitGroupEval = (groupId: string, groupName: string) => {
     const existing = store.evaluations.find(
       (e) => e.courseId === props.courseId && e.studentId === mid && e.sessionNumber === props.sessionNumber && e.type === props.type && e.evaluatorId === props.studentId
     )
+    const items = makeEvalItemsForTotal(props.type as EvalType, score)
     const ev = {
       id: existing ? existing.id : `ev-peer-${Date.now()}-${groupId}-${mid}`,
       courseId: props.courseId,
@@ -211,12 +216,13 @@ const handleSubmitGroupEval = (groupId: string, groupName: string) => {
       sessionNumber: props.sessionNumber,
       type: props.type as EvalType,
       score,
+      items,
       evaluatorId: props.studentId,
       evaluatorName: props.studentName,
       createdAt: getNow().toISOString().split('T')[0],
     }
     if (existing) {
-      store.updateEvaluation(ev.id, { score, createdAt: ev.createdAt })
+      store.updateEvaluation(ev.id, { score, items, createdAt: ev.createdAt })
     } else {
       store.addEvaluation(ev)
     }
