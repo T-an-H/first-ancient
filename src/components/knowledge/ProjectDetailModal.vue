@@ -512,7 +512,7 @@ import {
 } from '@/lib/evalStandards'
 import { computeRadarData } from '@/lib/evalRadar'
 import { createBuiltinEvalQuestionnaire } from '@/lib/evalQuestionnaire'
-import { checkUploadSize, formatLimit, MAX_UPLOAD_FILE_SIZE } from '@/lib/uploadLimits'
+import { checkUploadSize } from '@/lib/uploadLimits'
 
 const props = defineProps<{
   project: any

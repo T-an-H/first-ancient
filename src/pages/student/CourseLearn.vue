@@ -408,7 +408,7 @@
 
                 <!-- 文件上传 -->
                 <div class="bg-white rounded-xl p-4 border border-brand-400/20">
-                  <label class="text-sm font-medium text-gray-700 mb-2 block">上传资料（图片/文档，单个文件 ≤ 2MB）</label>
+                  <label class="text-sm font-medium text-gray-700 mb-2 block">上传资料（图片/文档，单个文件 ≤ {{ formatLimit(MAX_UPLOAD_FILE_SIZE) }}，合计 ≤ {{ formatLimit(MAX_UPLOAD_TOTAL_SIZE) }}）</label>
                   <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-emerald-400 transition-colors cursor-pointer"
                     @click="qualityFileInputRef?.click()">
                     <Upload class="w-8 h-8 mx-auto mb-2 text-gray-400" />
@@ -815,6 +815,7 @@ import { fetchSchedules, fetchTierTestQuestions, fetchTierTestResult, submitTier
 import { getNow, parseLocalDate } from '@/lib/date'
 import { mergeSchedulesForClass } from '@/lib/schedule'
 import { computeRadarData } from '@/lib/evalRadar'
+import { MAX_UPLOAD_FILE_SIZE, MAX_UPLOAD_TOTAL_SIZE, formatLimit } from '@/lib/uploadLimits'
 
 const route = useRoute()
 const router = useRouter()
@@ -1810,18 +1811,21 @@ async function handleQualityFileSelect(e: Event) {
   if (!files || files.length === 0) return
   qualitySubmitError.value = ''
   // 总大小限制（base64 存储于 localStorage，避免撑爆配额）。
-  // 这里的 2MB/4MB 比其它上传入口更严是**故意的**：素质评价的待提交文件会随
-  // store 落进 localStorage，而 localStorage 通常只有 5MB 左右配额，不能按
-  // 服务端上限来放。其余入口（课程标准/项目资料）不落 localStorage，用的是
-  // src/lib/uploadLimits.ts 里的共享上限。
+  // 大小上限统一走 src/lib/uploadLimits.ts —— 那里是从线上 nginx 实际放行的
+  // 1MiB 反推出来的（720KB），不是拍脑袋定的。此前这里写死 2MB/4MB，
+  // 而线上 nginx 只放行 1MiB，学生选完文件、填完表单才会在提交时失败。
+  //
+  // 曾经这里比其它入口更严是**故意的**（待提交文件会随 store 落进
+  // localStorage，配额只有 ~5MB）。现在 720KB 折成 base64 约 960KB，
+  // 仍然远低于配额，所以直接复用共享上限即可，不必再另立一套数字。
   const totalSize = qualityPendingFiles.value.reduce((s, f) => s + f.fileSize, 0)
   for (const file of Array.from(files)) {
-    if (file.size > 2 * 1024 * 1024) {
-      qualitySubmitError.value = `文件 ${file.name} 超过 2MB，已跳过`
+    if (file.size > MAX_UPLOAD_FILE_SIZE) {
+      qualitySubmitError.value = `文件 ${file.name} 超过 ${formatLimit(MAX_UPLOAD_FILE_SIZE)}，已跳过`
       continue
     }
-    if (totalSize + file.size > 4 * 1024 * 1024) {
-      qualitySubmitError.value = `文件总大小超过 4MB，已停止添加（当前已选 ${(totalSize / 1024 / 1024).toFixed(1)}MB）`
+    if (totalSize + file.size > MAX_UPLOAD_TOTAL_SIZE) {
+      qualitySubmitError.value = `文件总大小超过 ${formatLimit(MAX_UPLOAD_TOTAL_SIZE)}，已停止添加（当前已选 ${formatSize(totalSize)}）`
       break
     }
     try {

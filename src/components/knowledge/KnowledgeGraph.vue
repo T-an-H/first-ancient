@@ -138,7 +138,7 @@
           <h3 class="text-lg font-semibold text-gray-900">上传课程标准</h3>
           <button @click="showUploadModal = false" class="p-1 text-gray-400 hover:text-gray-600"><X class="w-5 h-5" /></button>
         </div>
-        <p class="text-xs text-gray-500 mb-3">支持 PDF / Word / Excel / PPT / 图片等常见格式，单个文件不超过 {{ formatLimit(MAX_UPLOAD_FILE_SIZE) }}，单次上传不超过 {{ formatLimit(MAX_UPLOAD_TOTAL_SIZE) }}。上传后将同步到学生端「课程标准」板块。</p>
+        <p class="text-xs text-gray-500 mb-3">支持 PDF / Word / Excel / PPT / 图片等常见格式，单个文件不超过 {{ formatLimit(MAX_UPLOAD_FILE_SIZE) }}（单次上传各文件合计不超过 {{ formatLimit(MAX_UPLOAD_TOTAL_SIZE) }}）。上传后将同步到学生端「课程标准」板块。</p>
         <div class="border border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-indigo-400/60 hover:bg-indigo-400/5 transition-colors"
           @click="planFileInput?.click()" @dragover.prevent @drop.prevent="onPlanDrop">
           <Upload class="w-6 h-6 mx-auto text-gray-400 mb-1.5" />
@@ -291,8 +291,8 @@ const planFileInput = ref<any>(null)
 const planFile = ref<File | null>(null)
 const uploadError = ref('')
 const importing = ref(false)
-// 文件上限统一与后端、网关对齐（见 src/lib/uploadLimits.ts）：
-// 5MB 文件转 base64 后约 6.7MB，仍在 nginx 与 Express 的放行范围内。
+// 界面上的体积提示统一取自 src/lib/uploadLimits.ts，
+// 那里的 720KB 是从线上 nginx 实际放行的 1MiB 反推出来的，不是拍脑袋定的。
 const standards = ref<any[]>([])
 
 async function loadStandards() {
