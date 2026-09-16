@@ -576,14 +576,22 @@ const ABILITY_DIMS = [
 ]
 
 const gradeRadar = computed(() => {
-  const myGrades = radarStudentId.value
-    ? store.grades.filter((g) => g.studentId === radarStudentId.value)
-    : []
+  const sid = radarStudentId.value
+  if (!sid) return { labels: ABILITY_DIMS.map((d) => d.label), values: ABILITY_DIMS.map(() => 0), count: 0, hasData: false }
+
+  // 数据源：成绩明细（detailed_grade）——由评价数据聚合而来。
+  // 此前读 store.grades（exam_scores，期中/期末考试成绩表），
+  // 而「评价」写的是 evaluations，两者互不相通，导致有评价也显示空态。
+  // 现改为与「职业方向推荐」同源，做到「有评价产出就有数据」。
+  const details = store.detailedGrades.filter((d) => d.studentId === sid)
   const buckets: number[][] = ABILITY_DIMS.map(() => [])
-  for (const g of myGrades) {
-    const score = Math.round(Number(g.totalScore ?? g.score ?? 0))
+  let used = 0
+  for (const d of details) {
+    const courseId = String(d.courseId || '')
+    const score = Math.round(store.calcTotalScore(courseId, d))
     if (!Number.isFinite(score) || score <= 0) continue
-    const course = store.courses.find((c) => String(c.id) === String(g.courseId))
+    used += 1
+    const course = store.courses.find((c) => String(c.id) === courseId)
     const catName = store.categories.find((cat) => String(cat.id) === String(course?.categoryId))?.name || ''
     const matched = ABILITY_DIMS
       .map((dim, i) => ({ dim, i }))
@@ -598,7 +606,8 @@ const gradeRadar = computed(() => {
   return {
     labels: ABILITY_DIMS.map((d) => d.label),
     values: buckets.map((arr) => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0)),
-    count: myGrades.length,
+    count: used,
+    hasData: used > 0,
   }
 })
 

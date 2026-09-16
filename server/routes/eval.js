@@ -3,6 +3,7 @@
  */
 import { Router } from 'express';
 import pool from '../db.js';
+import { syncDetailedGradesFromEvaluations, EVAL_TYPE_TO_COLUMN } from '../lib/detailedGrades.js';
 
 const router = Router();
 
@@ -94,6 +95,85 @@ router.post('/config', async (req, res) => {
 
 // ==================== 评价记录 ====================
 
+/**
+ * 评价写入/删除后自动回填成绩明细（detailed_grade）
+ *
+ * 为什么挂在写入侧：个人中心的「能力雷达」「职业方向推荐」读的是 detailed_grade，
+ * 而它依赖 evaluations 聚合。此前没有任何调用方触发聚合（前端只更新 localStorage、
+ * 后端 /detailed-grades/sync 无人调用），导致线上有 1155 条评价、detailed_grade 却全空，
+ * 两个模块永远显示空态。
+ *
+ * 除了聚合，还要把「已无评价的类型」对应的列清零 —— 聚合只写有数据的列，
+ * 删除最后一条评价后旧值会残留，导致图不随数据减少而更新。
+ *
+ * 放在响应前 await：保证「评价一产生，成绩明细即更新」，前端随后拉取就能拿到。
+ * 失败不影响评价本身落库。
+ */
+async function syncGradesAfterEvalWrite(courseId, studentId = '') {
+  if (!courseId) return
+  let connection
+  try {
+    connection = await pool.getConnection()
+    await syncDetailedGradesFromEvaluations(connection, courseId, studentId)
+    await clearStaleEvalColumns(connection, courseId, studentId)
+  } catch (e) {
+    console.warn('评价写入后回填成绩明细失败（评价已保存）:', e.message)
+  } finally {
+    connection?.release()
+  }
+}
+
+/**
+ * 把「该学生该课程下已无评价」的五类列清空。
+ *
+ * 例：删掉最后一条 self 评价后，self_eval_score 应归零/清空，
+ * 否则雷达与职业推荐会继续沿用已删除评价的旧分数。
+ */
+async function clearStaleEvalColumns(connection, courseId, studentId) {
+  if (!courseId) return
+  const params = [courseId]
+  let filter = ''
+  if (studentId) { filter = ' AND student_id = ?'; params.push(studentId) }
+
+  const [rows] = await connection.query(
+    `SELECT student_id, type FROM evaluations
+     WHERE course_id = ?${filter}
+     GROUP BY student_id, type`,
+    params
+  )
+  // 每个学生实际拥有的评价类型
+  const have = new Map()
+  for (const r of rows) {
+    const sid = String(r.student_id || '')
+    if (!sid) continue
+    if (!have.has(sid)) have.set(sid, new Set())
+    have.get(sid).add(r.type)
+  }
+
+  // 明细里出现过的学生（含已无任何评价的）
+  const detailParams = [courseId]
+  let detailFilter = ''
+  if (studentId) { detailFilter = ' AND student_id = ?'; detailParams.push(studentId) }
+  const [details] = await connection.query(
+    `SELECT student_id FROM detailed_grade WHERE course_id = ?${detailFilter}`,
+    detailParams
+  )
+
+  for (const d of details) {
+    const sid = String(d.student_id || '')
+    const owned = have.get(sid) || new Set()
+    const staleCols = Object.entries(EVAL_TYPE_TO_COLUMN)
+      .filter(([evalType]) => !owned.has(evalType))
+      .map(([, column]) => column)
+    if (staleCols.length === 0) continue
+    await connection.query(
+      `UPDATE detailed_grade SET ${staleCols.map((c) => `${c} = NULL`).join(', ')}
+       WHERE course_id = ? AND student_id = ?`,
+      [courseId, sid]
+    )
+  }
+}
+
 /** POST /api/eval/save - 保存一条评价 */
 router.post('/save', async (req, res) => {
   try {
@@ -102,6 +182,8 @@ router.post('/save', async (req, res) => {
       'REPLACE INTO evaluations (id, course_id, student_id, session_number, type, score, items, evaluator_id, evaluator_name, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [id, courseId, studentId, sessionNumber, type, score, items ? JSON.stringify(items) : null, evaluatorId || '', evaluatorName || '', comment || '', createdAt || '']
     );
+    // 只回填该学生，避免每次保存都聚合整门课
+    await syncGradesAfterEvalWrite(courseId, studentId);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
@@ -117,6 +199,14 @@ router.post('/batch', async (req, res) => {
         [e.id, e.courseId, e.studentId, e.sessionNumber, e.type, e.score, e.items ? JSON.stringify(e.items) : null, e.evaluatorId || '', e.evaluatorName || '', e.comment || '', e.createdAt || '']
       );
     }
+    // 批量后按「课程+学生」去重回填，避免同一学生重复聚合
+    const targets = new Map();
+    for (const e of evaluations) {
+      if (e?.courseId && e?.studentId) targets.set(`${e.courseId}||${e.studentId}`, [e.courseId, e.studentId]);
+    }
+    for (const [courseId, studentId] of targets.values()) {
+      await syncGradesAfterEvalWrite(courseId, studentId);
+    }
     res.json({ success: true, count: evaluations.length });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
@@ -124,7 +214,15 @@ router.post('/batch', async (req, res) => {
 /** DELETE /api/eval/:id - 删除一条评价 */
 router.delete('/:id', async (req, res) => {
   try {
+    // 先取出该评价归属，删除后按同样的课程/学生回填
+    const [rows] = await pool.execute(
+      'SELECT course_id, student_id FROM evaluations WHERE id = ? LIMIT 1',
+      [req.params.id]
+    );
     await pool.execute('DELETE FROM evaluations WHERE id = ?', [req.params.id]);
+    if (rows.length > 0) {
+      await syncGradesAfterEvalWrite(rows[0].course_id, rows[0].student_id);
+    }
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });

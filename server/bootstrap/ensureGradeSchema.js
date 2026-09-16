@@ -12,6 +12,7 @@
  * 故这里**运行时探测 courses.id 的 collation 并沿用**，而不是写死。
  */
 import pool from '../db.js';
+import { syncDetailedGradesFromEvaluations } from '../lib/detailedGrades.js';
 
 let schemaReadyPromise;
 
@@ -81,10 +82,41 @@ export default function ensureGradeSchema() {
           KEY idx_detailed_grade_course (course_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION} COMMENT='成绩明细（每生每课一条）'
       `);
+
+      // 历史数据回填：有评价的课程若 detailed_grade 缺失，补一次聚合。
+      // 此前聚合从无调用方（前端只更新 localStorage、后端 /detailed-grades/sync 无人调用），
+      // 线上 1155 条评价对应的成绩明细全空，个人中心的能力雷达/职业推荐永远无数据。
+      // 幂等：仅对「有评价但无明细」的课程补算，正常运行后每次启动都是空操作。
+      await backfillDetailedGrades(connection);
     } finally {
       connection.release();
     }
   })();
 
   return schemaReadyPromise;
+}
+
+/**
+ * 回填历史成绩明细：找出「有评价但 detailed_grade 一条都没有」的课程，逐门聚合。
+ *
+ * 逐门（而非全库全量）是为了启动开销可控，且只补真正缺的课。
+ */
+async function backfillDetailedGrades(connection) {
+  try {
+    const [courses] = await connection.query(
+      `SELECT DISTINCT course_id
+       FROM evaluations
+       WHERE course_id IS NOT NULL AND TRIM(course_id) <> ''
+         AND course_id NOT IN (SELECT DISTINCT course_id FROM detailed_grade)`
+    );
+    if (courses.length === 0) return;
+
+    let written = 0;
+    for (const row of courses) {
+      written += await syncDetailedGradesFromEvaluations(connection, row.course_id);
+    }
+    console.log(`[grade-schema] 回填历史成绩明细：${courses.length} 门课，${written} 条`);
+  } catch (e) {
+    console.warn('[grade-schema] 回填历史成绩明细失败（不影响启动）:', e.message);
+  }
 }
