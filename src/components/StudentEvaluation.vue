@@ -119,8 +119,32 @@
                       <span class="text-xs font-medium text-brand-600">已评 {{ getSubmittedPeerScore(target) }} 分</span>
                     </template>
                   </div>
+
+                  <!-- 被评对象的提交内容：作为互评依据（数据来自父组件已加载的进度，不额外请求） -->
+                  <template v-for="sub in [getTargetSubmission(target)]" :key="`sub-${target.key}`">
+                    <div v-if="sub" class="mt-1.5 rounded border border-blue-100 bg-blue-50/60 px-2 py-1.5">
+                      <p class="mb-1 text-[11px] font-semibold text-blue-700">
+                        {{ target.studentId ? '该同学的提交' : '该组的提交' }}
+                      </p>
+                      <p v-if="sub.comment" class="whitespace-pre-wrap text-[11px] leading-relaxed text-gray-700">{{ sub.comment }}</p>
+                      <div v-if="sub.attachments?.length" class="mt-1 flex flex-wrap gap-1">
+                        <span v-for="(f, fi) in sub.attachments" :key="fi"
+                          :class="`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${f.dataUrl ? 'border-blue-100 bg-white text-blue-600 hover:bg-blue-50 cursor-pointer' : 'border-gray-200 bg-white text-gray-500'}`"
+                          @click="f.dataUrl && openPeerFile(f.dataUrl)">
+                          <FileText class="h-3 w-3" /><span class="max-w-[140px] truncate">{{ f.name }}</span>
+                        </span>
+                      </div>
+                    </div>
+                  </template>
                   <template v-if="!hasSubmittedPeerFor(target)">
-                    <div class="mt-2 space-y-1.5">
+                    <!-- 对方尚未提交：没有评分依据，不允许评价（与教师端规则一致） -->
+                    <div v-if="!canEvalTarget(target)" class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5">
+                      <p class="flex items-center gap-1 text-[11px] text-amber-700">
+                        <AlertTriangle class="h-3 w-3 flex-shrink-0" />
+                        {{ target.studentId ? '该同学尚未提交任务，暂无评分依据' : '该组尚无成员提交任务，暂无评分依据' }}
+                      </p>
+                    </div>
+                    <div v-else class="mt-2 space-y-1.5">
                       <div
                         v-for="(item, itemIndex) in getEvalItemDefinitions(type)"
                         :key="itemIndex"
@@ -177,7 +201,7 @@ import { ref, computed, watch, type Component } from 'vue'
 import { useAppStore } from '@/stores/app'
 import {
   AlertTriangle, User, Users, Building2, GraduationCap, Briefcase,
-  CheckCircle, ChevronRight, Lock
+  CheckCircle, ChevronRight, Lock, FileText
 } from 'lucide-vue-next'
 import type { EvalType, EvalAnomaly, Evaluation } from '@/types'
 import { EvalTypeLabels, EvalTypeColors, EvalTemplateLabels, EvalFrequencyLabels, TEMPLATE_EVAL_TYPES } from '@/types'
@@ -197,6 +221,11 @@ const props = defineProps<{
   studentName: string
   /** 指定评价轮次：放入某个项目/测试时只展示并填写该轮次 */
   sessionNumber?: number
+  /**
+   * 本任务下所有学生的进度记录，用于互评时查看被评同学的提交内容。
+   * 由 StudentProjectModal 传入；不传时互评不展示提交内容。
+   */
+  peerProgress?: any[]
 }>()
 
 const store = useAppStore()
@@ -493,6 +522,64 @@ function getPeerTargets(type: EvalType): PeerTarget[] {
   return []
 }
 
+/**
+ * 取某个学生在本任务下提交的内容（文字描述 + 附件），供互评时参考。
+ * 数据来自父组件传入的 peerProgress，不额外发起请求。
+ */
+function getPeerSubmission(studentId?: string) {
+  if (!studentId || !props.peerProgress?.length) return null
+  const rec = props.peerProgress.find(
+    (r) => r.studentId === studentId && r.progressType === 'test'
+  ) || props.peerProgress.find((r) => r.studentId === studentId)
+  if (!rec) return null
+  const comment = String(rec.comment || '').trim()
+  const attachments = Array.isArray(rec.attachments) ? rec.attachments : []
+  if (!comment && attachments.length === 0) return null
+  return { comment, attachments }
+}
+
+/** 组间互评：取该组内任意一名有提交的成员的提交内容，作为小组产出展示 */
+function getGroupSubmission(memberIds?: string[]) {
+  if (!memberIds?.length) return null
+  for (const mid of memberIds) {
+    const sub = getPeerSubmission(mid)
+    if (sub) return sub
+  }
+  return null
+}
+
+/** 打开被评对象提交的附件（与任务弹窗的查看方式保持一致） */
+function openPeerFile(dataUrl: string) {
+  if (dataUrl) window.open(dataUrl, '_blank')
+}
+
+/**
+ * 互评目标的提交内容统一入口：
+ * 组内互评取该同学本人；组间互评取该组内任一有提交的成员。
+ * 模板里只调这一个函数，避免同一 target 反复查找。
+ */
+function getTargetSubmission(target: PeerTarget) {
+  return target.studentId
+    ? getPeerSubmission(target.studentId)
+    : getGroupSubmission(target.memberIds)
+}
+
+/**
+ * 该互评目标是否已完成提交（互评依据）。
+ *
+ * 与教师端一致：没有提交就没有评分依据，不允许评价。
+ * 组内互评看该同学本人；组间互评看该组是否至少有一个人提交。
+ * 父组件未传 peerProgress 时（例如非任务场景调用）不做限制，保持原有行为。
+ */
+function canEvalTarget(target: PeerTarget): boolean {
+  if (!props.peerProgress) return true
+  if (target.studentId) return getPeerSubmission(target.studentId) !== null
+  if (target.memberIds?.length) {
+    return target.memberIds.some((mid) => getPeerSubmission(mid) !== null)
+  }
+  return false
+}
+
 function hasSubmittedPeerFor(target: PeerTarget): boolean {
   if (target.type === 'intra_group' && target.studentId) {
     return store.evaluations.some(
@@ -563,6 +650,9 @@ function validateForm(): boolean {
   for (const type of ['intra_group', 'inter_group'] as EvalType[]) {
     for (const target of getPeerTargets(type)) {
       if (hasSubmittedPeerFor(target)) continue
+      // 对方尚未提交任务：界面上不显示输入框，也不应要求填分，
+      // 否则会因「请完整填写」而永久卡住提交。
+      if (!canEvalTarget(target)) continue
       const defs = getEvalItemDefinitions(type)
       const draft = getPeerItemDraft(type, target.key)
       const invalid = defs.some((item, index) => {
@@ -598,6 +688,9 @@ function handleModalSubmit() {
   for (const type of ['intra_group', 'inter_group'] as EvalType[]) {
     for (const target of getPeerTargets(type)) {
       if (hasSubmittedPeerFor(target)) continue
+      // 对方尚未提交任务：无评分依据，跳过（与界面门禁保持一致）。
+      // 不做这层兜底的话，即使输入框被隐藏，这里仍会写入一条全 0 的空评价。
+      if (!canEvalTarget(target)) continue
       const draft = getPeerItemDraft(type, target.key)
       const remarks = getPeerItemRemarks(type, target.key)
       if (type === 'intra_group' && target.studentId) {

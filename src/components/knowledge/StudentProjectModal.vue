@@ -208,6 +208,7 @@
               :student-id="myStudentId"
               :student-name="currentStudentName"
               :session-number="projectEvalSession"
+              :peer-progress="allProgressList"
             />
           </div>
           <div class="border-t border-gray-100 pt-4">
@@ -342,11 +343,16 @@ async function loadFiles() {
 
 // ===== 我的进度 =====
 const myProgressList = ref<any[]>([])
+/** 本任务下所有学生的进度记录（供互评时查看被评同学的提交内容） */
+const allProgressList = ref<any[]>([])
 async function loadProgress() {
   try {
     const list: any = await javaListProjectProgress(props.project.id)
-    myProgressList.value = Array.isArray(list) ? list.filter((r) => r.studentId === props.myStudentId) : []
+    const arr = Array.isArray(list) ? list : []
+    allProgressList.value = arr
+    myProgressList.value = arr.filter((r) => r.studentId === props.myStudentId)
   } catch {
+    allProgressList.value = []
     myProgressList.value = []
   }
 }

@@ -438,6 +438,22 @@
           <button @click="closeTestEval" class="text-gray-400 hover:text-gray-600"><X class="h-5 w-5" /></button>
         </div>
         <div class="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+          <!-- 学生提交内容：评分的依据 -->
+          <div v-if="testEvalSubmission" class="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5">
+            <p class="mb-1.5 text-xs font-semibold text-blue-700">学生提交内容</p>
+            <p v-if="testEvalSubmission.comment"
+              class="whitespace-pre-wrap text-xs leading-relaxed text-gray-700">{{ testEvalSubmission.comment }}</p>
+            <div v-if="testEvalSubmission.attachments?.length" class="mt-1.5 flex flex-wrap gap-1.5">
+              <span v-for="(f, fi) in testEvalSubmission.attachments" :key="fi"
+                :class="`inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] ${f.dataUrl ? 'border-blue-100 bg-blue-50 text-blue-600 hover:bg-blue-100 cursor-pointer' : 'border-gray-200 bg-gray-50 text-gray-500'}`"
+                @click="f.dataUrl && openFileDetail(f.dataUrl)">
+                <FileText class="h-3 w-3" /><span class="max-w-[180px] truncate">{{ f.name }}</span>
+              </span>
+            </div>
+            <p v-if="!testEvalSubmission.comment && !testEvalSubmission.attachments?.length"
+              class="text-xs text-gray-400">该学生未填写描述、也未上传附件</p>
+          </div>
+
           <div
             v-for="(item, index) in getEvalItemDefinitions(activeEvalType)"
             :key="index"
@@ -749,6 +765,17 @@ const testEvalError = ref('')
 const testEvalTotal = computed(() =>
   scoreFromEvalDraft(getEvalItemDefinitions(activeEvalType.value), testEvalDraft.value)
 )
+
+/** 当前正在评价的这名学生的提交内容（评分依据）：文字描述 + 附件 */
+const testEvalSubmission = computed(() => {
+  const sid = testEvalStudent.value?.id
+  if (!sid) return null
+  const rec = getProgressRecord(sid, 'test')
+  if (!rec) return null
+  const comment = String(rec.comment || '').trim()
+  const attachments = Array.isArray(rec.attachments) ? rec.attachments : []
+  return { comment, attachments }
+})
 
 function getActiveEvalScore(studentId: string) {
   const ev = store.evaluations.find(
