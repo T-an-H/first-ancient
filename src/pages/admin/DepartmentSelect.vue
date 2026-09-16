@@ -6,7 +6,7 @@
         <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center mx-auto mb-4">
           <GraduationCap class="w-8 h-8 text-white" />
         </div>
-        <h1 class="text-3xl font-bold text-gray-900 mb-2">选择管理学院</h1>
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">课程多元评价平台</h1>
         <p class="text-gray-500">请选择一个学院进入管理后台</p>
       </div>
 
