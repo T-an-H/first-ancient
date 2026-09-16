@@ -31,7 +31,26 @@
                 {{ store.getDepartmentCategories(dept.id).length }} 个专业
               </p>
             </div>
-            <ArrowRight class="w-5 h-5 text-gray-300 group-hover:text-brand-500 transition-colors flex-shrink-0" />
+            <!-- 卡片内操作：编辑 / 删除（.stop 阻止冒泡，避免误触发进入学院） -->
+            <div class="flex-shrink-0 flex items-center gap-1">
+              <button
+                type="button"
+                @click.stop="openEditModal(dept)"
+                class="p-1.5 rounded-lg text-gray-300 opacity-0 group-hover:opacity-100 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                title="编辑学院"
+              >
+                <Pencil class="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                @click.stop="openDeleteConfirm(dept)"
+                class="p-1.5 rounded-lg text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-600 hover:bg-red-50 transition-all"
+                title="删除学院"
+              >
+                <Trash2 class="w-4 h-4" />
+              </button>
+              <ArrowRight class="w-5 h-5 text-gray-300 group-hover:text-brand-500 transition-colors" />
+            </div>
           </div>
         </div>
 
@@ -127,7 +146,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createDepartment, deleteDepartment as apiDeleteDepartment, fetchDepartments, updateDepartment as apiUpdateDepartment } from '@/api'
 import { useAppStore } from '@/stores/app'
-import { GraduationCap, Plus, ArrowRight, LogOut, Trash2 } from 'lucide-vue-next'
+import { GraduationCap, Plus, ArrowRight, LogOut, Trash2, Pencil } from 'lucide-vue-next'
 import type { Department } from '@/types'
 import {
   DEPARTMENT_COLOR_OPTIONS,
@@ -178,6 +197,19 @@ function openAddModal() {
   showModal.value = true
 }
 
+/** 卡片上的「编辑」入口：带入该学院当前值 */
+function openEditModal(dept: Department) {
+  editingDept.value = dept
+  form.value = { name: dept.name, color: dept.color || '#3b82f6' }
+  showModal.value = true
+}
+
+/** 卡片上的「删除」入口：直接弹确认框（不必先进编辑弹窗） */
+function openDeleteConfirm(dept: Department) {
+  deleteTarget.value = dept
+  showDeleteConfirm.value = true
+}
+
 async function handleSave() {
   if (!form.value.name.trim()) return
 
@@ -210,10 +242,15 @@ function confirmDeleteDept() {
 
 async function handleDelete() {
   if (!deleteTarget.value) return
+  const deletedId = deleteTarget.value.id
 
   try {
-    await apiDeleteDepartment(deleteTarget.value.id)
+    await apiDeleteDepartment(deletedId)
     await loadDepartments()
+    // 删掉的正是当前选定学院时清空选择，否则后续进入「专业」页会带上已失效的 id
+    if (store.selectedDepartmentId === deletedId) {
+      store.setSelectedDepartment(null)
+    }
     showDeleteConfirm.value = false
     deleteTarget.value = null
     showModal.value = false
