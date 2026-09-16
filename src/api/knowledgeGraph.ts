@@ -2,7 +2,7 @@
  * 知识图谱模块专用 API
  * 接口与 GitHub main 保持一致，独立放在这里，避免改动本地 src/api/index.ts。
  */
-import { UPLOAD_TIMEOUT_MS, BULK_TIMEOUT_MS, formatLimit, MAX_UPLOAD_BODY_SIZE } from '@/lib/uploadLimits'
+import { UPLOAD_TIMEOUT_MS, BULK_TIMEOUT_MS } from '@/lib/uploadLimits'
 
 // 与主 API（src/api/index.ts）一致：默认使用相对路径 /api，由 nginx 代理到后端；如需独立服务地址可用 VITE_JAVA_API_BASE 覆盖
 const JAVA_API_BASE = (import.meta.env.VITE_JAVA_API_BASE as string | undefined) ?? '/api'
@@ -40,8 +40,12 @@ async function javaRequest(url: string, options: RequestOptions = {}) {
       // 网关（nginx）与 Express 的体积限制都会在到达业务代码前拒收，
       // 且 nginx 回的是 HTML、`response.json()` 解析失败只剩 {}。
       // 这里按状态码给可读文案，否则用户只会看到「请求失败 (413)」。
+      //
+      // 刻意不写具体上限：请求可能先被 nginx 挡下，也可能走到后端才被挡下，
+      // 两层上限未必一致（线上 nginx 常是默认 1MB，后端是 20MB）。
+      // 写死一个数字，就会在另一层上变成假话。
       if (response.status === 413) {
-        throw new Error(`文件过大，超过服务端接收上限（${MAX_UPLOAD_BODY_SIZE}），请压缩或分批上传`)
+        throw new Error('上传内容过大，请压缩文件后重试，或将文件分批上传')
       }
       if (response.status === 504 || response.status === 502) {
         throw new Error(`服务端响应超时或不可用（${response.status}），请稍后重试；若持续失败请压缩文件后重试`)

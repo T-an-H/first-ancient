@@ -130,7 +130,9 @@ app.use((err, req, res, next) => {
   if (err.type === 'entity.too.large') {
     return res.status(413).json({
       code: 413,
-      msg: `上传内容过大（上限 ${MAX_UPLOAD_BODY_SIZE}），请压缩文件或分批上传`,
+      // 不写具体上限：请求可能先被 nginx 挡下，也可能走到这里被 Express 挡下，
+      // 两层上限未必相同。写死一个数字反而会在另一层上骗人。
+      msg: '上传内容过大，请压缩文件后重试，或将文件分批上传',
       data: null,
     });
   }

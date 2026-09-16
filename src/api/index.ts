@@ -49,6 +49,17 @@ async function request(url: string, options: RequestOptions = {}) {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok || data.success === false) {
+      // 网关与后端的体积限制会在到达业务代码前拒收，且 nginx 回的是 HTML、
+      // 上面的 `response.json()` 解析失败只剩 {}，最终只显示「请求失败 (413)」。
+      // 这里按状态码给可读文案。刻意不写具体上限 —— 请求可能先被 nginx 挡下、
+      // 也可能走到后端才被挡下，两层上限未必一致，写死数字会在另一层上变成假话。
+      if (response.status === 413) {
+        throw new Error('上传内容过大，请压缩文件后重试，或将文件分批上传')
+      }
+      if (response.status === 504 || response.status === 502) {
+        throw new Error(`服务端响应超时或不可用（${response.status}），请稍后重试`)
+      }
+
       // 结构化附加信息（如删除学院前的影响面统计）一并带出，供调用方展示
       const attachDetails = (error: RequestError) => {
         if (data.details !== undefined) (error as any).details = data.details
