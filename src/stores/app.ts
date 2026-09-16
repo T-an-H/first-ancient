@@ -169,6 +169,15 @@ export function getActiveToken(): string | null {
   return getActiveSession()?.token ?? null
 }
 
+/**
+ * AI 分层测试窗口长度（天）
+ *
+ * 自「第一节课当天」起算的第 7 天 23:59:59 截止 —— 3/1 开课则 3/8 结束。
+ * 改这个数字会同时影响：学生端能否进入测试、逾期自动分配基础层、
+ * 以及待办的截止日期展示，都从 isAITierTestClosed / getAITierTestDeadline 派生。
+ */
+const AI_TIER_TEST_WINDOW_DAYS = 7
+
 // ====== Mock 数据版本检查：版本变化时清除旧 localStorage ======
 const MOCK_VERSION_KEY = 'mockDataVersion'
 try {
@@ -2228,29 +2237,39 @@ export const useAppStore = defineStore('app', () => {
     return getNow().getTime() >= occurrences[0].end.getTime()
   }
 
-  /** 第一节课当天 23:59:59.999（AI 分层测试的截止时刻） */
-  function getFirstClassDayEnd(courseId: string, className = ''): Date | null {
+  /**
+   * AI 分层测试截止时刻 = 第一节课当天 23:59:59 + AI_TIER_TEST_WINDOW_DAYS 天
+   *
+   * 以「第一节课当天」为起算日，第 7 天结束（23:59:59）时截止。
+   * 例如 3/1 开课，截止 3/8 23:59:59。
+   *
+   * 取当天 23:59:59 而非第一节课的下课时刻，是为了让窗口始终落在自然日边界上，
+   * 学生看到的「还剩几天」不会因为上午/下午开课而差半天。
+   */
+  function getAITierTestDeadline(courseId: string, className = ''): Date | null {
     const occurrences = getCourseScheduleOccurrences(courseId, className)
     if (occurrences.length === 0) return null
     const dayEnd = new Date(occurrences[0].end)
     dayEnd.setHours(23, 59, 59, 999)
-    return dayEnd
+    const deadline = new Date(dayEnd)
+    deadline.setDate(deadline.getDate() + AI_TIER_TEST_WINDOW_DAYS)
+    return deadline
   }
 
   /**
    * AI 分层测试窗口是否已关闭
    *
-   * 窗口 = 第一节课结束后 ~ 第一节课当天 23:59:59
-   * 当天未完成 → 关闭并自动分配基础层。
+   * 窗口 = 第一节课结束 ~ 开课当天起算的第 7 天 23:59:59
+   * 逾期未完成 → 关闭并自动分配基础层。
    * 只有当天的课次晚于 23:59 结束（如 23:00-23:59 后拖到次日）时，
    * 以第一节课结束时刻兜底，避免窗口倒挂。
    */
   function isAITierTestClosed(courseId: string, className = ''): boolean {
     const occurrences = getCourseScheduleOccurrences(courseId, className)
     if (occurrences.length === 0) return false
-    const dayEnd = getFirstClassDayEnd(courseId, className)
-    const deadline = Math.max(dayEnd ? dayEnd.getTime() : 0, occurrences[0].end.getTime())
-    return getNow().getTime() >= deadline
+    const deadline = getAITierTestDeadline(courseId, className)
+    const cutoff = Math.max(deadline ? deadline.getTime() : 0, occurrences[0].end.getTime())
+    return getNow().getTime() >= cutoff
   }
 
   /** 获取某学生所有未完成的 AI 分层测试（测试窗口已开但未超时） */
@@ -2275,19 +2294,19 @@ export const useAppStore = defineStore('app', () => {
       result.push({
         courseId: enr.courseId,
         courseTitle: course.title,
-        deadline: formatDateOnly(occurrences[0].end),
+        deadline: formatDateOnly(getAITierTestDeadline(enr.courseId, className) ?? occurrences[0].end),
       })
     }
 
     return result
   }
 
-  /** 第一节课当天未完成测试 → 自动分配基础层（当天 23:59:59 之后触发） */
+  /** 开课后第 7 天 23:59:59 仍未完成测试 → 自动分配基础层 */
   function autoAssignOverdueBasicTier(courseId: string, studentId: string, fallbackClassName = '') {
     const key = `${courseId}||${studentId}`
     const className = resolveStudentClassName(studentId, fallbackClassName)
     if (studentTiers.value[key]) return
-    // 以第一节课当天 23:59:59 为截止；当天无有效课次时无从判定，直接跳过
+    // 以开课后第 7 天 23:59:59 为截止；无有效课次时无从判定，直接跳过
     if (!isAITierTestClosed(courseId, className)) return
 
     const record: StudentTierRecord = {
@@ -2677,7 +2696,7 @@ export const useAppStore = defineStore('app', () => {
         if (hasAutoTodo(todoId)) continue
         newTodos.push({
           id: todoId,
-          title: `[AI分层] ${test.courseTitle} - 请在第一节课当天完成分层测试`,
+          title: `[AI分层] ${test.courseTitle} - 请在开课后第 7 天前完成分层测试`,
           completed: false,
           createdAt: now.toISOString().split('T')[0],
           dueDate: test.deadline,
@@ -2813,7 +2832,7 @@ export const useAppStore = defineStore('app', () => {
     hasPendingEvalForCourse, isCourseConfigPending, getMyPendingCourseIds,
     getCurrentStudent,
     getStudentTier, determineTier, submitAITierTest, syncStudentTierFromBackend,
-    isAITierTestClosed, getPendingAITierTests, autoAssignOverdueBasicTier,
+    isAITierTestClosed, getAITierTestDeadline, getPendingAITierTests, autoAssignOverdueBasicTier,
     // department actions
     setSelectedDepartment, getSelectedDepartment,
     addDepartment, updateDepartment, deleteDepartment,

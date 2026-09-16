@@ -29,12 +29,12 @@
               <p class="text-xs text-brand-400 mt-1">届时将根据第一节课内容生成 10 道测试题，依据得分判定学习层级</p>
             </div>
 
-            <!-- 测试窗口期（第一节课结束后 ~ 第一节课当天 23:59） -->
-            <div v-else-if="firstClassEnded && !secondClassStarted && !tierFinalized" class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-8 text-center">
+            <!-- 测试窗口期（第一节课结束后 ~ 开课后第 7 天 23:59） -->
+            <div v-else-if="firstClassEnded && !tierTestClosed && !tierFinalized" class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-8 text-center">
               <Sparkles class="w-12 h-12 mx-auto mb-3 text-blue-500" />
               <h3 class="text-lg font-semibold text-blue-800 mb-2">AI 分层测试已开放</h3>
               <p class="text-sm text-blue-600 mb-2">完成 10 道测试题（单选+判断），系统将根据得分判定你的学习层级</p>
-              <p class="text-xs text-brand-600 mb-6">⚠ 测试窗口：第一节课结束后 ~ 当天 23:59，逾期将自动分配到基础层</p>
+              <p class="text-xs text-brand-600 mb-6">⚠ 测试窗口：第一节课结束后 ~ {{ tierTestDeadlineText }}，逾期将自动分配到基础层</p>
               <button @click="openAITest"
                 class="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors shadow-lg shadow-blue-500/25 inline-flex items-center gap-2">
                 <HelpCircle class="w-5 h-5" />
@@ -43,10 +43,10 @@
             </div>
 
             <!-- 逾期未测，自动分配基础层 -->
-            <div v-else-if="secondClassStarted && !tierFinalized" class="bg-red-50 border border-red-200 rounded-xl p-8 text-center">
+            <div v-else-if="tierTestClosed && !tierFinalized" class="bg-red-50 border border-red-200 rounded-xl p-8 text-center">
               <XCircle class="w-12 h-12 mx-auto mb-3 text-red-400" />
               <h3 class="text-lg font-semibold text-red-700 mb-2">测试窗口已关闭</h3>
-              <p class="text-sm text-red-600 mb-4">第一节课当天已结束，AI 分层测试逾期未完成，已自动分配到基础层</p>
+              <p class="text-sm text-red-600 mb-4">开课后第 7 天已过，AI 分层测试逾期未完成，已自动分配到基础层</p>
               <div class="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm">
                 <Layers class="w-4 h-4 text-brand-600" />
                 <span class="text-sm font-bold text-gray-800">基础层</span>
@@ -952,12 +952,23 @@ const myTier = computed<LearningTier>(() => tierRecord.value?.tier ?? 'basic')
 const myTierScore = computed(() => tierRecord.value?.score ?? 0)
 const tierFinalized = computed(() => tierRecord.value !== null)
 const firstClassEnded = computed(() => store.isFirstClassStarted(courseId, currentClassName.value))
-const secondClassStarted = computed(() => store.isAITierTestClosed(courseId, currentClassName.value))
+// 分层测试窗口是否已关闭（开课当天起算第 7 天 23:59:59 之后）
+const tierTestClosed = computed(() => store.isAITierTestClosed(courseId, currentClassName.value))
 // 本课程分层测试满分：按题目配置固定计算，不依赖弹窗是否打开
 const tierTestFullScore = 100
-// 是否逾期自动分配（score=0 且第一节课当天已结束）
+// AI 分层测试的截止时刻（第一节课当天起算的第 7 天 23:59:59）
+const tierTestDeadline = computed(() =>
+  store.getAITierTestDeadline(courseId, currentClassName.value)
+)
+const tierTestDeadlineText = computed(() => {
+  const d = tierTestDeadline.value
+  if (!d) return '开课后第 7 天'
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} 23:59`
+})
+// 是否逾期自动分配（score=0 且分层测试窗口已过）
 const isAutoAssigned = computed(() =>
-  tierFinalized.value && secondClassStarted.value && myTierScore.value === 0
+  tierFinalized.value && tierTestClosed.value && myTierScore.value === 0
 )
 
 const tierLabel = computed(() => {
