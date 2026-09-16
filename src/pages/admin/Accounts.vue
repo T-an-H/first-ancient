@@ -146,7 +146,10 @@
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">学院</label>
-            <input v-model="addForm.department" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+            <select v-model="addForm.department" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500">
+              <option value="">未设置</option>
+              <option v-for="d in departmentOptions" :key="d.id" :value="d.name">{{ d.name }}</option>
+            </select>
           </div>
           <p v-if="addError" class="text-sm text-red-500">{{ addError }}</p>
           <p v-if="addSuccess" class="text-sm text-green-600">{{ addSuccess }}</p>
@@ -163,11 +166,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Search, LoaderCircle, Download, Upload, FileSpreadsheet, Plus } from 'lucide-vue-next'
-import { fetchAccounts, updateAccountStatus, resetAccountPassword, importAccounts, exportAccounts, exportStudents, exportTeachers, createAccountStudent, createAccountTeacher, deleteAccount as apiDeleteAccount } from '@/api'
+import { fetchAccounts, updateAccountStatus, resetAccountPassword, importAccounts, exportAccounts, exportStudents, exportTeachers, createAccountStudent, createAccountTeacher, deleteAccount as apiDeleteAccount, fetchDepartments } from '@/api'
+import type { Department } from '@/types'
 
 const accounts = ref<any[]>([])
+const departments = ref<Department[]>([])
 const loading = ref(false)
 const keyword = ref('')
 const roleFilter = ref('')
@@ -197,6 +202,10 @@ function debouncedLoad() {
   if (loadTimer) clearTimeout(loadTimer)
   loadTimer = setTimeout(loadAccounts, 300)
 }
+
+const departmentOptions = computed(() =>
+  [...departments.value].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN')),
+)
 
 async function loadAccounts() {
   loading.value = true
@@ -418,5 +427,17 @@ async function handleAddAccount() {
   }
 }
 
-onMounted(loadAccounts)
+async function loadDepartments() {
+  try {
+    const res = await fetchDepartments()
+    if (res.success) departments.value = res.departments || []
+  } catch (err: any) {
+    showToast(err instanceof Error ? err.message : '加载学院列表失败')
+  }
+}
+
+onMounted(() => {
+  void loadDepartments()
+  void loadAccounts()
+})
 </script>

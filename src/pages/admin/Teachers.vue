@@ -308,7 +308,10 @@
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">学院</label>
-            <input v-model="addForm.department" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+            <select v-model="addForm.department" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500">
+              <option value="">未设置</option>
+              <option v-for="d in departmentOptions" :key="d.id" :value="d.name">{{ d.name }}</option>
+            </select>
           </div>
           <p v-if="addError" class="text-sm text-red-500">{{ addError }}</p>
           <p v-if="addSuccess" class="text-sm text-green-600">{{ addSuccess }}</p>
