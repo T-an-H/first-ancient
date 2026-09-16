@@ -209,6 +209,7 @@
               :student-name="currentStudentName"
               :session-number="projectEvalSession"
               :peer-progress="allProgressList"
+              :my-task-submitted="isMyTaskSubmitted"
             />
           </div>
           <div class="border-t border-gray-100 pt-4">
@@ -358,6 +359,21 @@ async function loadProgress() {
 }
 const myProgress = (type: string) => myProgressList.value.find((r) => r.progressType === type)
 const mySubmission = (type: string) => myProgress(type)
+
+/**
+ * 本人是否已提交本次任务的工单。
+ *
+ * 判定标准与 submitTest 的提交门槛一致：附件或文字描述至少其一，
+ * 仅当「既没上传文件、又没写描述」时才视为未提交。
+ * 该值决定评价区能否填写——没有提交就没有可评价的依据。
+ */
+const isMyTaskSubmitted = computed(() => {
+  const rec = myProgress('test')
+  if (!rec) return false
+  const hasComment = Boolean(String(rec.comment || '').trim())
+  const hasFiles = Array.isArray(rec.attachments) && rec.attachments.length > 0
+  return hasComment || hasFiles
+})
 const myWorkorderScore = computed(() => {
   const r = myProgress('workorder')
   return r?.score != null ? Number(r.score) : null

@@ -226,6 +226,12 @@ const props = defineProps<{
    * 由 StudentProjectModal 传入；不传时互评不展示提交内容。
    */
   peerProgress?: any[]
+  /**
+   * 本人是否已提交本次任务的工单（文字描述或附件至少其一）。
+   * 由 StudentProjectModal 传入；为 false 时整轮评价锁住，不可填写。
+   * 不传（undefined）时不做限制，保持非任务场景的原有行为。
+   */
+  myTaskSubmitted?: boolean
 }>()
 
 const store = useAppStore()
@@ -271,6 +277,11 @@ const evalModalOpen = ref(false)
 const editingSession = ref(0)
 
 function sessionState(session: number): { disabled: boolean; reason: string } {
+  // 本人尚未提交本次任务的工单 → 没有可评价的依据，整轮评价锁住。
+  // 仅当父组件明确传入 false 时才限制；未传（非任务场景）不受影响。
+  if (props.myTaskSubmitted === false) {
+    return { disabled: true, reason: '请先提交本任务工单' }
+  }
   // 已锁定 → 不可评价
   if (store.isSessionLocked(props.courseId, session)) {
     return { disabled: true, reason: '该轮次评价已锁定' }
