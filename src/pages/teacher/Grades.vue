@@ -350,11 +350,12 @@ let exportToastTimer: ReturnType<typeof setTimeout> | null = null
 
 // ====== Computed ======
 const isMentor = computed(() => store.currentRole === 'mentor')
-const isLeaderWithTeaching = computed(() => store.leaders.some((l) => l.name === store.currentUser && l.asTeacher))
+// 领导兼任授课教师：判定用登录角色，不再依赖写死的 mock 领导名单
+const isLeaderWithTeaching = computed(() => store.currentRole === 'leader')
 
 const myCourses = computed(() => {
   if (isLeaderWithTeaching.value) {
-    return store.getLeaderCourses(store.currentUser || '')
+    return store.getLeaderCourses()
   }
   if (isMentor.value) {
     const mentorCourseIds = store.getMentorCourseIds(store.currentUser || '')

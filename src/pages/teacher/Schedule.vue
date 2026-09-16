@@ -316,7 +316,8 @@ const userSchedules = computed(() => {
   }
   // 领导段：管辖课程 或 自己教的课
   if (isLeaderRoute) {
-    const leaderCourseIds = store.getLeaderCourses(currentUser).map((c) => c.id)
+    // 领导：管辖学院的课程 + 自己授课的课程（学员按登录会话的学院解析）
+    const leaderCourseIds = store.getLeaderCourses().map((c) => c.id)
     return store.schedules.filter((s) =>
       leaderCourseIds.includes(s.courseId) || s.teacher === currentUser
     )

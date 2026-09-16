@@ -70,3 +70,28 @@ export function getStudentLookupKeyword(
 ): string {
   return session.studentId || session.name || currentUser || session.account || ''
 }
+
+/**
+ * 读取当前登录用户所属学院（登录时后端返回的 user.department）。
+ *
+ * 学院领导端用它确定「管辖哪个学院」，不再依赖写死的 mock 名单。
+ * 读取顺序与 getStoredStudentSession 一致：sessionStorage 优先，
+ * 兼容首登中转的 localStorage.userInfo。
+ */
+export function getStoredUserDepartment(): string {
+  try {
+    let user: any = null
+    const rawSession = sessionStorage.getItem('activeSession')
+    if (rawSession) {
+      user = JSON.parse(rawSession)?.userInfo ?? null
+    }
+    if (!user) {
+      const raw = localStorage.getItem('userInfo')
+      if (raw) user = JSON.parse(raw) ?? {}
+    }
+    if (!user) return ''
+    return readText(user.department ?? user.dept ?? '')
+  } catch {
+    return ''
+  }
+}

@@ -299,8 +299,10 @@ const batchSession = ref(1)
 const overdueMsg = ref('')
 
 const myCourses = computed(() => {
-  if (store.leaders.some((l) => l.name === store.currentUser && l.asTeacher)) {
-    return store.getLeaderCourses(store.currentUser || '')
+  // 领导兼任授课教师时，看其管辖学院的课程；判定用登录角色，
+  // 不再依赖写死的 mock 领导名单（真实领导不在名单里）。
+  if (store.currentRole === 'leader') {
+    return store.getLeaderCourses()
   }
   return store.courses.filter((c) => c.teacher === store.currentUser)
 })

@@ -20,6 +20,8 @@ export interface Course {
   categoryId: string;
   /** 所属学院（学院即专业时使用） */
   departmentId?: string;
+  /** 所属学院名称（后端 mapCourseRow 返回的 departmentName） */
+  departmentName?: string;
   cover: string;
   /** 课程开始日期 */
   startDate?: string;

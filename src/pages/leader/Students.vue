@@ -171,8 +171,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores/app'
+import { fetchDepartmentStudents } from '@/api'
+import { getStoredUserDepartment } from '@/lib/studentSession'
 import { Search, Users, UserCheck, BookOpen } from 'lucide-vue-next'
 import Modal from '@/components/Modal.vue'
 import type { Student } from '@/types'
@@ -180,7 +182,30 @@ import type { Student } from '@/types'
 const store = useAppStore()
 
 // ===== 数据 =====
-const allStudents = computed(() => store.getLeaderStudents(store.currentUser))
+/**
+ * 学员列表。
+ *
+ * 优先使用后端按学院查询的结果（真实数据）；
+ * 接口不可用时退回 store.getLeaderStudents()（同样按当前登录用户的学院过滤），
+ * 保证页面不会空白。
+ */
+const remoteStudents = ref<Student[] | null>(null)
+const allStudents = computed<Student[]>(() =>
+  remoteStudents.value ?? store.getLeaderStudents()
+)
+
+onMounted(async () => {
+  const dept = getStoredUserDepartment()
+  if (!dept) return
+  try {
+    const res = await fetchDepartmentStudents(dept)
+    if (res.success && Array.isArray(res.students)) {
+      remoteStudents.value = res.students
+    }
+  } catch (e) {
+    console.warn('学员总览：接口加载失败，改用本地数据:', e)
+  }
+})
 
 const activeCount = computed(() => filteredStudents.value.filter((s) => s.status === 'active').length)
 

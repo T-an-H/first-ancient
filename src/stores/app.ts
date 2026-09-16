@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { getNow, getTodayStart, parseLocalDate } from '@/lib/date'
 import { buildCourseScheduleOccurrences } from '@/lib/schedule'
-import { matchStudentFromSession } from '@/lib/studentSession'
+import { matchStudentFromSession, getStoredUserDepartment } from '@/lib/studentSession'
 import {
   fetchCourseEvaluationState,
   fetchCourseGroups,
@@ -2391,20 +2391,30 @@ export const useAppStore = defineStore('app', () => {
 
   // ====== 学院领导相关 ======
 
-  /** 获取某领导管辖的所有课程 */
-  function getLeaderCourses(leaderName: string): Course[] {
-    const leader = leaders.value.find((l) => l.name === leaderName)
-    if (!leader) return []
-    return courses.value.filter((c) => leader.categoryIds.includes(c.categoryId))
+  /**
+   * 获取某领导管辖的所有课程。
+   *
+   * 数据源改为「登录会话里的真实学院」（后端 user.department），
+   * 不再依赖写死的 mock 领导名单——此前真实领导账号不在 mock 名单里，
+   * 导致领导端的课程总览与学员总览恒为空。
+   *
+   * 入参 leaderName 保留以兼容既有调用点（教师端兼任场景会传当前用户名），
+   * 实际判定一律以当前登录用户的学院为准。
+   */
+  function getLeaderCourses(_leaderName?: string): Course[] {
+    const dept = getStoredUserDepartment()
+    if (!dept) return []
+    return courses.value.filter((c) => c.departmentName === dept)
   }
 
-  /** 获取某领导作为教师授课的专属课程（与教师端"我的课程"逻辑一致） */
+  /**
+   * 获取某领导作为教师授课的专属课程。
+   * 判定方式与教师端「我的课程」一致：courses.teacher === 当前用户，
+   * 不再依赖 mock 里的 teacherCourseIds 白名单。
+   */
   function getLeaderTeacherCourses(leaderName: string): Course[] {
-    const leader = leaders.value.find((l) => l.name === leaderName)
-    if (!leader?.asTeacher) return []
-    return courses.value.filter(
-      (c) => leader.teacherCourseIds?.includes(c.id) || c.teacher === leaderName
-    )
+    if (!leaderName) return []
+    return courses.value.filter((c) => c.teacher === leaderName)
   }
 
   /** 判断某课程是否为该领导作为教师的授课课程（可完整管理） */
@@ -2481,13 +2491,16 @@ export const useAppStore = defineStore('app', () => {
     return [...result]
   }
 
-  /** 获取某领导管辖的所有学生（去重） */
-  function getLeaderStudents(leaderName: string): Student[] {
-    const leader = leaders.value.find((l) => l.name === leaderName)
-    if (!leader) return []
-    const courseIds = courses.value
-      .filter((c) => leader.categoryIds.includes(c.categoryId))
-      .map((c) => c.id)
+  /**
+   * 获取某领导管辖的所有学生（去重）。
+   *
+   * 与 getLeaderCourses 同源：按当前登录用户的真实学院过滤课程，
+   * 再取这些课程的选课学生。入库时未分配学院的学生不会出现——
+   * 这是预期行为（待分配池由管理员处理）。
+   */
+  function getLeaderStudents(_leaderName?: string): Student[] {
+    const courseIds = getLeaderCourses().map((c) => c.id)
+    if (courseIds.length === 0) return []
     const studentIds = new Set(
       enrollments.value
         .filter((e) => courseIds.includes(e.courseId))

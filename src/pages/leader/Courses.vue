@@ -103,6 +103,7 @@ import { useRouter } from 'vue-router'
 import { Search, BookOpen, Play, CheckCircle, LoaderCircle } from 'lucide-vue-next'
 import { fetchDepartmentCourses } from '@/api'
 import { useAppStore } from '@/stores/app'
+import { getStoredUserDepartment } from '@/lib/studentSession'
 
 const store = useAppStore()
 const router = useRouter()
@@ -155,22 +156,22 @@ function goDetail(courseId: string) {
 async function loadCourses() {
   loading.value = true
   usingMockData.value = false
+  // 按当前登录领导所属学院查询（登录时后端返回的 user.department），
+  // 此前写死为「计算机学院」，其他学院的领导永远拿不到本学院课程。
+  const dept = getStoredUserDepartment()
   try {
-    const res = await fetchDepartmentCourses('计算机学院')
+    if (!dept) throw new Error('当前账号未设置所属学院')
+    const res = await fetchDepartmentCourses(dept)
     if (res.success && res.courses && res.courses.length > 0) {
       courses.value = res.courses
     } else {
       throw new Error('No data from API')
     }
   } catch (e) {
-    console.warn('API加载课程失败，使用本地模拟数据:', e)
+    console.warn('API加载课程失败，改用本地课程数据:', e)
     usingMockData.value = true
-    const leaderName = store.currentUser
-    if (leaderName) {
-      courses.value = store.getLeaderCourses(leaderName)
-    } else {
-      courses.value = store.courses
-    }
+    // 后端接口不可用时退回 store 里的课程（同样按学院过滤）
+    courses.value = store.getLeaderCourses()
   } finally {
     loading.value = false
   }
