@@ -1,7 +1,13 @@
 import type { Category, Course, Student, Schedule, Enrollment, Teacher, Grade, Evaluation, EvaluationConfig, StudentGroup, Mentor, Leader, Department } from '@/types';
 
-/** Mock 数据版本号 — 修改后自动覆盖 localStorage 旧数据 */
-export const MOCK_VERSION = '3.1';
+/**
+ * Mock 数据版本号 —— 变更后会自动清空 localStorage 里对应 key 的缓存。
+ *
+ * 改成 '4.0' 的原因：此前 store 以 mock 作初始值，用户浏览器里可能已经
+ * 存下过 mock 生成的学院/课程/成绩（假 id，如 'dept-1'/'course-1'）。
+ * 这些残留在本地缓存里的旧数据会在升级后继续被读出来，必须清掉一次。
+ */
+export const MOCK_VERSION = '4.0';
 
 export const departments: Department[] = [
   { id: 'dept-1', name: '计算机学院', color: '#3b82f6' },

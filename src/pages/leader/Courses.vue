@@ -4,11 +4,11 @@
     <div class="flex items-center justify-between">
       <div>
         <h1 class="text-2xl font-bold text-gray-900">课程总览</h1>
-        <p class="text-gray-400 mt-1">查看本学院的所有课程信息{{ usingMockData ? '（演示模式）' : '（数据来源：MySQL）' }}</p>
+        <p class="text-gray-400 mt-1">查看本学院的所有课程信息</p>
       </div>
-      <div class="flex items-center gap-2 text-xs" :class="loading ? 'text-amber-500' : usingMockData ? 'text-blue-500' : 'text-green-500'">
-        <span class="w-2 h-2 rounded-full" :class="loading ? 'bg-amber-500 animate-pulse' : usingMockData ? 'bg-blue-500' : 'bg-green-500'"></span>
-        {{ loading ? '加载中...' : usingMockData ? `演示数据 · ${courses.length} 门课程` : `已连接 · ${courses.length} 门课程` }}
+      <div class="flex items-center gap-2 text-xs" :class="loading ? 'text-amber-500' : loadFailed ? 'text-red-500' : 'text-green-500'">
+        <span class="w-2 h-2 rounded-full" :class="loading ? 'bg-amber-500 animate-pulse' : loadFailed ? 'bg-red-500' : 'bg-green-500'"></span>
+        {{ loading ? '加载中...' : loadFailed ? '加载失败' : `已连接 · ${courses.length} 门课程` }}
       </div>
     </div>
 
@@ -111,7 +111,7 @@ const router = useRouter()
 const courses = ref<any[]>([])
 const loading = ref(true)
 const searchText = ref('')
-const usingMockData = ref(false)
+const loadFailed = ref(false)
 
 const activeCount = computed(() => filteredCourses.value.filter((c: any) => c.status === 'active').length)
 const inactiveCount = computed(() => filteredCourses.value.filter((c: any) => c.status !== 'active').length)
@@ -155,23 +155,26 @@ function goDetail(courseId: string) {
 
 async function loadCourses() {
   loading.value = true
-  usingMockData.value = false
+  loadFailed.value = false
   // 按当前登录领导所属学院查询（登录时后端返回的 user.department），
   // 此前写死为「计算机学院」，其他学院的领导永远拿不到本学院课程。
   const dept = getStoredUserDepartment()
   try {
     if (!dept) throw new Error('当前账号未设置所属学院')
     const res = await fetchDepartmentCourses(dept)
-    if (res.success && res.courses && res.courses.length > 0) {
+    if (res.success && Array.isArray(res.courses)) {
+      // 空数组是「本学院真的没有课程」，照实显示，不再退回本地/mock 数据
       courses.value = res.courses
     } else {
-      throw new Error('No data from API')
+      throw new Error('接口返回异常')
     }
   } catch (e) {
-    console.warn('API加载课程失败，改用本地课程数据:', e)
-    usingMockData.value = true
-    // 后端接口不可用时退回 store 里的课程（同样按学院过滤）
-    courses.value = store.getLeaderCourses()
+    // 接口不可用 → 显示空态。此前退回 store.getLeaderCourses()，
+    // 那读的是本地存储（空时是 mock），会把不存在的课程显示给领导，
+    // 且用「演示模式」标签掩盖了数据并非真实这一点。
+    console.error('加载本学院课程失败:', e)
+    courses.value = []
+    loadFailed.value = true
   } finally {
     loading.value = false
   }

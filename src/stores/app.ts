@@ -31,32 +31,12 @@ import type {
   Department, QualityEvaluation, QualityEvalFile, QualityEvalSubmission
 } from '@/types'
 import { getDefaultGradeConfig, TEMPLATE_EVAL_TYPES } from '@/types'
-import {
-  courses as mockCourses,
-  categories as mockCategories,
-  students as mockStudents,
-  schedules as mockSchedules,
-  enrollments as mockEnrollments,
-  teachers as mockTeachers,
-  grades as mockGrades,
-  evaluationConfigs as mockEvalConfigs,
-  evaluations as mockEvaluations,
-  studentGroups as mockStudentGroups,
-  detailedGrades as mockDetailedGrades,
-  mentors as mockMentors,
-  leaders as mockLeaders,
-  onlineDocs as mockOnlineDocs,
-  notes as mockNotes,
-  todoItems as mockTodos,
-  cloudFiles as mockCloudFiles,
-  examScores as mockExamScores,
-  studentTiers as mockStudentTiers,
-  supplementaryGrades as mockSupplementaryGrades,
-  supplementaryAll,
-  departments as mockDepartments,
-  departmentClasses as mockDepartmentClasses,
-  MOCK_VERSION,
-} from '@/data/mockData'
+// ⚠️ 这里**只**引 MOCK_VERSION，不再引任何 mock 数据。
+//
+// 曾经 store 以 mock 作初始值，导致「读 store 但自己没拉接口」的页面
+// 把不存在的学院/课程/学员当成真的显示出来。现在数据一律由接口写入。
+// mock 数据仍保留在 data/mockData.ts（供离线开发参考），但不再进入应用。
+import { MOCK_VERSION } from '@/data/mockData'
 
 type UserRole = 'admin' | 'teacher' | 'student' | 'mentor' | 'leader' | null
 
@@ -65,15 +45,23 @@ const normalizeCloudFile = (file: CloudFile): CloudFile => ({
   visibilityScope: file.visibilityScope ?? (file.visibleToClassNames?.length ? 'students' : 'private'),
 })
 
+/**
+ * 读本地缓存。
+ *
+ * 注意：**空数组是合法值**，不做任何「空就用 fallback」的兜底 ——
+ * 曾经这里有一条「存的是空数组则回落到 mock」的规则，后果是：
+ * 后端真的把某学院/某课程删干净、页面把空结果写进缓存后，
+ * 下次加载又会被 mock 数据覆盖，用户看到的是并不存在的课程/学员。
+ *
+ * 各 key 的 fallback 统一为**空**（见下方 State 区），mock 数据不再进入应用。
+ */
 const loadFromStorage = <T>(key: string, fallback: T): T => {
   try {
     const stored = localStorage.getItem(key)
     if (!stored) return fallback
     const parsed = JSON.parse(stored)
-    // 类型校验：如果 fallback 是数组，确保 parsed 也是数组（防止脏数据污染）
+    // 类型校验：fallback 是数组时，确保 parsed 也是数组（防止脏数据污染）
     if (Array.isArray(fallback) && !Array.isArray(parsed)) return fallback
-    // 数组类型：如果 localStorage 存的是空数组，也用 fallback（防止 stale 空数组覆盖 mock 数据）
-    if (Array.isArray(parsed) && parsed.length === 0 && Array.isArray(fallback)) return fallback
     return parsed
   } catch {
     return fallback
@@ -203,23 +191,34 @@ try {
 
 export const useAppStore = defineStore('app', () => {
   // ====== State ======
-  const courses = ref<Course[]>(loadFromStorage('courses', mockCourses))
-  const categories = ref<Category[]>(loadFromStorage('categories', mockCategories))
-  const students = ref<Student[]>(loadFromStorage('students', mockStudents))
-  const schedules = ref<Schedule[]>(loadFromStorage('schedules', [...mockSchedules, ...supplementaryAll.supplementarySchedules, ...supplementaryAll.adminDemoSchedules]))
-  const enrollments = ref<Enrollment[]>(loadFromStorage('enrollments', [...mockEnrollments, ...supplementaryAll.supplementaryEnrollments]))
-  const teachers = ref<Teacher[]>(loadFromStorage('teachers', mockTeachers))
-  const grades = ref<Grade[]>(loadFromStorage('grades', [...mockGrades, ...mockSupplementaryGrades]))
-  const loadedCloudFiles = loadFromStorage<CloudFile[]>('cloudFiles', [...mockCloudFiles, ...supplementaryAll.supplementaryCloudFiles])
+  //
+  // ⚠️ 全部 fallback 一律为空，**刻意不接 mock 数据**。
+  //
+  // 这里曾是 mock 泄漏的总源头：store 初值是 mock，而 mock 用的是
+  // 'dept-1'/'cat-1'/'course-1' 这类假 id，与后端真实 id（'1'、'113'…）
+  // 完全对不上。任何「读 store 但自己没拉接口」的页面（如教师端成绩/学员页）
+  // 就会把这些并不存在的数据当成真的显示出来，且刷新后时有时无 ——
+  // 取决于本次会话有没有先逛过别的页面把真实数据写进 store。
+  //
+  // 现在统一为空：数据一律由各页面的接口请求写入，拿不到就是空态。
+  // mock 数据仍保留在 data/mockData.ts 供参考/离线开发，但不再进入应用。
+  const courses = ref<Course[]>(loadFromStorage<Course[]>('courses', []))
+  const categories = ref<Category[]>(loadFromStorage<Category[]>('categories', []))
+  const students = ref<Student[]>(loadFromStorage<Student[]>('students', []))
+  const schedules = ref<Schedule[]>(loadFromStorage<Schedule[]>('schedules', []))
+  const enrollments = ref<Enrollment[]>(loadFromStorage<Enrollment[]>('enrollments', []))
+  const teachers = ref<Teacher[]>(loadFromStorage<Teacher[]>('teachers', []))
+  const grades = ref<Grade[]>(loadFromStorage<Grade[]>('grades', []))
+  const loadedCloudFiles = loadFromStorage<CloudFile[]>('cloudFiles', [])
   const hasLegacyCloudFiles = loadedCloudFiles.some((file) => !file.visibilityScope)
   const cloudFiles = ref<CloudFile[]>(loadedCloudFiles.map(normalizeCloudFile))
-  const todos = ref<TodoItem[]>(loadFromStorage<TodoItem[]>('todos', [...mockTodos, ...supplementaryAll.supplementaryTodos]))
-  const onlineDocs = ref<OnlineDoc[]>(loadFromStorage<OnlineDoc[]>('onlineDocs', [...mockOnlineDocs, ...supplementaryAll.supplementaryOnlineDocs]))
-  const notes = ref<Note[]>(loadFromStorage<Note[]>('notes', [...mockNotes, ...supplementaryAll.supplementaryNotes]))
-  const evaluations = ref<Evaluation[]>(loadFromStorage<Evaluation[]>('evaluations', [...mockEvaluations, ...supplementaryAll.supplementaryEvaluations]))
-  const evalConfigs = ref<EvaluationConfig[]>(loadFromStorage<EvaluationConfig[]>('evalConfigs', mockEvalConfigs))
-  const studentGroups = ref<StudentGroup[]>(loadFromStorage<StudentGroup[]>('studentGroups', [...mockStudentGroups, ...supplementaryAll.supplementaryStudentGroups]))
-  const evalReminders = ref<EvalReminder[]>(loadFromStorage<EvalReminder[]>('evalReminders', supplementaryAll.supplementaryEvalReminders))
+  const todos = ref<TodoItem[]>(loadFromStorage<TodoItem[]>('todos', []))
+  const onlineDocs = ref<OnlineDoc[]>(loadFromStorage<OnlineDoc[]>('onlineDocs', []))
+  const notes = ref<Note[]>(loadFromStorage<Note[]>('notes', []))
+  const evaluations = ref<Evaluation[]>(loadFromStorage<Evaluation[]>('evaluations', []))
+  const evalConfigs = ref<EvaluationConfig[]>(loadFromStorage<EvaluationConfig[]>('evalConfigs', []))
+  const studentGroups = ref<StudentGroup[]>(loadFromStorage<StudentGroup[]>('studentGroups', []))
+  const evalReminders = ref<EvalReminder[]>(loadFromStorage<EvalReminder[]>('evalReminders', []))
 
   // 素质评价提交（学生上传文件，教师打分）
   const qualityEvaluations = ref<import('@/types').QualityEvaluation[]>(
@@ -252,7 +251,7 @@ export const useAppStore = defineStore('app', () => {
       ]),
     ),
   )
-  const detailedGrades = ref<DetailedGrade[]>(loadFromStorage<DetailedGrade[]>('detailedGrades', [...mockDetailedGrades, ...supplementaryAll.supplementaryDetailedGrades]))
+  const detailedGrades = ref<DetailedGrade[]>(loadFromStorage<DetailedGrade[]>('detailedGrades', []))
   const __initialSession = getActiveSession()
   const isLoggedIn = ref<boolean>(!!__initialSession)
   const currentUser = ref<string | null>(__initialSession?.userInfo?.name ?? null)
@@ -273,17 +272,17 @@ export const useAppStore = defineStore('app', () => {
   const EVAL_PREVIEW_UNLOCKED = true
   const hasEvalReminders = ref<boolean>(false)
 
-  // 企业导师数据
-  const mentors = ref<Mentor[]>(loadFromStorage<Mentor[]>('mentors', mockMentors))
-  // 学院领导数据（只读演示数据，不从 localStorage 缓存，确保新数据及时生效）
-  const leaders = ref<Leader[]>([...mockLeaders])
+  // 企业导师数据（由接口写入，无 mock 兜底）
+  const mentors = ref<Mentor[]>(loadFromStorage<Mentor[]>('mentors', []))
+  // 学院领导数据（由接口写入，无 mock 兜底）
+  const leaders = ref<Leader[]>([])
   // 次要角色（用于 leader+teacher/mentor 双重身份）
   const secondaryRoles = ref<UserRole[]>(__initialSession?.secondaryRoles ?? [])
 
   // ====== 学院系统 ======
-  const departments = ref<Department[]>(loadFromStorage<Department[]>('departments', mockDepartments))
+  const departments = ref<Department[]>(loadFromStorage<Department[]>('departments', []))
   const departmentClasses = ref<Record<string, string[]>>(
-    loadFromStorage<Record<string, string[]>>('departmentClasses', mockDepartmentClasses)
+    loadFromStorage<Record<string, string[]>>('departmentClasses', {})
   )
   const selectedDepartmentId = ref<string | null>(
     loadFromStorage<string | null>('selectedDepartmentId', null)
@@ -296,7 +295,7 @@ export const useAppStore = defineStore('app', () => {
 
   // 考试/项目成绩
   const examScores = ref<import('@/types').ExamScore[]>(
-    loadFromStorage<import('@/types').ExamScore[]>('examScores', mockExamScores)
+    loadFromStorage<import('@/types').ExamScore[]>('examScores', [])
   )
 
   // 考试/项目权重配置 (courseId → examName → weight)
@@ -328,7 +327,7 @@ export const useAppStore = defineStore('app', () => {
 
   // AI 分层记录（key: `${courseId}||${studentId}`）
   const studentTiers = ref<Record<string, StudentTierRecord>>(
-    loadFromStorage<Record<string, StudentTierRecord>>('studentTiers', mockStudentTiers)
+    loadFromStorage<Record<string, StudentTierRecord>>('studentTiers', {})
   )
 
   // ====== Actions ======
@@ -361,6 +360,14 @@ export const useAppStore = defineStore('app', () => {
     // 写入每标签独立的激活会话 + 跨标签共享的账号存档
     if (session?.token) {
       const userInfo = session.userInfo ?? {}
+
+      // 兼任标志可能只在登录响应里（调用方没塞进 userInfo），
+      // 而 Sidebar 在刷新后要读它决定菜单，所以补进 userInfo 一并持久化。
+      if (session.sub_role === 'leader' && userInfo.asTeacher === undefined) {
+        userInfo.asTeacher = Boolean(isTeacherFromDb)
+        userInfo.asMentor = Boolean(isMentorFromDb)
+      }
+
       setActiveSession({
         token: session.token,
         userInfo,
@@ -1786,9 +1793,12 @@ export const useAppStore = defineStore('app', () => {
    * 每 2 节课对应 1 次评价，确保不会产生无对应排课的幻影场次
    */
   function getEvalSessions(courseId: string, className = ''): number {
-    const course = courses.value.find((c) => c.id === courseId)
-    if (!course) return 1
-
+    // ⚠️ 这里刻意**不**校验「课程是否在 store.courses 里」。
+    // 调用方（如教师端评价管理）的课程来自接口而非 store.courses，
+    // 一旦课程不在 store 里就直接返回 1，会让评价轮次算少，
+    // 进而导致「已提交」判定错位、逾期处理轮次不足。
+    // 本函数只依赖排课与评价配置，这两者的缺失已由下面的分支各自兜底。
+    //
     // 口径与 getCourseScheduleOccurrences 对齐：数「去重后的课次」而不是「排课行数」。
     // 前者会把「全班级行 + 本班专属行」重合的同一节课算成两次，导致评价轮次虚增。
     const scheduleCount = getCourseScheduleOccurrences(courseId, className).length

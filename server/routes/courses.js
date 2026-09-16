@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../db.js';
+import { buildEnrollmentProgress } from '../lib/scheduleProgress.js';
 import {
   createCourseId,
   ensureDepartment,
@@ -381,10 +382,32 @@ router.get('/:id/students', async (req, res) => {
       [req.params.id]
     );
 
-    res.json({
-      success: true,
-      students: rows.map(mapStudentRow),
+    // 进度：与 /students/:id/courses 同一套口径（按排课时间实时推算）。
+    // 教师端「学员进度」需要一次性看到整门课的进度，逐个学生调那个接口是 N+1，
+    // 故在这里用共享模块就地算出来。
+    const [scheduleRows] = await pool.query(
+      'SELECT id, class_name, day, start_date, end_date, time_slot FROM schedules WHERE course_id = ?',
+      [req.params.id]
+    );
+    const starts = scheduleRows.map((r) => r.start_date).filter(Boolean).sort();
+    const ends = scheduleRows.map((r) => r.end_date).filter(Boolean).sort();
+    const courseStart = starts[0] || null;
+    const courseEnd = ends[ends.length - 1] || null;
+
+    const students = rows.map((row) => {
+      const mapped = mapStudentRow(row);
+      // 本课程内班级优先（教师分班），否则用学籍班级
+      const className = String(row.course_class_name || '').trim() || String(row.class_name || '').trim();
+      // 全班级排课（class_name 为空）对该课所有学生生效，必须计入
+      const timingRows = scheduleRows.filter((schedule) => {
+        const rowClass = String(schedule.class_name || '').trim();
+        return !rowClass || rowClass === className;
+      });
+      const progress = buildEnrollmentProgress(timingRows, courseStart, courseEnd);
+      return { ...mapped, progress: progress.progress, progressStatus: progress.status };
     });
+
+    res.json({ success: true, students });
   } catch (error) {
     handleRouteError(res, error);
   }

@@ -266,8 +266,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
+import { batchSaveEvaluations, fetchCourseEvaluationState, fetchCourseStudents, fetchEvalConfig, fetchTeacherCourses } from '@/api'
 import {
   BookOpen, Settings, Users, AlertTriangle, ClipboardCheck,
   Eye, EyeOff, RefreshCw
@@ -298,15 +299,90 @@ const evalTypeFilter = ref<EvalType | 'all'>('all')
 const batchSession = ref(1)
 const overdueMsg = ref('')
 
-const myCourses = computed(() => {
-  // 领导兼任授课教师时，看其管辖学院的课程；判定用登录角色，
-  // 不再依赖写死的 mock 领导名单（真实领导不在名单里）。
-  if (store.currentRole === 'leader') {
-    return store.getLeaderCourses()
-  }
-  return store.courses.filter((c) => c.teacher === store.currentUser)
+const myCourses = ref<any[]>([])
+/** courseId → 评价方案（接口数据，用于课程卡片上的摘要） */
+const configByCourse = ref<Record<string, any>>({})
+
+/**
+ * 当前选中课程的评价记录。
+ *
+ * 由 store.syncCourseEvaluationState(courseId) 从 /eval/course/:id 拉取后写入
+ * store.evaluations（按 courseId 过滤出本课），是数据库里的真实记录。
+ */
+const courseEvaluations = computed(() =>
+  selectedCourse.value
+    ? store.evaluations.filter((e) => e.courseId === selectedCourse.value)
+    : []
+)
+/** 当前选中课程的学生名单（接口数据） */
+const courseStudents = ref<any[]>([])
+const loadingCourse = ref(false)
+
+/**
+ * 初始化：拉取教师本人课程（接口数据，不再读 store.courses）。
+ *
+ * 本页此前没有任何网络请求，课程/学生/评价全从 store 取 —— 更早时 store 初值是
+ * mock（假 id，与真实课程对不上），显示的是并不存在的课程与学员；store 改为空后
+ * 直接进入本页就是一片空白。现在数据全部来自接口。
+ */
+onMounted(() => {
+  void loadCourses()
 })
-const selectedCourseData = computed(() => selectedCourse.value ? store.courses.find((c) => c.id === selectedCourse.value) : null)
+
+async function loadCourses() {
+  try {
+    const res = await fetchTeacherCourses(store.currentUser || '')
+    myCourses.value = res?.success ? res.courses || [] : []
+    await loadConfigs()
+  } catch (error) {
+    console.error('加载教师课程失败:', error)
+    myCourses.value = []
+  }
+}
+
+/** 拉取每门课的评价方案（课程卡片上要显示「模板 · 频率」摘要） */
+async function loadConfigs() {
+  const entries = await Promise.all(
+    myCourses.value.map(async (course) => {
+      try {
+        const res = await fetchEvalConfig(String(course.id))
+        return [String(course.id), res?.config ?? null] as const
+      } catch {
+        return [String(course.id), null] as const
+      }
+    })
+  )
+  configByCourse.value = Object.fromEntries(entries.filter(([, config]) => config))
+}
+
+/**
+ * 切换课程时加载该课的评价方案、评价记录与学员名单。
+ *
+ * - syncCourseEvaluationState 拉 /eval/course/:id（评价）、/eval/config/:id（方案）、分组
+ * - fetchCourseStudents 拉该课学员（教师端导入的选课记录，权威源）
+ */
+watch(selectedCourse, async (courseId) => {
+  courseStudents.value = []
+  if (!courseId) return
+
+  loadingCourse.value = true
+  try {
+    const [studentsRes] = await Promise.allSettled([
+      fetchCourseStudents(courseId),
+      store.syncCourseEvaluationState(courseId),
+    ])
+    courseStudents.value =
+      studentsRes.status === 'fulfilled' && studentsRes.value?.success
+        ? studentsRes.value.students || []
+        : []
+  } catch (error) {
+    console.error('加载课程评价数据失败:', error)
+  } finally {
+    loadingCourse.value = false
+  }
+})
+
+const selectedCourseData = computed(() => selectedCourse.value ? myCourses.value.find((c) => c.id === selectedCourse.value) : null)
 const selectedConfig = computed(() => selectedCourse.value ? store.evalConfigs.find((c) => c.courseId === selectedCourse.value) : null)
 const baseEnabledTypes = computed<EvalType[]>(() => selectedConfig.value ? TEMPLATE_EVAL_TYPES[selectedConfig.value.template] : [])
 const totalSessions = computed(() => selectedCourse.value ? store.getEvalSessions(selectedCourse.value) : 1)
@@ -324,17 +400,14 @@ const displaySessions = computed(() => {
   return Array.from({ length: totalSessions.value }, (_, i) => i + 1)
 })
 
-const getCourseConfig = (courseId: string) => store.evalConfigs.find((c) => c.courseId === courseId)
+const getCourseConfig = (courseId: string) => configByCourse.value[String(courseId)] || null
 
 const enrolledStudents = computed(() => {
   if (!selectedCourse.value) return []
-  return store.enrollments
-    .filter((e) => e.courseId === selectedCourse.value && e.status !== 'dropped')
-    .map((e) => ({
-      enrollmentId: e.id,
-      student: store.students.find((s) => s.id === e.studentId),
-    }))
-    .filter((e) => e.student)
+  return courseStudents.value.map((student: any) => ({
+    enrollmentId: `enr-${selectedCourse.value}-${student.id}`,
+    student,
+  }))
 })
 
 const anomalies = computed(() => {
@@ -370,8 +443,8 @@ const handleBatchEval = (type: EvalType, level: string) => {
 
   enrolledStudents.value.forEach(({ student }) => {
     if (!student) return
-    const existing = store.evaluations.find(
-      (e) => e.courseId === selectedCourse.value && e.studentId === student.id && e.type === type && e.sessionNumber === session
+    const existing = courseEvaluations.value.find(
+      (e) => e.studentId === student.id && e.type === type && e.sessionNumber === session
     )
     const ev: Evaluation = {
       id: existing ? existing.id : `ev-batch-${Date.now()}-${student.id}-${type}`,
@@ -397,30 +470,99 @@ const handleBatchEval = (type: EvalType, level: string) => {
 }
 
 const getStudentEvals = (studentId: string, sessionNumber: number, type: EvalType) => {
-  return store.evaluations.filter(
-    (e) => e.courseId === selectedCourse.value && e.studentId === studentId && e.sessionNumber === sessionNumber && e.type === type
+  return courseEvaluations.value.filter(
+    (e) => e.studentId === studentId && e.sessionNumber === sessionNumber && e.type === type
   )
 }
 
-const handleProcessOverdue = () => {
+/**
+ * 处理逾期未评：为「规则覆盖的轮次 × 学生 × 已启用评价类型」补一条兜底评价。
+ *
+ * ⚠️ 此前调 store.processSessionOverdue，它有两个问题：
+ *   1. 依赖 store.courses / store.enrollments，两者为空时**静默 return**，
+ *      什么都不做，界面却照样提示「已处理 N 轮次」；
+ *   2. 只写 localStorage，**不落库**，刷新即丢。
+ * 现在直接由本页的接口数据算出待补评价，经 /eval/batch 写入数据库
+ * （该接口写完后会回填成绩明细），并按真实写入条数给出提示。
+ */
+const handleProcessOverdue = async () => {
   if (!selectedCourse.value) return
-  let count = 0
+  const course = selectedCourseData.value
+  const config = selectedConfig.value
+  if (!course || !config || config.overdueRule === 'none') {
+    overdueMsg.value = '该课程未配置逾期处理规则'
+    setTimeout(() => { overdueMsg.value = '' }, 3000)
+    return
+  }
+
+  const scoreByRule: Record<string, number> = { average: 60, zero: 0, full: 100 }
+  const commentByRule: Record<string, string> = {
+    average: '逾期未评，默认60分',
+    zero: '逾期未评，记0分',
+    full: '逾期未评，记满分',
+  }
+  const score = scoreByRule[config.overdueRule]
+  const comment = commentByRule[config.overdueRule]
+  if (score === undefined) {
+    overdueMsg.value = '未知的逾期处理规则'
+    setTimeout(() => { overdueMsg.value = '' }, 3000)
+    return
+  }
+
+  const pending: Evaluation[] = []
   for (let s = 1; s <= totalSessions.value; s++) {
-    if (!store.isSessionLocked(selectedCourse.value, s)) {
-      store.processSessionOverdue(selectedCourse.value, s)
-      count++
+    if (store.isSessionLocked(selectedCourse.value, s)) continue
+    for (const { student } of enrolledStudents.value) {
+      if (!student) continue
+      for (const type of enabledTypes.value) {
+        const exists = courseEvaluations.value.some(
+          (e) => e.studentId === student.id && e.sessionNumber === s && e.type === type
+        )
+        if (exists) continue
+
+        const targetIsTeacher = type === 'teacher' || type === 'mentor'
+        pending.push({
+          id: `auto-${selectedCourse.value}-${student.id}-${s}-${type}-${Date.now()}`,
+          courseId: selectedCourse.value,
+          studentId: student.id,
+          sessionNumber: s,
+          type,
+          score,
+          items: makeEvalItemsForTotal(type, score),
+          evaluatorId: targetIsTeacher ? course.teacher : student.id,
+          evaluatorName: targetIsTeacher ? course.teacher : student.name || '',
+          comment,
+          createdAt: getNow().toISOString().split('T')[0],
+        })
+      }
     }
   }
-  overdueMsg.value = count > 0 ? `已处理 ${count} 轮次逾期评价` : '没有待处理的逾期评价'
-  setTimeout(() => { overdueMsg.value = '' }, 3000)
+
+  if (pending.length === 0) {
+    overdueMsg.value = '没有待处理的逾期评价'
+    setTimeout(() => { overdueMsg.value = '' }, 3000)
+    return
+  }
+
+  try {
+    await batchSaveEvaluations(pending)
+    // 重新拉取，确保界面显示的是库里的真实记录
+    await store.syncCourseEvaluationState(selectedCourse.value)
+    overdueMsg.value = `已处理 ${pending.length} 条逾期评价`
+  } catch (error) {
+    console.error('处理逾期评价失败:', error)
+    overdueMsg.value = '处理失败，请稍后重试'
+  } finally {
+    setTimeout(() => { overdueMsg.value = '' }, 4000)
+  }
 }
 
 const getScoreClass = (studentId: string, sessionNumber: number, type: EvalType) => {
   const evals = getStudentEvals(studentId, sessionNumber, type)
   const avgScore = evals.length > 0 ? Math.round(evals.reduce((a, e) => a + e.score, 0) / evals.length) : null
   const isSelf = type === 'self'
-  const otherEvals = isSelf ? store.evaluations.filter(
-    (e) => e.courseId === selectedCourse.value && e.studentId === studentId && e.sessionNumber === sessionNumber && e.type !== 'self'
+  const otherEvals = isSelf ? courseEvaluations.value.filter(
+    (e) => e.studentId === studentId && e.sessionNumber === sessionNumber && e.type !== 'self'
   ) : []
   const otherAvg = otherEvals.length > 0 ? Math.round(otherEvals.reduce((a, e) => a + e.score, 0) / otherEvals.length) : null
   const showAnomaly = isSelf && avgScore !== null && otherAvg !== null && Math.abs(avgScore - otherAvg) > 20
@@ -440,8 +582,8 @@ const showAnomalyIcon = (studentId: string, sessionNumber: number, type: EvalTyp
   if (type !== 'self') return false
   const evals = getStudentEvals(studentId, sessionNumber, type)
   const avgScore = evals.length > 0 ? Math.round(evals.reduce((a, e) => a + e.score, 0) / evals.length) : null
-  const otherEvals = store.evaluations.filter(
-    (e) => e.courseId === selectedCourse.value && e.studentId === studentId && e.sessionNumber === sessionNumber && e.type !== 'self'
+  const otherEvals = courseEvaluations.value.filter(
+    (e) => e.studentId === studentId && e.sessionNumber === sessionNumber && e.type !== 'self'
   )
   const otherAvg = otherEvals.length > 0 ? Math.round(otherEvals.reduce((a, e) => a + e.score, 0) / otherEvals.length) : null
   return avgScore !== null && otherAvg !== null && Math.abs(avgScore - otherAvg) > 20

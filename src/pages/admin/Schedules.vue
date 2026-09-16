@@ -545,10 +545,18 @@ const store = useAppStore()
 const route = useRoute()
 const router = useRouter()
 
-const departments = ref<Department[]>([...store.departments])
-const categories = ref<Category[]>([...store.categories])
-const courses = ref<Course[]>([...store.courses])
-const teachers = ref<Teacher[]>([...store.teachers])
+/**
+ * 本页数据一律以接口为准，初始为空数组。
+ *
+ * 刻意**不**用 `[...store.xxx]` 作初值：store 的初值来自 localStorage，
+ * 本地没有时回落到 mock —— mock 的学院/专业/课程 id 是 'dept-1'/'cat-1'
+ * 这类假 id，与真实 id 对不上，会渲染出「0 门课程」甚至把已删除的数据
+ * 重新显示出来。页面挂载后由 loadMasterData() 填入接口数据。
+ */
+const departments = ref<Department[]>([])
+const categories = ref<Category[]>([])
+const courses = ref<Course[]>([])
+const teachers = ref<Teacher[]>([])
 const dbSchedules = ref<Schedule[]>([])
 
 const selectedCourse = ref<Course | null>(null)
@@ -624,7 +632,8 @@ function defaultSemester() {
 const routeDepartmentId = computed(() => (typeof route.query.departmentId === 'string' ? route.query.departmentId : ''))
 const routeCategoryId = computed(() => (typeof route.query.categoryId === 'string' ? route.query.categoryId : ''))
 const routeCourseId = computed(() => (typeof route.query.courseId === 'string' ? route.query.courseId : ''))
-const departmentList = computed(() => (departments.value.length > 0 ? departments.value : store.departments))
+// 只读接口数据：接口返回空就是「真的没有」，不能回落到 store（可能是 mock）。
+const departmentList = computed(() => departments.value)
 const activeDepartmentId = computed(() => routeDepartmentId.value || store.selectedDepartmentId || '')
 
 const currentDept = computed(() => {
@@ -788,45 +797,43 @@ function syncDepartmentFromRoute() {
   }
 }
 
-function resolveFetchedList<T>(incoming: T[] | undefined, fallback: T[]) {
-  if (Array.isArray(incoming) && incoming.length > 0) {
-    return incoming
-  }
-  return fallback
-}
-
 async function loadMasterData() {
   try {
-    const [departmentRes, categoryRes, courseRes, teacherRes] = await Promise.all([
+    const results = await Promise.allSettled([
       fetchDepartments(),
       fetchCategories(),
       fetchCourses(),
       fetchTeachers(),
     ])
 
-    if (departmentRes.success) {
-      const nextDepartments = resolveFetchedList(departmentRes.departments, departmentList.value)
-      departments.value = nextDepartments
-      store.departments = nextDepartments
+    /**
+     * 取接口数据。
+     *
+     * - 请求成功（即使返回空数组）→ 以接口为准。空数组是「真的没有数据」，
+     *   若沿用旧值会把已删除的课程/专业继续显示出来。
+     * - 请求失败 → 保持本页现有数据，避免一次网络抖动把页面清空。
+     */
+    const take = <T>(result: PromiseSettledResult<any>, key: string, current: T[]) => {
+      if (result.status !== 'fulfilled' || !result.value?.success) return current
+      const incoming = result.value[key]
+      return Array.isArray(incoming) ? (incoming as T[]) : current
     }
 
-    if (categoryRes.success) {
-      const nextCategories = resolveFetchedList(categoryRes.categories, categories.value.length > 0 ? categories.value : store.categories)
-      categories.value = nextCategories
-      store.categories = nextCategories
-    }
+    const nextDepartments = take<Department>(results[0], 'departments', departments.value)
+    departments.value = nextDepartments
+    store.departments = nextDepartments
 
-    if (courseRes.success) {
-      const nextCourses = resolveFetchedList(courseRes.courses, courses.value.length > 0 ? courses.value : store.courses)
-      courses.value = nextCourses
-      store.courses = nextCourses
-    }
+    const nextCategories = take<Category>(results[1], 'categories', categories.value)
+    categories.value = nextCategories
+    store.categories = nextCategories
 
-    if (teacherRes.success) {
-      const nextTeachers = resolveFetchedList(teacherRes.teachers, teachers.value.length > 0 ? teachers.value : store.teachers)
-      teachers.value = nextTeachers
-      store.teachers = nextTeachers
-    }
+    const nextCourses = take<Course>(results[2], 'courses', courses.value)
+    courses.value = nextCourses
+    store.courses = nextCourses
+
+    const nextTeachers = take<Teacher>(results[3], 'teachers', teachers.value)
+    teachers.value = nextTeachers
+    store.teachers = nextTeachers
 
     syncSelections()
   } catch (error) {

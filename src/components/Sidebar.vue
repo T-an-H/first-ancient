@@ -155,12 +155,14 @@ function renderSidebar() {
 
   if (store.currentRole === 'leader') {
     fullItems = []
-    const leader = store.leaders.find((l) => l.name === store.currentUser)
-    if (leader?.asTeacher) {
+    // 兼任身份取登录时后端算好的 secondaryRoles（真实数据）。
+    // 此前读 store.leaders，而该数组只来自 mock，导致兼任教师的领导
+    // 看不到「教学管理」。
+    if (store.secondaryRoles.includes('teacher')) {
       fullItems.push({ separator: true, label: '教学管理' } as any)
       teacherNavItems.forEach((item) => fullItems.push(item))
     }
-    if (leader?.asMentor) {
+    if (store.secondaryRoles.includes('mentor')) {
       fullItems.push({ separator: true, label: '企业导师管理' } as any)
       mentorNavItems.forEach((item) => fullItems.push(item))
     }

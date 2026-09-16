@@ -28,7 +28,7 @@
             <div class="flex-1 min-w-0">
               <h3 class="font-bold text-gray-900 text-lg group-hover:text-brand-600 transition-colors truncate">{{ dept.name }}</h3>
               <p class="text-sm text-gray-400 mt-0.5">
-                {{ store.getDepartmentCategories(dept.id).length }} 个专业
+                {{ getCategoryCount(dept.id) }} 个专业
               </p>
             </div>
             <!-- 卡片内操作：编辑 / 删除（.stop 阻止冒泡，避免误触发进入学院） -->
@@ -177,10 +177,10 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { createDepartment, deleteDepartment as apiDeleteDepartment, fetchDepartments, updateDepartment as apiUpdateDepartment, fetchDepartmentUsage } from '@/api'
+import { createDepartment, deleteDepartment as apiDeleteDepartment, fetchCategories, fetchDepartments, updateDepartment as apiUpdateDepartment, fetchDepartmentUsage } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { GraduationCap, Plus, ArrowRight, LogOut, Trash2, Pencil } from 'lucide-vue-next'
-import type { Department } from '@/types'
+import type { Category, Department } from '@/types'
 import {
   DEPARTMENT_COLOR_OPTIONS,
   getDepartmentColorName,
@@ -193,6 +193,23 @@ const router = useRouter()
 const showModal = ref(false)
 const editingDept = ref<Department | null>(null)
 const form = ref({ name: '', color: '#3b82f6' })
+
+/**
+ * 学院卡片上的「N 个专业」用的专业列表。
+ *
+ * 必须来自接口的 `fetchCategories()`，**不能**用 `store.categories`：
+ * store 的 categories 初值来自 localStorage，本地为空时回落到 mock 数据，
+ * 而 mock 的学院 id 是 'dept-1' 这类假 id，与真实学院 id（'1'、'113'…）
+ * 交集恒为 0 —— 于是每个学院都显示「0 个专业」，刷新后尤其明显。
+ */
+const apiCategories = ref<Category[]>([])
+
+/** 某学院下的专业数（按接口数据统计） */
+function getCategoryCount(departmentId: string) {
+  return apiCategories.value.filter(
+    (category) => String(category.departmentId) === String(departmentId)
+  ).length
+}
 
 const showDeleteConfirm = ref(false)
 const deleteTarget = ref<Department | null>(null)
@@ -257,17 +274,34 @@ onMounted(() => {
 })
 
 async function loadDepartments() {
-  try {
-    const res = await fetchDepartments()
-    if (res.success) {
-      const nextDepartments = res.departments.length > 0 ? res.departments : store.departments
-      store.departments = nextDepartments
-      if (store.selectedDepartmentId && nextDepartments.length > 0 && !nextDepartments.some((dept: Department) => dept.id === store.selectedDepartmentId)) {
-        store.setSelectedDepartment(null)
-      }
+  // 两个请求各自独立容错：专业拉不到只影响卡片上的计数，
+  // 不该连累学院列表一起加载不出来。
+  const [deptRes, categoryRes] = await Promise.allSettled([
+    fetchDepartments(),
+    fetchCategories(),
+  ])
+
+  if (categoryRes.status === 'fulfilled' && categoryRes.value?.success) {
+    apiCategories.value = categoryRes.value.categories || []
+    // 同步给 store，让「课程管理」等页面在切过去时就有正确数据
+    store.categories = apiCategories.value
+  } else if (categoryRes.status === 'rejected') {
+    console.error('加载专业失败，学院卡片计数将显示 0:', categoryRes.reason)
+  }
+
+  if (deptRes.status === 'fulfilled' && deptRes.value?.success) {
+    // 接口返回空列表是「真的没有学院」，不能回落到本地 store —— 那里可能是
+    // mock 数据（假 id），会把已删除的学院、错误的数据重新显示出来。
+    const nextDepartments: Department[] = deptRes.value.departments || []
+    store.departments = nextDepartments
+    if (
+      store.selectedDepartmentId &&
+      !nextDepartments.some((dept) => dept.id === store.selectedDepartmentId)
+    ) {
+      store.setSelectedDepartment(null)
     }
-  } catch (error) {
-    console.error('加载学院失败:', error)
+  } else if (deptRes.status === 'rejected') {
+    console.error('加载学院失败:', deptRes.reason)
   }
 }
 

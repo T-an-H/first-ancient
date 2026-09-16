@@ -110,6 +110,33 @@ router.post('/login', async (req, res) => {
     const hasTeacherAccess = user.role === 'teacher';
     const needChangePassword = Number(user.need_change_password) === 1;
 
+    /**
+     * 学院领导是否兼任教师/企业导师。
+     *
+     * 此前前端读 `store.leaders` 判断，而该数组只来自 mock 数据（后端没有
+     * 领导接口），于是兼任教师的领导登录后侧边栏不显示「教学管理」——
+     * 且结果时有时无，取决于浏览器有没有缓存过 mock。
+     * 这里按姓名回查 leaders 表，把真实标志随登录结果一并返回。
+     */
+    let leaderFlags = { asTeacher: false, asMentor: false };
+    if (user.sub_role === 'leader') {
+      try {
+        const [leaderRows] = await pool.query(
+          'SELECT as_teacher, as_mentor FROM leaders WHERE name = ? LIMIT 1',
+          [user.name]
+        );
+        if (leaderRows[0]) {
+          leaderFlags = {
+            asTeacher: Number(leaderRows[0].as_teacher) === 1,
+            asMentor: Number(leaderRows[0].as_mentor) === 1,
+          };
+        }
+      } catch (error) {
+        // leaders 表缺失不该拦住登录
+        console.warn('读取领导兼任标志失败:', error.code || error.message);
+      }
+    }
+
     res.json({
       success: true,
       message: '登录成功',
@@ -122,6 +149,7 @@ router.post('/login', async (req, res) => {
         sub_role: user.sub_role,
         isTeacher: hasTeacherAccess,
         userNo: user.user_no || '',
+        ...leaderFlags,
       },
       portal,
       need_change_password: needChangePassword,

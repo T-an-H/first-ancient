@@ -185,14 +185,13 @@ const store = useAppStore()
 /**
  * 学员列表。
  *
- * 优先使用后端按学院查询的结果（真实数据）；
- * 接口不可用时退回 store.getLeaderStudents()（同样按当前登录用户的学院过滤），
- * 保证页面不会空白。
+ * 只认后端按学院查询的结果（真实数据）。接口不可用时显示空列表，
+ * **不**退回 store.getLeaderStudents()：那读的是本地存储，本地为空时
+ * 回落到 mock 学生/选课（id 形如 'stu-1'，与真实 id 对不上），会把
+ * 不存在的学员显示给学院领导。
  */
-const remoteStudents = ref<Student[] | null>(null)
-const allStudents = computed<Student[]>(() =>
-  remoteStudents.value ?? store.getLeaderStudents()
-)
+const remoteStudents = ref<Student[]>([])
+const allStudents = computed<Student[]>(() => remoteStudents.value)
 
 onMounted(async () => {
   const dept = getStoredUserDepartment()
@@ -203,7 +202,7 @@ onMounted(async () => {
       remoteStudents.value = res.students
     }
   } catch (e) {
-    console.warn('学员总览：接口加载失败，改用本地数据:', e)
+    console.error('学员总览：接口加载失败:', e)
   }
 })
 

@@ -520,7 +520,8 @@ const store = useAppStore()
 
 /** 导师模式：纯导师登录，或学院领导以导师身份进入 /mentor 路由 */
 const isMentor = computed(() => store.currentRole === 'mentor' || route.path.startsWith('/mentor'))
-const isLeaderWithTeaching = computed(() => store.leaders.some((l) => l.name === store.currentUser && l.asTeacher))
+/** 学院领导以教师身份任教（取登录时后端算好的兼任标志，不再读 mock 领导名单） */
+const isLeaderWithTeaching = computed(() => store.secondaryRoles.includes('teacher'))
 
 const searchQuery = ref('')
 const dbCourses = ref<any[]>([])

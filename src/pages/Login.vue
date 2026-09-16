@@ -140,24 +140,26 @@ function resolveStoreRole(role: string, subRole?: string) {
   return role as 'admin' | 'teacher' | 'student'
 }
 
-function getExtraRoleFlags(name: string, subRole?: string) {
-  let isTeacherFromDb = false
-  let isMentorFromDb = false
-
-  if (subRole === 'leader') {
-    const leaderData = store.leaders.find((leader) => leader.name === name)
-    if (leaderData?.asTeacher) isTeacherFromDb = true
-    if (leaderData?.asMentor) isMentorFromDb = true
+/**
+ * 领导是否兼任教师/导师 —— 取登录接口返回的真实标志
+ * （后端按姓名回查 leaders 表）。此前读 store.leaders，而该数组只来自
+ * mock 数据，导致兼任教师的领导侧边栏不出现「教学管理」。
+ */
+function getExtraRoleFlags(user: { sub_role?: string; asTeacher?: boolean; asMentor?: boolean }) {
+  if (user.sub_role !== 'leader') {
+    return { isTeacherFromDb: false, isMentorFromDb: false }
   }
-
-  return { isTeacherFromDb, isMentorFromDb }
+  return {
+    isTeacherFromDb: Boolean(user.asTeacher),
+    isMentorFromDb: Boolean(user.asMentor),
+  }
 }
 
-function completeLogin(user: { name: string; role: string; sub_role?: string }, portal: string, options?: {
+function completeLogin(user: { name: string; role: string; sub_role?: string; asTeacher?: boolean; asMentor?: boolean }, portal: string, options?: {
   token?: string
   userInfo?: unknown
 }) {
-  const { isTeacherFromDb, isMentorFromDb } = getExtraRoleFlags(user.name, user.sub_role)
+  const { isTeacherFromDb, isMentorFromDb } = getExtraRoleFlags(user)
 
   store.login(
     user.name,

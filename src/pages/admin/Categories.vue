@@ -447,10 +447,18 @@ const store = useAppStore()
 const route = useRoute()
 const router = useRouter()
 
-const departments = ref<Department[]>([...store.departments])
-const teachers = ref<Teacher[]>([...store.teachers])
-const apiCategories = ref<CategoryRow[]>(store.categories.map((category) => ({ ...category })))
-const apiCourses = ref<Course[]>([...store.courses])
+/**
+ * 本页数据一律以接口为准，初始为空数组。
+ *
+ * 刻意**不**用 `[...store.xxx]` 作初值：store 的初值来自 localStorage，
+ * 本地没有时回落到 mock —— 而 mock 的学院/专业 id 是 'dept-1'/'cat-1'
+ * 这类假 id，与真实 id（'1'、'113'…）对不上，会渲染出「0 门课程」甚至
+ * 把已删除的学院/课程重新显示出来。页面挂载后由 loadData() 填入接口数据。
+ */
+const departments = ref<Department[]>([])
+const teachers = ref<Teacher[]>([])
+const apiCategories = ref<CategoryRow[]>([])
+const apiCourses = ref<Course[]>([])
 const apiClasses = ref<ClassItem[]>([])
 const apiSchedules = ref<Schedule[]>([])
 
@@ -485,9 +493,10 @@ const timeSlots = [
 
 const routeDepartmentId = computed(() => (typeof route.query.departmentId === 'string' ? route.query.departmentId : ''))
 const routeCategoryId = computed(() => (typeof route.query.categoryId === 'string' ? route.query.categoryId : ''))
-const departmentList = computed(() => (departments.value.length > 0 ? departments.value : store.departments))
-const categoryList = computed<CategoryRow[]>(() => (apiCategories.value.length > 0 ? apiCategories.value : store.categories.map((category) => ({ ...category }))))
-const teacherList = computed(() => (teachers.value.length > 0 ? teachers.value : store.teachers))
+// 只读接口数据：接口返回空就是「真的没有」，不能回落到 store（可能是 mock）。
+const departmentList = computed(() => departments.value)
+const categoryList = computed<CategoryRow[]>(() => apiCategories.value)
+const teacherList = computed(() => teachers.value)
 const activeDepartmentId = computed(() => routeDepartmentId.value || store.selectedDepartmentId || '')
 
 const currentDepartment = computed(() => {

@@ -198,7 +198,9 @@ function mergeSchedulesByClass(className: string, schedules: Schedule[]) {
 }
 
 function getCourse(courseId: string) {
-  return remoteCourses.value.find((item) => item.id === courseId) || store.courses.find((item) => item.id === courseId)
+  // 只认接口回来的课程。此前会回落到 store.courses（本地存储，空时是 mock），
+  // 于是已删除的课程仍能显示出标题。
+  return remoteCourses.value.find((item) => item.id === courseId)
 }
 
 function getGrade(courseId: string) {
