@@ -3,7 +3,7 @@
  *
  * 存在意义：`server/routes/tierTest.js` 的 3 个接口（取题 / 提交判分 / 查结果）
  * 依赖这两张表，但建表语句此前缺失，调用必然 ER_NO_SUCH_TABLE。
- * 另外 `homeworks.js` 按层级过滤作业、学生端读层级也都要读 tier_test_results。
+ * 学生端读层级也要读 tier_test_results。
  *
  * ⚠️ collation：与既有表（尤其 courses）保持一致，否则跨表比较会抛
  * ER_CANT_AGGREGATE_2COLLATIONS。历史库 collation 不统一，故运行时探测而非写死。

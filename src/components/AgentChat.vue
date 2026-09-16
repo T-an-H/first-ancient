@@ -168,12 +168,11 @@ type PageContext = AssistantRole
 type StudentCourseAction =
   | 'course'
   | 'grade'
-  | 'homework'
   | 'ai_tier'
   | 'knowledge_graph'
   | 'resources'
   | 'evaluations'
-type TeacherCourseAction = 'course' | 'comments' | 'grade-config' | 'grade-entry' | 'homework' | 'students'
+type TeacherCourseAction = 'course' | 'comments' | 'grade-config' | 'grade-entry' | 'students'
 
 interface ChatAction {
   label: string
@@ -718,7 +717,6 @@ function buildStudentCourseSelectionIntent(
   const prompts: Record<StudentCourseAction, string> = {
     course: '你想进入哪门课？',
     grade: '你想看哪门课的成绩？',
-    homework: '你想打开哪门课的作业区？',
     ai_tier: '你想做哪门课的 AI 分层测试？',
     knowledge_graph: '你想看哪门课的知识图谱？',
     resources: '你想看哪门课的课程资源？',
@@ -755,7 +753,6 @@ function buildTeacherCourseSelectionIntent(
     comments: '你想打开哪门课的评价管理？',
     'grade-config': '你想打开哪门课的成绩配置？',
     'grade-entry': '你想打开哪门课的成绩管理？',
-    homework: '你想打开哪门课程的课程管理，在测试题目中布置作业？',
     students: '你想打开哪门课的学生管理？',
   }
 
@@ -827,7 +824,6 @@ function buildStudentCourseActionIntent(action: StudentCourseAction, course: Cou
   }
 
   const tabMap: Partial<Record<StudentCourseAction, string>> = {
-    homework: 'homework',
     ai_tier: 'ai_tier',
     knowledge_graph: 'knowledge_graph',
     resources: 'resources',
@@ -837,7 +833,6 @@ function buildStudentCourseActionIntent(action: StudentCourseAction, course: Cou
   const messageMap: Record<StudentCourseAction, string> = {
     course: `我带你进入《${course.title}》。`,
     grade: `我带你去看《${course.title}》的成绩详情。`,
-    homework: `我带你去《${course.title}》的作业区。`,
     ai_tier: `我带你去《${course.title}》的 AI 分层测试。`,
     knowledge_graph: `我带你去《${course.title}》的知识图谱。`,
     resources: `我带你去《${course.title}》的课程资源。`,
@@ -859,7 +854,6 @@ function buildTeacherCourseActionIntent(action: TeacherCourseAction, course: Cou
     comments: 'comments',
     'grade-config': 'grade-config',
     'grade-entry': 'grade-entry',
-    homework: 'course-mgmt',
     students: 'students',
   }
 
@@ -868,7 +862,6 @@ function buildTeacherCourseActionIntent(action: TeacherCourseAction, course: Cou
     comments: `我带你去《${course.title}》的评价管理。`,
     'grade-config': `我带你去《${course.title}》的成绩配置。`,
     'grade-entry': `我带你去《${course.title}》的成绩管理。`,
-    homework: `我带你去《${course.title}》的课程管理测试题目。`,
     students: `我带你去《${course.title}》的学生管理。`,
   }
 
@@ -1035,7 +1028,6 @@ function resolveStudentIntent(rawText: string): AssistantIntent | null {
   const isProgressIntent = /(进度|学习情况|掌握情况|完成到哪|学得怎么样)/.test(rawText)
   const isProfileIntent = /(画像|个人信息|个人资料|我的信息|能力分析)/.test(rawText)
   const isExtraIntent = /(额外功能|待办)/.test(rawText)
-  const isHomeworkIntent = /(作业|提交作业)/.test(rawText)
   const isAITierIntent = /(ai分层|分层测试|分层测评|分层)/i.test(rawText)
   const isKnowledgeIntent = /(知识图谱|知识点图|知识图)/.test(rawText)
   const isResourcesIntent = /(资源|资料|课件)/.test(rawText)
@@ -1045,12 +1037,6 @@ function resolveStudentIntent(rawText: string): AssistantIntent | null {
   const isCourseDetailIntent =
     /(进入课程|打开课程|课程详情)/.test(rawText) || (hasCourseVerb && Boolean(courseResolution.match))
   const needsSpecificCourse = /(这门课|当前课程|这个课程|本课程|某门课|哪门课)/.test(rawText)
-
-  if (isHomeworkIntent) {
-    if (courseResolution.ambiguous) return buildStudentCourseSelectionIntent('homework', courseResolution.candidates)
-    if (specificCourse) return buildStudentCourseActionIntent('homework', specificCourse)
-    return buildStudentCourseSelectionIntent('homework')
-  }
 
   if (isAITierIntent) {
     if (courseResolution.ambiguous) return buildStudentCourseSelectionIntent('ai_tier', courseResolution.candidates)
@@ -1158,7 +1144,6 @@ function resolveTeacherIntent(rawText: string): AssistantIntent | null {
   const isEvaluationIntent = /(评价管理|评价|评教|评语|评论)/.test(rawText)
   const isGradeConfigIntent = /(成绩配置|评分配置|权重配置|成绩权重)/.test(rawText)
   const isGradeEntryIntent = /(成绩管理|成绩录入|录入成绩|登记成绩|提交成绩)/.test(rawText)
-  const isHomeworkIntent = /(作业管理|作业区|布置作业|作业)/.test(rawText)
   const isStudentManagementIntent = /(学生管理|学员管理|班级学生|学生名单)/.test(rawText)
   const isExtraIntent = /(额外功能|待办)/.test(rawText)
   const hasCourseVerb = /(进入|打开|查看|去)/.test(rawText)
@@ -1179,14 +1164,6 @@ function resolveTeacherIntent(rawText: string): AssistantIntent | null {
     }
     if (specificCourse) return buildTeacherCourseActionIntent('grade-entry', specificCourse)
     return buildTeacherCourseSelectionIntent('grade-entry')
-  }
-
-  if (isHomeworkIntent) {
-    if (courseResolution.ambiguous) {
-      return buildTeacherCourseSelectionIntent('homework', courseResolution.candidates)
-    }
-    if (specificCourse) return buildTeacherCourseActionIntent('homework', specificCourse)
-    return buildTeacherCourseSelectionIntent('homework')
   }
 
   if (isEvaluationIntent) {

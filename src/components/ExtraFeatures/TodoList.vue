@@ -57,9 +57,6 @@ const activeTodos = computed(() => myTodos.value.filter((t) => !t.completed))
 const doneTodos = computed(() => myTodos.value.filter((t) => t.completed))
 
 onMounted(async () => {
-  if (store.currentRole === 'student') {
-    await store.syncStudentHomeworkTodos()
-  }
   store.generateAutoTodos()
 })
 
@@ -163,13 +160,6 @@ function getTodoTrace(t: { id: string; title: string }): TodoTrace | null {
     // 待办对应的课程已不在待测列表（已完成分层）→ 不给跳转入口
     if (!hit) return null
     return { path: `/student/courses/${hit.courseId}?tab=ai_tier`, label: '去测试' }
-  }
-  // [作业] auto-homework-{homeworkId}-{studentId}
-  if (t.id.startsWith('auto-homework-') && currentStudentId) {
-    const hwId = t.id.replace('auto-homework-', '').slice(0, -currentStudentId.length - 1)
-    const hw = store.findStudentHomeworkSummary(hwId) || store.homework.find((h) => h.id === hwId)
-    if (!hw) return null
-    return { path: `/student/courses/${hw.courseId}?tab=homework`, label: '去完成' }
   }
   // 旧的「📋 评价提醒」待办：从标题匹配课程名
   if (t.title.includes('评价提醒')) {

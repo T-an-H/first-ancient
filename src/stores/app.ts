@@ -4,7 +4,6 @@ import { getNow, getTodayStart, parseLocalDate } from '@/lib/date'
 import { buildCourseScheduleOccurrences } from '@/lib/schedule'
 import { matchStudentFromSession } from '@/lib/studentSession'
 import {
-  API_BASE,
   fetchCourseEvaluationState,
   fetchCourseGroups,
   fetchCourseQualityEvaluations,
@@ -29,7 +28,7 @@ import type {
   CloudFile, TodoItem, OnlineDoc, Note, Evaluation, EvaluationConfig,
   StudentGroup, EvalAnomaly, EvalReminder, GradeWeightConfig, DetailedGrade,
   Mentor, Leader, AITierQuestion, StudentTierRecord, EvalType, LearningTier,
-  Homework, HomeworkSubmission, Department, QualityEvaluation, QualityEvalFile, QualityEvalSubmission
+  Department, QualityEvaluation, QualityEvalFile, QualityEvalSubmission
 } from '@/types'
 import { getDefaultGradeConfig, TEMPLATE_EVAL_TYPES } from '@/types'
 import {
@@ -50,8 +49,6 @@ import {
   notes as mockNotes,
   todoItems as mockTodos,
   cloudFiles as mockCloudFiles,
-  homework as mockHomework,
-  homeworkSubmissions as mockHomeworkSubmissions,
   examScores as mockExamScores,
   studentTiers as mockStudentTiers,
   supplementaryGrades as mockSupplementaryGrades,
@@ -184,45 +181,6 @@ export function getActiveToken(): string | null {
   return getActiveSession()?.token ?? null
 }
 
-type StudentHomeworkSummary = {
-  id: string
-  courseId: string
-  title: string
-  description?: string
-  chapterTitle?: string
-  dueDate?: string
-  createdAt?: string
-  publishedAt?: string
-  submission: {
-    id: string
-    status: string
-    totalScore?: number
-    submittedAt?: string
-  } | null
-}
-
-const normalizeStudentHomeworkSummary = (courseId: string, item: any): StudentHomeworkSummary => ({
-  id: item.id,
-  courseId: item.courseId || courseId,
-  title: item.title,
-  description: item.description,
-  chapterTitle: item.chapterTitle,
-  dueDate: item.dueDate,
-  createdAt: item.createdAt ?? item.publishedAt,
-  publishedAt: item.publishedAt,
-  submission: item.submission
-    ? {
-        id: item.submission.id,
-        status: item.submission.status,
-        totalScore: item.submission.totalScore,
-        submittedAt: item.submission.submittedAt,
-      }
-    : null,
-})
-
-const isPendingStudentHomework = (item: StudentHomeworkSummary) =>
-  !item.submission || item.submission.status === 'submitted'
-
 // ====== Mock 数据版本检查：版本变化时清除旧 localStorage ======
 const MOCK_VERSION_KEY = 'mockDataVersion'
 try {
@@ -234,7 +192,7 @@ try {
       'schedules', 'students', 'enrollments', 'teachers', 'grades',
       'cloudFiles', 'todos', 'onlineDocs', 'notes',
       'evaluations', 'evalConfigs', 'studentGroups', 'evalReminders',
-      'gradeConfigs', 'detailedGrades', 'homework', 'homeworkSubmissions',
+      'gradeConfigs', 'detailedGrades',
       'examScores', 'examWeights', 'teacherSubmittedEvals', 'lockedSessions',
       'studentTiers', 'qualityEvaluations', 'projectWeightLocks',
     ]
@@ -295,10 +253,6 @@ export const useAppStore = defineStore('app', () => {
     ),
   )
   const detailedGrades = ref<DetailedGrade[]>(loadFromStorage<DetailedGrade[]>('detailedGrades', [...mockDetailedGrades, ...supplementaryAll.supplementaryDetailedGrades]))
-  const homework = ref<Homework[]>(loadFromStorage<Homework[]>('homework', [...mockHomework, ...supplementaryAll.supplementaryHomework]))
-  const homeworkSubmissions = ref<HomeworkSubmission[]>(loadFromStorage<HomeworkSubmission[]>('homeworkSubmissions', [...mockHomeworkSubmissions, ...supplementaryAll.supplementaryHomeworkSubmissions]))
-  const studentHomeworkSummaries = ref<Record<string, StudentHomeworkSummary[]>>({})
-  const syncedStudentHomeworkCourses = ref<Record<string, boolean>>({})
   const __initialSession = getActiveSession()
   const isLoggedIn = ref<boolean>(!!__initialSession)
   const currentUser = ref<string | null>(__initialSession?.userInfo?.name ?? null)
@@ -809,25 +763,6 @@ export const useAppStore = defineStore('app', () => {
 
   // ====== 作业系统 ======
 
-  function addHomework(hw: Homework) {
-    homework.value = [...homework.value, hw]
-    saveToStorage('homework', homework.value)
-  }
-
-  function updateHomework(id: string, data: Partial<Homework>) {
-    homework.value = homework.value.map((h) => (h.id === id ? { ...h, ...data } : h))
-    saveToStorage('homework', homework.value)
-  }
-
-  function deleteHomework(id: string) {
-    homework.value = homework.value.filter((h) => h.id !== id)
-    saveToStorage('homework', homework.value)
-  }
-
-  function getCourseHomework(courseId: string): Homework[] {
-    return homework.value.filter((h) => h.courseId === courseId)
-  }
-
   function getCourseCloudFiles(courseId: string): CloudFile[] {
     // 当前学生身份（仅学生端调用，需结合班级可见性过滤）
     const student = getCurrentStudent()
@@ -845,91 +780,6 @@ export const useAppStore = defineStore('app', () => {
       // 按班级可见：需当前学生所在班级在可见班级列表中
       return Boolean(myClassName && f.visibleToClassNames.includes(myClassName))
     })
-  }
-
-  function submitHomework(submission: HomeworkSubmission) {
-    homeworkSubmissions.value = [...homeworkSubmissions.value, submission]
-    saveToStorage('homeworkSubmissions', homeworkSubmissions.value)
-    generateAutoTodos()
-  }
-
-  function getHomeworkSubmission(homeworkId: string, studentId: string): HomeworkSubmission | undefined {
-    return homeworkSubmissions.value.find(
-      (s) => s.homeworkId === homeworkId && s.studentId === studentId
-    )
-  }
-
-  function setStudentHomeworkSummaries(courseId: string, items: any[]) {
-    studentHomeworkSummaries.value = {
-      ...studentHomeworkSummaries.value,
-      [courseId]: items.map((item) => normalizeStudentHomeworkSummary(courseId, item)),
-    }
-    syncedStudentHomeworkCourses.value = {
-      ...syncedStudentHomeworkCourses.value,
-      [courseId]: true,
-    }
-  }
-
-  function getStudentHomeworkSummaries(courseId?: string): StudentHomeworkSummary[] {
-    if (courseId) return studentHomeworkSummaries.value[courseId] || []
-    return Object.values(studentHomeworkSummaries.value).reduce(
-      (all, items) => all.concat(items),
-      [] as StudentHomeworkSummary[],
-    )
-  }
-
-  function findStudentHomeworkSummary(homeworkId: string): StudentHomeworkSummary | null {
-    for (const items of Object.values(studentHomeworkSummaries.value)) {
-      const matched = items.find((item) => item.id === homeworkId)
-      if (matched) return matched
-    }
-    return null
-  }
-
-  function getPendingStudentHomeworkSummaries(courseId?: string): StudentHomeworkSummary[] {
-    return getStudentHomeworkSummaries(courseId).filter(isPendingStudentHomework)
-  }
-
-  function getPendingStudentHomeworkTasks(courseId?: string) {
-    return getPendingStudentHomeworkSummaries(courseId).map((item) => ({
-      id: item.id,
-      courseId: item.courseId,
-      title: item.title,
-      dueDate: item.dueDate,
-      chapterTitle: item.chapterTitle,
-      publishedAt: item.publishedAt,
-      completed: false,
-    }))
-  }
-
-  async function syncStudentHomeworkTodos(courseId?: string, studentId?: string) {
-    const resolvedStudentId = studentId || (currentRole.value === 'student' ? getCurrentStudent()?.id : null) || null
-    if (!resolvedStudentId) return []
-
-    const courseIds = courseId
-      ? [courseId]
-      : Array.from(new Set(
-          enrollments.value
-            .filter((e) => e.studentId === resolvedStudentId && e.status !== 'dropped')
-            .map((e) => e.courseId),
-        ))
-
-    await Promise.all(courseIds.map(async (cid) => {
-      try {
-        const response = await fetch(
-          `${API_BASE}/homeworks/student/${cid}?studentId=${encodeURIComponent(resolvedStudentId)}`,
-        )
-        const data = await response.json().catch(() => null)
-        if (data?.success && Array.isArray(data.homeworks)) {
-          setStudentHomeworkSummaries(cid, data.homeworks)
-        }
-      } catch (error) {
-        console.error('加载学生作业失败:', error)
-      }
-    }))
-
-    generateAutoTodos()
-    return courseId ? getStudentHomeworkSummaries(courseId) : getStudentHomeworkSummaries()
   }
 
   // ====== 评价系统 ======
@@ -2615,10 +2465,7 @@ export const useAppStore = defineStore('app', () => {
           const hasEval = evalReminders.value.some(
             (r) => r.courseId === courseId && r.studentId === student.id && r.status !== 'completed'
           )
-          const hasHomework = syncedStudentHomeworkCourses.value[courseId]
-            ? getPendingStudentHomeworkSummaries(courseId).length > 0
-            : false
-          if (hasEval || aiTierPending.has(courseId) || hasHomework) result.add(courseId)
+          if (hasEval || aiTierPending.has(courseId)) result.add(courseId)
         }
       }
     } else if (scope === 'leader') {
@@ -2817,24 +2664,6 @@ export const useAppStore = defineStore('app', () => {
       }
     }
 
-    // ── 4. 作业待办（仅学生） ──
-    if (student?.id) {
-      const pendingHomework = getPendingStudentHomeworkSummaries()
-      for (const hw of pendingHomework) {
-        const todoId = `auto-homework-${hw.id}-${student.id}`
-        if (hasAutoTodo(todoId)) continue
-        newTodos.push({
-          id: todoId,
-          title: `[作业] ${hw.title}`,
-          completed: false,
-          createdAt: hw.createdAt || hw.publishedAt || now.toISOString().split('T')[0],
-          dueDate: hw.dueDate,
-          createdBy: currentUser.value || 'system',
-        })
-        changed = true
-      }
-    }
-
     // ── 5. 清理：当底层源已完成时，标记对应 auto-todo 为已完成（自动消失） ──
     todos.value = todos.value.map((t) => {
       if (t.completed) return t
@@ -2889,26 +2718,6 @@ export const useAppStore = defineStore('app', () => {
         }
       }
 
-      // 作业待办清理
-      if (t.id.startsWith('auto-homework-')) {
-        const key = t.id.replace('auto-homework-', '') // homeworkId-studentId
-        const sepIdx = key.lastIndexOf('-')
-        if (sepIdx > 0) {
-          const hwId = key.substring(0, sepIdx)
-          const summary = findStudentHomeworkSummary(hwId)
-          const localHomework = homework.value.find((item) => item.id === hwId)
-          const syncedCourseId = summary?.courseId || localHomework?.courseId
-          if (summary && !isPendingStudentHomework(summary)) {
-            changed = true
-            return { ...t, completed: true }
-          }
-          if (!summary && syncedCourseId && syncedStudentHomeworkCourses.value[syncedCourseId]) {
-            changed = true
-            return { ...t, completed: true }
-          }
-        }
-      }
-
       return t
     })
 
@@ -2932,7 +2741,6 @@ export const useAppStore = defineStore('app', () => {
     cloudFiles, todos, onlineDocs, notes,
     evaluations, evalConfigs, studentGroups, evalReminders,
     gradeConfigs, detailedGrades,
-    homework, homeworkSubmissions,
     isLoggedIn, currentUser, currentRole,
     hasEvalReminders,
     mentors, leaders, secondaryRoles,
@@ -2952,11 +2760,7 @@ export const useAppStore = defineStore('app', () => {
     addTodo, updateTodo, deleteTodo,
     addOnlineDoc, updateOnlineDoc, deleteOnlineDoc,
     addNote, updateNote, deleteNote,
-    addHomework, updateHomework, deleteHomework,
-    getCourseHomework, getCourseCloudFiles,
-    submitHomework, getHomeworkSubmission,
-    setStudentHomeworkSummaries, getStudentHomeworkSummaries, getPendingStudentHomeworkTasks,
-    findStudentHomeworkSummary, syncStudentHomeworkTodos,
+    getCourseCloudFiles,
     syncCourseEvaluationState, syncQualityEvaluationState, syncDetailedGradesFromApi, addEvaluation, updateEvaluation, deleteEvaluation,
     setEvalConfig, addStudentGroup, addStudent, addTeacher, updateTeacher, deleteTeacher, updateStudent, deleteStudent, updateStudentGroup, deleteStudentGroup,
     getCourseGroups, clearCourseGroups, setCourseGroups, randomGroup,

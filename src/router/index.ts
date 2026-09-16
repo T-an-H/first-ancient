@@ -118,11 +118,6 @@ const router = createRouter({
           component: () => import('@/pages/student/Courses.vue'),
         },
         {
-          path: 'courses/:courseId/homeworks/:homeworkId/result',
-          name: 'StudentHomeworkResult',
-          component: () => import('@/pages/student/HomeworkResult.vue'),
-        },
-        {
           path: 'courses/:id',
           name: 'StudentCourseLearn',
           component: () => import('@/pages/student/CourseLearn.vue'),

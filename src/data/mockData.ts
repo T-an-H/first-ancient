@@ -519,28 +519,6 @@ export const notes: import('@/types').Note[] = [
 ];
 
 // ========== 仪表盘统计数据 ==========
-
-export const homework: import('@/types').Homework[] = [
-  { id: 'hw-1', courseId: 'course-1', title: '第1章课后作业', description: '完成React基础概念的练习题，包括组件、props、state等基础知识点', dueDate: '2026-07-25', createdAt: '2026-07-10', createdBy: '王老师' },
-  { id: 'hw-2', courseId: 'course-1', title: '第2章课后作业', description: '使用Hooks实现一个计数器应用，包含useState、useEffect', dueDate: '2026-07-30', createdAt: '2026-07-15', createdBy: '王老师' },
-  { id: 'hw-3', courseId: 'course-1', title: '第3章课后作业', description: '实现Context跨组件数据传递案例', dueDate: '2026-08-05', createdAt: '2026-07-20', createdBy: '王老师' },
-  { id: 'hw-4', courseId: 'course-2', title: 'Python数据分析作业一', description: '使用Pandas读取CSV文件并进行数据清洗', dueDate: '2026-07-26', createdAt: '2026-07-12', createdBy: '李老师' },
-  { id: 'hw-5', courseId: 'course-2', title: 'Python数据分析作业二', description: '使用Matplotlib进行数据可视化', dueDate: '2026-08-02', createdAt: '2026-07-18', createdBy: '李老师' },
-  { id: 'hw-6', courseId: 'course-3', title: 'UI设计作业', description: '设计一个移动端App的首页界面', dueDate: '2026-07-28', createdAt: '2026-07-14', createdBy: '陈老师' },
-  { id: 'hw-7', courseId: 'course-4', title: 'TypeScript泛型作业', description: '实现泛型函数和泛型接口', dueDate: '2026-07-27', createdAt: '2026-07-16', createdBy: '王老师' },
-  { id: 'hw-8', courseId: 'course-5', title: '机器学习作业', description: '使用线性回归预测房价', dueDate: '2026-08-03', createdAt: '2026-07-18', createdBy: '张老师' },
-  { id: 'hw-9', courseId: 'course-14', title: 'AI项目阶段性作业', description: '完成AI应用的第一阶段开发', dueDate: '2026-07-31', createdAt: '2026-07-20', createdBy: '周老师' },
-  { id: 'hw-10', courseId: 'course-15', title: '数据可视化作业', description: '创建交互式数据仪表盘', dueDate: '2026-08-01', createdAt: '2026-07-22', createdBy: '钱老师' },
-];
-
-export const homeworkSubmissions: import('@/types').HomeworkSubmission[] = [
-  { id: 'sub-1', homeworkId: 'hw-1', courseId: 'course-1', studentId: 'stu-1', submittedAt: '2026-07-24', fileName: 'React第1章作业.docx', fileDataUrl: 'https://example.com/submissions/react-hw1.docx', fileSize: 512000, fileType: 'application/docx' },
-  { id: 'sub-2', homeworkId: 'hw-1', courseId: 'course-1', studentId: 'stu-2', submittedAt: '2026-07-23', fileName: '第1章作业.pdf', fileDataUrl: 'https://example.com/submissions/hw1-stu2.pdf', fileSize: 1024000, fileType: 'application/pdf' },
-  { id: 'sub-3', homeworkId: 'hw-4', courseId: 'course-2', studentId: 'stu-3', submittedAt: '2026-07-25', fileName: '数据分析作业一.ipynb', fileDataUrl: 'https://example.com/submissions/python-hw1.ipynb', fileSize: 256000, fileType: 'application/ipynb' },
-  { id: 'sub-4', homeworkId: 'hw-6', courseId: 'course-3', studentId: 'stu-5', submittedAt: '2026-07-27', fileName: 'UI设计稿.fig', fileDataUrl: 'https://example.com/submissions/ui-design.fig', fileSize: 5120000, fileType: 'application/fig' },
-  { id: 'sub-5', homeworkId: 'hw-7', courseId: 'course-4', studentId: 'stu-1', submittedAt: '2026-07-26', fileName: 'TypeScript泛型作业.ts', fileDataUrl: 'https://example.com/submissions/ts-generics.ts', fileSize: 10240, fileType: 'text/typescript' },
-];
-
 export const dashboardStats: import('@/types').DashboardStats = {
   totalCourses: 20,
   totalStudents: 21,
@@ -887,35 +865,6 @@ export const supplementaryEvaluations: import('@/types').Evaluation[] = [
   { id: 'ev-88', courseId: 'course-20', studentId: 'stu-21', sessionNumber: 1, type: 'teacher', score: 78, evaluatorId: 't-10', evaluatorName: '吴老师', comment: '需求分析能力较好', createdAt: '2026-07-28' },
 ];
 
-// ========== 补充作业提交记录（sub-6起，至少15条） ==========
-
-export const supplementaryHomeworkSubmissions: import('@/types').HomeworkSubmission[] = [
-  // course-1, hw-2
-  { id: 'sub-6', homeworkId: 'hw-2', courseId: 'course-1', studentId: 'stu-1', submittedAt: '2026-07-29', fileName: 'Hooks计数器实现.tsx', fileDataUrl: 'https://example.com/submissions/hooks-counter.tsx', fileSize: 15360, fileType: 'text/typescript' },
-  { id: 'sub-7', homeworkId: 'hw-2', courseId: 'course-1', studentId: 'stu-2', submittedAt: '2026-07-28', fileName: 'counter-app.zip', fileDataUrl: 'https://example.com/submissions/counter-app.zip', fileSize: 204800, fileType: 'application/zip' },
-  { id: 'sub-8', homeworkId: 'hw-2', courseId: 'course-1', studentId: 'stu-15', submittedAt: '2026-07-29', fileName: 'react-counter.jsx', fileDataUrl: 'https://example.com/submissions/react-counter.jsx', fileSize: 8192, fileType: 'text/javascript' },
-  // course-1, hw-3
-  { id: 'sub-9', homeworkId: 'hw-3', courseId: 'course-1', studentId: 'stu-1', submittedAt: '2026-08-04', fileName: 'Context主题切换.tsx', fileDataUrl: 'https://example.com/submissions/context-theme.tsx', fileSize: 12288, fileType: 'text/typescript' },
-  { id: 'sub-10', homeworkId: 'hw-3', courseId: 'course-1', studentId: 'stu-22', submittedAt: '2026-08-03', fileName: 'advanced-context.tsx', fileDataUrl: 'https://example.com/submissions/advanced-context.tsx', fileSize: 20480, fileType: 'text/typescript' },
-  { id: 'sub-11', homeworkId: 'hw-3', courseId: 'course-1', studentId: 'stu-24', submittedAt: '2026-08-04', fileName: 'context-app.tsx', fileDataUrl: 'https://example.com/submissions/context-app.tsx', fileSize: 10240, fileType: 'text/typescript' },
-  // course-2, hw-5
-  { id: 'sub-12', homeworkId: 'hw-5', courseId: 'course-2', studentId: 'stu-3', submittedAt: '2026-08-01', fileName: '数据可视化报告.ipynb', fileDataUrl: 'https://example.com/submissions/vis-report.ipynb', fileSize: 512000, fileType: 'application/ipynb' },
-  { id: 'sub-13', homeworkId: 'hw-5', courseId: 'course-2', studentId: 'stu-4', submittedAt: '2026-07-31', fileName: 'matplotlib-charts.ipynb', fileDataUrl: 'https://example.com/submissions/matplotlib-charts.ipynb', fileSize: 384000, fileType: 'application/ipynb' },
-  { id: 'sub-14', homeworkId: 'hw-5', courseId: 'course-2', studentId: 'stu-23', submittedAt: '2026-08-01', fileName: 'charts-basic.ipynb', fileDataUrl: 'https://example.com/submissions/charts-basic.ipynb', fileSize: 128000, fileType: 'application/ipynb' },
-  // course-3, hw-6
-  { id: 'sub-15', homeworkId: 'hw-6', courseId: 'course-3', studentId: 'stu-5', submittedAt: '2026-07-27', fileName: '移动端首页设计.fig', fileDataUrl: 'https://example.com/submissions/mobile-home.fig', fileSize: 4096000, fileType: 'application/fig' },
-  { id: 'sub-16', homeworkId: 'hw-6', courseId: 'course-3', studentId: 'stu-19', submittedAt: '2026-07-27', fileName: 'app-design.fig', fileDataUrl: 'https://example.com/submissions/app-design.fig', fileSize: 3072000, fileType: 'application/fig' },
-  // course-4, hw-7
-  { id: 'sub-17', homeworkId: 'hw-7', courseId: 'course-4', studentId: 'stu-1', submittedAt: '2026-07-26', fileName: '泛型练习.ts', fileDataUrl: 'https://example.com/submissions/generics-practice.ts', fileSize: 8192, fileType: 'text/typescript' },
-  { id: 'sub-18', homeworkId: 'hw-7', courseId: 'course-4', studentId: 'stu-22', submittedAt: '2026-07-25', fileName: 'advanced-generics.ts', fileDataUrl: 'https://example.com/submissions/advanced-generics.ts', fileSize: 12288, fileType: 'text/typescript' },
-  // course-14, hw-9
-  { id: 'sub-19', homeworkId: 'hw-9', courseId: 'course-14', studentId: 'stu-1', submittedAt: '2026-07-30', fileName: 'AI问答系统源码.zip', fileDataUrl: 'https://example.com/submissions/ai-qa-source.zip', fileSize: 3072000, fileType: 'application/zip' },
-  { id: 'sub-20', homeworkId: 'hw-9', courseId: 'course-14', studentId: 'stu-17', submittedAt: '2026-07-29', fileName: 'ai-app-stage1.zip', fileDataUrl: 'https://example.com/submissions/ai-app-stage1.zip', fileSize: 2048000, fileType: 'application/zip' },
-  // course-15, hw-10
-  { id: 'sub-21', homeworkId: 'hw-10', courseId: 'course-15', studentId: 'stu-1', submittedAt: '2026-07-31', fileName: 'dashboard仪表盘源码.zip', fileDataUrl: 'https://example.com/submissions/dashboard-source.zip', fileSize: 4096000, fileType: 'application/zip' },
-  { id: 'sub-22', homeworkId: 'hw-10', courseId: 'course-15', studentId: 'stu-22', submittedAt: '2026-07-31', fileName: 'data-dashboard.zip', fileDataUrl: 'https://example.com/submissions/data-dashboard.zip', fileSize: 5120000, fileType: 'application/zip' },
-];
-
 // ========== 补充分项成绩（dg-18起） ==========
 
 export const supplementaryDetailedGrades: import('@/types').DetailedGrade[] = [
@@ -955,68 +904,6 @@ export const supplementaryStudentGroups: import('@/types').StudentGroup[] = [
   { id: 'grp-21', courseId: 'course-19', name: '微服务组', memberIds: ['stu-20', 'stu-22', 'stu-17'] },
   { id: 'grp-22', courseId: 'course-20', name: '需求分析组', memberIds: ['stu-1', 'stu-5', 'stu-19'] },
   { id: 'grp-23', courseId: 'course-15', name: '可视化组', memberIds: ['stu-2', 'stu-3', 'stu-22'] },
-];
-
-// ========== 补充作业数据（hw-11起） ==========
-
-export const supplementaryHomework: import('@/types').Homework[] = [
-  // course-1（React）
-  { id: 'hw-11', courseId: 'course-1', title: '第4章课后作业', description: '使用useReducer和useContext实现一个购物车功能', dueDate: '2026-08-12', createdAt: '2026-07-25', createdBy: '王老师' },
-  { id: 'hw-12', courseId: 'course-1', title: '第5章课后作业', description: '实现自定义Hook：useLocalStorage和useDebounce', dueDate: '2026-08-20', createdAt: '2026-07-28', createdBy: '王老师' },
-  { id: 'hw-13', courseId: 'course-1', title: '综合实战项目', description: '使用React全家桶完成一个任务管理应用', dueDate: '2026-08-30', createdAt: '2026-08-01', createdBy: '王老师' },
-  // course-2（Python）
-  { id: 'hw-14', courseId: 'course-2', title: 'Python数据分析作业三', description: '使用Pandas进行数据聚合和分组分析', dueDate: '2026-08-09', createdAt: '2026-07-25', createdBy: '李老师' },
-  { id: 'hw-15', courseId: 'course-2', title: 'Python期末项目', description: '选择一个数据集完成完整的数据分析报告', dueDate: '2026-08-20', createdAt: '2026-07-30', createdBy: '李老师' },
-  // course-3（UI/UX）
-  { id: 'hw-16', courseId: 'course-3', title: '用户研究作业', description: '完成一份用户访谈和用户画像报告', dueDate: '2026-08-05', createdAt: '2026-07-20', createdBy: '陈老师' },
-  { id: 'hw-17', courseId: 'course-3', title: '原型设计作业', description: '使用Figma制作高保真交互原型', dueDate: '2026-08-15', createdAt: '2026-07-25', createdBy: '陈老师' },
-  { id: 'hw-18', courseId: 'course-3', title: 'UX评估报告', description: '对现有App进行可用性测试并撰写评估报告', dueDate: '2026-08-25', createdAt: '2026-08-01', createdBy: '陈老师' },
-  // course-4（TypeScript）
-  { id: 'hw-19', courseId: 'course-4', title: '类型体操练习', description: '实现工具类型：Partial、Required、Pick、Record等', dueDate: '2026-08-08', createdAt: '2026-07-22', createdBy: '王老师' },
-  { id: 'hw-20', courseId: 'course-4', title: '装饰器模式实践', description: '使用TypeScript装饰器实现日志和权限控制', dueDate: '2026-08-18', createdAt: '2026-07-28', createdBy: '王老师' },
-  // course-5（机器学习）
-  { id: 'hw-21', courseId: 'course-5', title: '决策树实践', description: '使用决策树模型对iris数据集进行分类', dueDate: '2026-08-06', createdAt: '2026-07-22', createdBy: '张老师' },
-  { id: 'hw-22', courseId: 'course-5', title: 'SVM分类器作业', description: '使用SVM对手写数字数据集进行分类', dueDate: '2026-08-16', createdAt: '2026-07-28', createdBy: '张老师' },
-  { id: 'hw-23', courseId: 'course-5', title: '神经网络入门作业', description: '使用PyTorch实现一个简单的前馈神经网络', dueDate: '2026-08-26', createdAt: '2026-08-02', createdBy: '张老师' },
-  // course-6（项目管理）
-  { id: 'hw-24', courseId: 'course-6', title: '项目章程编写', description: '为一个虚拟项目编写项目章程和范围说明书', dueDate: '2026-08-05', createdAt: '2026-07-20', createdBy: '刘老师' },
-  { id: 'hw-25', courseId: 'course-6', title: '甘特图与风险管理', description: '使用工具绘制项目甘特图并制定风险应对计划', dueDate: '2026-08-15', createdAt: '2026-07-25', createdBy: '刘老师' },
-  // course-9（Photoshop）
-  { id: 'hw-26', courseId: 'course-9', title: '图像合成作业', description: '使用图层蒙版和混合模式合成创意海报', dueDate: '2026-08-07', createdAt: '2026-07-22', createdBy: '陈老师' },
-  { id: 'hw-27', courseId: 'course-9', title: '商业修图作业', description: '对人像照片进行专业级精修处理', dueDate: '2026-08-17', createdAt: '2026-07-28', createdBy: '陈老师' },
-  // course-10（商务英语）
-  { id: 'hw-28', courseId: 'course-10', title: '商务邮件写作', description: '撰写商务邮件：询盘、报价、投诉各一封', dueDate: '2026-08-06', createdAt: '2026-07-22', createdBy: '赵老师' },
-  { id: 'hw-29', courseId: 'course-10', title: '会议演讲准备', description: '准备5分钟的英文产品演示演讲稿', dueDate: '2026-08-16', createdAt: '2026-07-28', createdBy: '赵老师' },
-  { id: 'hw-30', courseId: 'course-10', title: '商务谈判角色扮演', description: '模拟商务谈判场景，撰写谈判策略文档', dueDate: '2026-08-26', createdAt: '2026-08-02', createdBy: '赵老师' },
-  // course-11（Vue3）
-  { id: 'hw-31', courseId: 'course-11', title: '组合式API练习', description: '使用setup语法糖实现待办列表组件', dueDate: '2026-08-06', createdAt: '2026-07-22', createdBy: '王老师' },
-  { id: 'hw-32', courseId: 'course-11', title: 'Pinia状态管理', description: '使用Pinia实现购物车状态管理', dueDate: '2026-08-16', createdAt: '2026-07-28', createdBy: '王老师' },
-  // course-12（日语）
-  { id: 'hw-33', courseId: 'course-12', title: '日语语法练习', description: '完成教材第3-4单元语法练习题', dueDate: '2026-08-07', createdAt: '2026-07-22', createdBy: '孙老师' },
-  { id: 'hw-34', courseId: 'course-12', title: '日语短文写作', description: '用日语写一篇200字左右的自我介绍和兴趣爱好', dueDate: '2026-08-17', createdAt: '2026-07-28', createdBy: '孙老师' },
-  // course-14（AI生成式）
-  { id: 'hw-35', courseId: 'course-14', title: 'AI项目阶段性作业二', description: '完成AI应用的第二阶段开发：接入大模型API', dueDate: '2026-08-08', createdAt: '2026-07-25', createdBy: '周老师' },
-  { id: 'hw-36', courseId: 'course-14', title: 'AI项目阶段性作业三', description: '完善AI应用的提示词工程和输出格式化', dueDate: '2026-08-18', createdAt: '2026-07-30', createdBy: '周老师' },
-  // course-15（数据可视化）
-  { id: 'hw-37', courseId: 'course-15', title: 'D3.js基础作业', description: '使用D3.js创建柱状图和折线图', dueDate: '2026-08-08', createdAt: '2026-07-25', createdBy: '钱老师' },
-  { id: 'hw-38', courseId: 'course-15', title: 'ECharts高级图表', description: '使用ECharts制作地理热力图和桑基图', dueDate: '2026-08-18', createdAt: '2026-07-30', createdBy: '钱老师' },
-  // course-16（高效沟通）
-  { id: 'hw-39', courseId: 'course-16', title: '即兴演讲练习', description: '自选主题进行3分钟即兴演讲并录制视频', dueDate: '2026-08-05', createdAt: '2026-07-22', createdBy: '吴老师' },
-  { id: 'hw-40', courseId: 'course-16', title: '跨部门沟通案例', description: '分析一个跨部门沟通失败的案例并提出改进方案', dueDate: '2026-08-15', createdAt: '2026-07-28', createdBy: '吴老师' },
-  // course-17（英语口语）
-  { id: 'hw-41', courseId: 'course-17', title: '英语配音作业', description: '为一段英文影视片段进行配音并录制', dueDate: '2026-08-07', createdAt: '2026-07-22', createdBy: '孙老师' },
-  { id: 'hw-42', courseId: 'course-17', title: '小组英语辩论', description: '分组进行英语辩论赛，准备辩论稿和论点', dueDate: '2026-08-17', createdAt: '2026-07-28', createdBy: '孙老师' },
-  { id: 'hw-43', courseId: 'course-17', title: '英文简历与面试', description: '撰写英文简历并模拟英文面试问答', dueDate: '2026-08-27', createdAt: '2026-08-02', createdBy: '孙老师' },
-  // course-18（Docker）
-  { id: 'hw-44', courseId: 'course-18', title: 'Dockerfile编写', description: '为一个Node.js应用编写多阶段构建Dockerfile', dueDate: '2026-08-08', createdAt: '2026-07-25', createdBy: '周老师' },
-  { id: 'hw-45', courseId: 'course-18', title: 'Docker Compose实践', description: '使用Docker Compose编排前端+后端+数据库应用', dueDate: '2026-08-18', createdAt: '2026-07-30', createdBy: '周老师' },
-  // course-19（微服务）
-  { id: 'hw-46', courseId: 'course-19', title: '服务拆分设计', description: '对一个单体应用进行微服务拆分设计', dueDate: '2026-08-09', createdAt: '2026-07-25', createdBy: '钱老师' },
-  { id: 'hw-47', courseId: 'course-19', title: 'API网关配置', description: '配置Spring Cloud Gateway实现路由和过滤器', dueDate: '2026-08-19', createdAt: '2026-07-30', createdBy: '钱老师' },
-  // course-20（产品经理）
-  { id: 'hw-48', courseId: 'course-20', title: '竞品分析报告', description: '选择一款产品进行竞品分析，输出SWOT分析报告', dueDate: '2026-08-06', createdAt: '2026-07-22', createdBy: '吴老师' },
-  { id: 'hw-49', courseId: 'course-20', title: 'PRD文档编写', description: '为一个新功能编写完整的产品需求文档', dueDate: '2026-08-16', createdAt: '2026-07-28', createdBy: '吴老师' },
-  { id: 'hw-50', courseId: 'course-20', title: '产品数据分析', description: '分析产品数据指标，提出产品优化建议', dueDate: '2026-08-26', createdAt: '2026-08-02', createdBy: '吴老师' },
 ];
 
 // ========== 补充云盘文件数据（file-13起） ==========
@@ -1159,10 +1046,8 @@ export const supplementaryAll = {
   supplementarySchedules,
   supplementaryEnrollments,
   supplementaryEvaluations,
-  supplementaryHomeworkSubmissions,
   supplementaryDetailedGrades,
   supplementaryStudentGroups,
-  supplementaryHomework,
   supplementaryCloudFiles,
   supplementaryNotes,
   supplementaryOnlineDocs,

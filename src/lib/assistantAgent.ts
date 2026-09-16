@@ -162,13 +162,6 @@ function buildStudentActions(studentCourses: Course[]): AssistantPageAction[] {
         [...courseKeywords, '成绩', '分数', '总评', '查看成绩'],
       ),
       createAction(
-        `student.course.${course.id}.homework`,
-        `打开《${course.title}》作业`,
-        `进入《${course.title}》的作业页`,
-        { path: coursePath, query: { tab: 'homework' } },
-        [...courseKeywords, '作业', '提交作业'],
-      ),
-      createAction(
         `student.course.${course.id}.ai_tier`,
         `打开《${course.title}》AI分层`,
         `进入《${course.title}》的 AI 分层测试页`,
@@ -280,13 +273,6 @@ function buildTeacherActions(teacherCourses: Course[]): AssistantPageAction[] {
         `进入《${course.title}》的成绩录入标签页`,
         { path: coursePath, query: { tab: 'grade-entry' } },
         [...courseKeywords, '成绩管理', '成绩录入', '录入成绩', '提交成绩'],
-      ),
-      createAction(
-        `teacher.course.${course.id}.homework`,
-        `打开《${course.title}》课程管理测试题目`,
-        `进入《${course.title}》课程管理，在测试题目中布置作业`,
-        { path: coursePath, query: { tab: 'course-mgmt' } },
-        [...courseKeywords, '作业管理', '布置作业', '作业'],
       ),
       createAction(
         `teacher.course.${course.id}.students`,

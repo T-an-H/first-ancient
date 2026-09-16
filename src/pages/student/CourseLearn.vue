@@ -806,7 +806,6 @@ import {
   CheckCircle, Circle, Layers, Award, Sparkles, UserCheck, Users, MessageSquare, ArrowRight, Eye, HelpCircle, Lock, XCircle,
   Download, Upload, TrendingUp, X, Calendar, BarChart3, PieChart, Network, BookMarked
 } from 'lucide-vue-next'
-import StudentHomework from '@/components/Homework/StudentHomework.vue'
 import { javaListCourseStandards } from '@/api/knowledgeGraph'
 import KnowledgeGraph from '@/components/knowledge/KnowledgeGraph.vue'
 import RadarChart from '@/components/RadarChart.vue'
@@ -823,19 +822,13 @@ const store = useAppStore()
 const courseId = route.params.id as string
 // 当前登录学生：与 store 内统一口径一致（会话 id/学号优先，姓名仅兜底）
 const myStudent = computed(() => store.getCurrentStudent())
-const homeworkStudentId = computed(() =>
-  myStudent.value?.studentId ||
-  myStudent.value?.id ||
-  '',
-)
 const currentClassName = computed(() => myStudent.value?.className || '')
 
 // 支持 ?tab=xxx 直达对应模块（用于红点溯源跳转）
-const VALID_TABS = ['ai_tier', 'course-mgmt', 'course_standard', 'tasks', 'resources', 'homework', 'evaluations', 'eval_overview']
+const VALID_TABS = ['ai_tier', 'course-mgmt', 'course_standard', 'tasks', 'resources', 'evaluations', 'eval_overview']
 const activeTab = ref<string>(
   VALID_TABS.includes(route.query.tab as string) ? (route.query.tab as string) : 'tasks'
 )
-const selectedFiles = ref<Record<string, File>>({})
 
 // ===== 课程标准（教师上传，自动同步展示） =====
 const courseStandards = ref<any[]>([])
@@ -901,7 +894,6 @@ onMounted(async () => {
     // 后端为分层结果的权威源：先同步，避免换设备/清缓存后被误判为「逾期自动分配基础层」
     await syncTierFromBackend()
     store.autoAssignOverdueBasicTier(courseId, myStudent.value.id, currentClassName.value)
-    await store.syncStudentHomeworkTodos(courseId, myStudent.value.id)
   }
 })
 
@@ -948,15 +940,8 @@ const myGrade = computed(() =>
   store.grades.find((g) => g.courseId === courseId && g.studentId === myStudent.value?.id)
 )
 
-// ===== 任务：显示当前课程未完成的真实作业 =====
-const courseTasks = computed(() => store.getPendingStudentHomeworkTasks(courseId))
-
 // ===== 资源（从store获取课程关联资源） =====
 const courseResources = computed(() => store.getCourseCloudFiles(courseId))
-
-// ===== 作业（从store获取课程作业） =====
-const courseHomework = computed(() => store.getCourseHomework(courseId))
-const submittedCount = computed(() => courseHomework.value.filter(hw => isHomeworkSubmitted(hw.id)).length)
 
 // ===== AI 分层 =====
 const tierRecord = computed(() =>
@@ -1787,64 +1772,6 @@ function getFileTypeName(type: string): string {
 
 function downloadFile(file: CloudFile) {
   alert(`开始下载：${file.name}`)
-}
-
-function goToHomeworkTab() {
-  activeTab.value = 'homework'
-  void router.replace({
-    query: {
-      ...route.query,
-      tab: 'homework',
-    },
-  })
-}
-
-function isHomeworkSubmitted(homeworkId: string): boolean {
-  if (!myStudent.value) return false
-  return !!store.getHomeworkSubmission(homeworkId, myStudent.value.id)
-}
-
-function getSubmissionFileName(homeworkId: string): string {
-  if (!myStudent.value) return ''
-  const submission = store.getHomeworkSubmission(homeworkId, myStudent.value.id)
-  return submission?.fileName || ''
-}
-
-function downloadSubmission(homeworkId: string) {
-  if (!myStudent.value) return
-  const submission = store.getHomeworkSubmission(homeworkId, myStudent.value.id)
-  if (submission) {
-    alert(`开始下载已提交作业：${submission.fileName}`)
-  }
-}
-
-function handleFileSelect(event: Event, homeworkId: string) {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (file) {
-    selectedFiles.value[homeworkId] = file
-  }
-}
-
-function submitHomework(hw: typeof courseHomework.value[0]) {
-  if (!myStudent.value || !selectedFiles.value[hw.id]) return
-  
-  const file = selectedFiles.value[hw.id]
-  
-  store.submitHomework({
-    id: `sub-${Date.now()}`,
-    homeworkId: hw.id,
-    courseId: courseId,
-    studentId: myStudent.value.id,
-    submittedAt: getNow().toISOString().split('T')[0],
-    fileName: file.name,
-    fileDataUrl: 'https://example.com/submissions/' + file.name,
-    fileSize: file.size,
-    fileType: file.type,
-  })
-  
-  delete selectedFiles.value[hw.id]
-  alert('作业提交成功！')
 }
 
 // ====== 素质评价 ======

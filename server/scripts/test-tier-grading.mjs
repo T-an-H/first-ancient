@@ -93,7 +93,7 @@ test('选择题序号答案落库为选项原文', () => {
 console.log('\n[6] 本地兜底题库：每道题答案必须能命中某个选项');
 const deepseekSrc = fs.readFileSync(resolve(here, '../deepseek.js'), 'utf8');
 const bankSrc = deepseekSrc
-  .slice(deepseekSrc.indexOf('function fallbackTierTestQuestions'), deepseekSrc.indexOf('function fallbackGradeSubmission'))
+  .slice(deepseekSrc.indexOf('function fallbackTierTestQuestions'), deepseekSrc.indexOf('const TIER_DESCS'))
   .replace('function fallbackTierTestQuestions', 'function buildBank');
 const { buildBank } = vm.runInNewContext(
   `${bankSrc}\n;({ buildBank })`,

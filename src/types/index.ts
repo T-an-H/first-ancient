@@ -291,28 +291,6 @@ export interface Note {
   }[];
 }
 
-export interface Homework {
-  id: string;
-  courseId: string;
-  title: string;
-  description?: string;
-  dueDate: string;
-  createdAt: string;
-  createdBy: string;
-}
-
-export interface HomeworkSubmission {
-  id: string;
-  homeworkId: string;
-  courseId: string;
-  studentId: string;
-  submittedAt: string;
-  fileName: string;
-  fileDataUrl: string;
-  fileSize: number;
-  fileType: string;
-}
-
 // ========== 评价系统 ==========
 
 /** 评价类型 */

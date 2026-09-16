@@ -17,7 +17,6 @@ import categoryRoutes from './routes/categories.js';
 import courseRoutes from './routes/courses.js';
 import teachingRoutes from './routes/teaching.js';
 import evalRoutes from './routes/eval.js';
-import homeworkRoutes from './routes/homeworks.js';
 import tierTestRoutes from './routes/tierTest.js';
 import assistantRoutes from './routes/assistant.js';
 import { warmAssistantModel } from './assistant-agent.js';
@@ -102,8 +101,6 @@ app.use('/api/eval', evalRoutes);
 // 成绩配置 + 成绩明细路由（平时成绩后端权威源）：/api/grade-config/*、/api/detailed-grades/*
 app.use('/api', gradeRoutes);
 
-// 作业管理路由（含AI出题/批改）
-app.use('/api/homeworks', homeworkRoutes);
 app.use('/api/quality-evaluations', qualityEvaluationRoutes);
 
 // AI 分层测试路由
