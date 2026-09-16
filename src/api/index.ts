@@ -101,7 +101,9 @@ export async function verifyToken(token: string) {
 
 export async function fetchStudents(params: Record<string, any> = {}) {
   const query = buildQuery(params)
-  return request(`/students${query ? `?${query}` : ''}`)
+  // 列表页一次拉 500 行，且后端条件列都包了 COLLATE 导致索引失效（全表扫描），
+  // 学生表变大后 3s 默认值不够，走批量超时。
+  return request(`/students${query ? `?${query}` : ''}`, { timeoutMs: BULK_TIMEOUT_MS })
 }
 
 export async function fetchStudentCourses(studentId: string) {
@@ -234,7 +236,9 @@ export async function deleteCategory(id: string) {
 
 export async function fetchCourses(params: Record<string, any> = {}) {
   const query = buildQuery(params)
-  return request(`/courses${query ? `?${query}` : ''}`)
+  // 无参全量调用时，后端每行带 2 个 schedules 相关子查询（求开课/结课日期），
+  // 课程数一多就是 2N 次子查询，3s 不够。
+  return request(`/courses${query ? `?${query}` : ''}`, { timeoutMs: BULK_TIMEOUT_MS })
 }
 
 export async function createCourse(data: any) {
@@ -245,7 +249,9 @@ export async function createCourse(data: any) {
 }
 
 export async function syncCategoriesFromSchedules() {
-  return request('/categories/sync', { method: 'POST' })
+  // 后端逐条排课做「查分类→建分类→查课程→写课程」，是 O(排课数) 次串行查询，
+  // 排课多时远超 3s 默认超时，走批量超时。
+  return request('/categories/sync', { method: 'POST', timeoutMs: BULK_TIMEOUT_MS })
 }
 
 export async function bulkImportSchedules(schedules: any) {
@@ -325,6 +331,9 @@ export async function saveCourseGroups(courseId: string, groups: any[]) {
     method: 'POST',
     keepalive: true,
     body: JSON.stringify({ courseId, groups }),
+    // 一次同步整门课的分组（含 memberIds），人数多时体积可观，走批量超时。
+    // 原先用 3s 默认值：分组页自动同步是后台静默调用，超时会被当成同步失败重试。
+    timeoutMs: BULK_TIMEOUT_MS,
   })
 }
 
@@ -351,6 +360,9 @@ export async function saveEvaluation(ev: any) {
   return request('/eval/save', {
     method: 'POST',
     body: JSON.stringify(ev),
+    // 后端存完评价会同步回填该生平时成绩（syncGradesAfterEvalWrite），
+    // 且 store 里是 fire-and-forget，超时被静默吞掉 -> 表现为成绩明细不更新。
+    timeoutMs: BULK_TIMEOUT_MS,
   })
 }
 
@@ -363,7 +375,8 @@ export async function batchSaveEvaluations(evaluations: any) {
 }
 
 export async function deleteEvaluation(id: string) {
-  return request(`/eval/${id}`, { method: 'DELETE' })
+  // 与 saveEvaluation 同理：后端删完会同步回填成绩，且调用方是 fire-and-forget
+  return request(`/eval/${id}`, { method: 'DELETE', timeoutMs: BULK_TIMEOUT_MS })
 }
 
 export async function submitTeacherEval(data: any) {
@@ -437,7 +450,8 @@ export async function fetchDepartmentCourses(department: string) {
 }
 
 export async function fetchDepartmentStudents(department: string) {
-  return request(`/students/department/${encodeURIComponent(department)}`)
+  // 后端不分页、无 LIMIT，按学院返回全部学生（带 2 个 LEFT JOIN）
+  return request(`/students/department/${encodeURIComponent(department)}`, { timeoutMs: BULK_TIMEOUT_MS })
 }
 
 export async function fetchCourseStudents(courseId: string) {

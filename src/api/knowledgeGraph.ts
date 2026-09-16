@@ -106,10 +106,15 @@ export async function javaSetProjectCloseAt(id: string, closeAt: string) {
   })
 }
 
-/** GET /projects/{projectId}/files?fileType= 项目文件列表 */
+/**
+ * GET /projects/{id}/files 项目文件列表
+ *
+ * 每个文件的 data_url 都是 base64 全量存在这道响应里，几十 MB 属正常。
+ * 瓶颈在传输而非后端计算，所以读接口同样要放宽 —— 这里用上传口径的超时。
+ */
 export async function javaListProjectFiles(projectId: string, fileType?: string) {
   const q = fileType ? `?fileType=${encodeURIComponent(fileType)}` : ''
-  return javaRequest(`/projects/${encodeURIComponent(projectId)}/files${q}`)
+  return javaRequest(`/projects/${encodeURIComponent(projectId)}/files${q}`, { timeoutMs: UPLOAD_TIMEOUT_MS })
 }
 
 /** POST /projects/files 新增项目文件（携带 base64，大文件需放宽超时） */
@@ -122,9 +127,9 @@ export async function javaDeleteProjectFile(id: string) {
   return javaRequest(`/projects/files/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
-/** GET /course-standards?courseId= 课程标准文件列表（教师上传，学生端同步） */
+/** GET /course-standards?courseId= 课程标准文件列表（响应含 base64 文件体，走上传超时） */
 export async function javaListCourseStandards(courseId: string) {
-  return javaRequest(`/course-standards?courseId=${encodeURIComponent(courseId)}`)
+  return javaRequest(`/course-standards?courseId=${encodeURIComponent(courseId)}`, { timeoutMs: UPLOAD_TIMEOUT_MS })
 }
 
 /** POST /course-standards 上传课程标准文件（dataUrl 为文件 base64） */
@@ -137,9 +142,9 @@ export async function javaDeleteCourseStandard(id: string) {
   return javaRequest(`/course-standards/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
-/** GET /projects/{projectId}/progress 项目全部学生进度 */
+/** GET /projects/{projectId}/progress 项目全部学生进度（attachments 含 base64，走上传超时） */
 export async function javaListProjectProgress(projectId: string) {
-  return javaRequest(`/projects/${encodeURIComponent(projectId)}/progress`)
+  return javaRequest(`/projects/${encodeURIComponent(projectId)}/progress`, { timeoutMs: UPLOAD_TIMEOUT_MS })
 }
 
 /** POST /projects/{projectId}/progress 学生提交/更新进度（attachments 含 base64，走上传超时） */
