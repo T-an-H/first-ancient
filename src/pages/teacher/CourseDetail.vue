@@ -453,7 +453,7 @@
             <span class="text-xs text-gray-400">{{ enrolledStudents.length }}名学生</span>
           </div>
           <div v-if="!isViewOnly" class="flex items-center gap-2">
-            <button @click="handleSaveGradeConfig" :disabled="isReadOnly || isWeightLocked || mainTotal !== 100 || regularTotal !== 100 || midtermSubTotal !== 100 || finalSubTotal !== 100"
+            <button @click="handleSaveGradeConfig" :disabled="isReadOnly || isWeightLocked || !hasUnsavedWeightChanges || mainTotal !== 100 || regularTotal !== 100 || midtermSubTotal !== 100 || finalSubTotal !== 100"
               class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 disabled:bg-gray-50 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed transition-colors">
               <Save class="w-3.5 h-3.5" />
               保存配置
@@ -465,6 +465,30 @@
         <div v-if="isWeightLocked" class="mb-4 flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-500">
           <Lock class="w-3.5 h-3.5 text-gray-400" />
           <span>期末考试成绩已录入，权重已锁定，不可再修改。</span>
+        </div>
+
+        <!-- 合计不为 100 时，说明「保存配置」为何置灰 -->
+        <div
+          v-else-if="mainTotal !== 100 || regularTotal !== 100 || midtermSubTotal !== 100 || finalSubTotal !== 100"
+          class="mb-4 flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600"
+        >
+          <AlertCircle class="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+          <span>
+            各分组合计须等于 100% 才能保存 ——
+            总成绩 {{ mainTotal }}%<template v-if="mainTotal !== 100">（差 {{ 100 - mainTotal }}%）</template>、
+            平时成绩构成 {{ regularTotal }}%<template v-if="regularTotal !== 100">（差 {{ 100 - regularTotal }}%）</template>、
+            期中成绩构成 {{ midtermSubTotal }}%<template v-if="midtermSubTotal !== 100">（差 {{ 100 - midtermSubTotal }}%）</template>、
+            期末成绩构成 {{ finalSubTotal }}%<template v-if="finalSubTotal !== 100">（差 {{ 100 - finalSubTotal }}%）</template>
+          </span>
+        </div>
+
+        <!-- 没有改动时，说明按钮为何置灰 -->
+        <div
+          v-else-if="!hasUnsavedWeightChanges"
+          class="mb-4 flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-500"
+        >
+          <AlertCircle class="w-3.5 h-3.5 flex-shrink-0" />
+          <span>当前权重与已保存的一致，没有需要保存的改动。</span>
         </div>
 
         <!-- 完整权重配置区域 -->
@@ -2211,7 +2235,7 @@ import {
   EvalFrequencyDescs, getDefaultGradeConfig
 } from '@/types'
 import type { EvalTemplate, EvalType, Evaluation, EvalFrequency, Schedule, GradeWeightConfig, EvaluationConfig } from '@/types'
-import { AlertTriangle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, UserX, LogOut, Network, PieChart, Sparkles, MessageSquare, Award, Info } from 'lucide-vue-next'
+import { AlertTriangle, AlertCircle, ChevronRight, Plus, Search, X, Pencil, Trash2, Calendar, Clock, ClipboardCheck, TrendingUp, Users, Upload, RefreshCw, Settings, ArrowLeft, Eye, Lock, EyeOff, CheckCircle, Save, FileSpreadsheet, BookOpen, BarChart3, UserCheck, FileText, UserPlus, UserMinus, UserX, LogOut, Network, PieChart, Sparkles, MessageSquare, Award, Info } from 'lucide-vue-next'
 import RadarChart from '@/components/RadarChart.vue'
 import { computeRadarData } from '@/lib/evalRadar'
 import { getNow } from '@/lib/date'
@@ -2913,6 +2937,35 @@ const mainTotal = computed(() => gradeConfig.value.regularWeight + gradeConfig.v
 const regularTotal = computed(() => gradeConfig.value.selfEvalWeight + gradeConfig.value.peerReviewWeight + gradeConfig.value.interGroupEvalWeight + gradeConfig.value.teacherScoreWeight + gradeConfig.value.mentorScoreWeight)
 const midtermSubTotal = computed(() => gradeConfig.value.midtermExamWeight + gradeConfig.value.midtermProjectWeight)
 const finalSubTotal = computed(() => gradeConfig.value.finalExamWeight + gradeConfig.value.finalProjectWeight)
+
+/** 已保存的成绩权重（从未保存过则为 undefined） */
+const savedGradeConfig = computed(() =>
+  courseId.value ? store.gradeConfigs[courseId.value] : undefined
+)
+
+/** 参与「是否有改动」比对的权重字段 */
+const GRADE_WEIGHT_FIELDS = [
+  'regularWeight', 'midtermWeight', 'finalWeight',
+  'qualityEvalWeight', 'qualityEvalMaxBonus',
+  'selfEvalWeight', 'peerReviewWeight', 'interGroupEvalWeight', 'teacherScoreWeight', 'mentorScoreWeight',
+  'midtermExamWeight', 'midtermProjectWeight', 'finalExamWeight', 'finalProjectWeight',
+] as const
+
+/**
+ * 是否存在未保存的权重改动（没有改动则「保存配置」置灰）
+ *
+ * 从未保存过时返回 true：默认值四组合计本就等于 100，
+ * 若此时也置灰，老师将无法点保存来完成「成绩权重配置」，
+ * 对应的待配置提醒也就永远清不掉。
+ */
+const hasUnsavedWeightChanges = computed(() => {
+  const saved = savedGradeConfig.value
+  if (!saved) return true
+  const current = gradeConfig.value
+  return GRADE_WEIGHT_FIELDS.some(
+    (field) => Number(current[field] ?? 0) !== Number((saved as any)[field] ?? 0),
+  )
+})
 function handleSaveGradeConfig() {
   if (!courseId.value) return
   normalizeGradeConfigForTemplate()

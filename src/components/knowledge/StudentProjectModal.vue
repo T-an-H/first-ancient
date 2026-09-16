@@ -18,6 +18,12 @@
         </button>
       </div>
 
+      <!-- 任务已关闭提示（教师锁定 / 已过关闭时间） -->
+      <div v-if="isClosed" class="mx-6 mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+        <Lock class="w-3.5 h-3.5 flex-shrink-0" />
+        <span>{{ closedReason }}，你仍可查看已提交的内容。</span>
+      </div>
+
       <!-- 项目说明 -->
       <div v-if="props.project.content || props.project.keyPoints" class="px-6 pt-4">
         <div class="bg-indigo-50/50 rounded-xl p-3.5 text-xs text-indigo-800 space-y-1.5">
@@ -97,7 +103,7 @@
                 class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg border border-dashed border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors">
                 <Upload class="w-3.5 h-3.5" /> 选择文件{{ myWorkorderDraft.length ? `（${myWorkorderDraft.length} 个）` : '' }}
               </button>
-              <button @click="submitWorkorder" :disabled="myWorkorderDraft.length === 0"
+              <button @click="submitWorkorder" :disabled="myWorkorderDraft.length === 0 || isClosed"
                 class="px-3.5 py-2 text-xs font-medium rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed">
                 提交测试
               </button>
@@ -168,7 +174,7 @@
                 class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg border border-dashed border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors">
                 <Upload class="w-3.5 h-3.5" /> 选择作答文件{{ myTestDraft.length ? `（${myTestDraft.length} 个）` : '' }}
               </button>
-              <button @click="submitTest" :disabled="myTestDraft.length === 0 && !testAnswer.trim()"
+              <button @click="submitTest" :disabled="(myTestDraft.length === 0 && !testAnswer.trim()) || isClosed"
                 class="px-3.5 py-2 text-xs font-medium rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed">
                 提交测试
               </button>
@@ -274,7 +280,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { X, FileText, Upload, CheckCircle, BookOpen, Wrench, ClipboardCheck, FileQuestion, Star, GitBranch } from 'lucide-vue-next'
+import { X, FileText, Upload, CheckCircle, BookOpen, Wrench, ClipboardCheck, FileQuestion, Star, GitBranch, Lock } from 'lucide-vue-next'
 import StudentEvaluation from '@/components/StudentEvaluation.vue'
 import RadarChart from '@/components/RadarChart.vue'
 import { javaListProjectFiles, javaUpsertProjectProgress, javaListProjectProgress, javaGetQuestionnaire, javaListEvalResponses, javaSubmitEvalResponse } from '@/api/knowledgeGraph'
@@ -394,7 +400,29 @@ function onSubmitFile(type: string, e: Event) {
   input.value = ''
 }
 
+// ===== 任务关闭状态 =====
+/**
+ * 任务是否已关闭（不可再提交）
+ *
+ * 两种来源：
+ *   1. 教师点了「锁定」——任务定稿，学生不能再提交
+ *   2. 教师设置的关闭时间已到
+ * 二者任一成立即禁止提交，入口置灰并给出原因。
+ */
+const isLocked = computed(() => Boolean(props.project?.locked))
+const isPastCloseTime = computed(() => {
+  const raw = props.project?.closeAt
+  if (!raw) return false
+  const t = new Date(raw).getTime()
+  return Number.isFinite(t) && Date.now() >= t
+})
+const isClosed = computed(() => isLocked.value || isPastCloseTime.value)
+const closedReason = computed(() =>
+  isLocked.value ? '该任务已被教师锁定，不能再提交' : '该任务已过关闭时间，不能再提交',
+)
+
 async function submitWorkorder() {
+  if (isClosed.value) { alert(closedReason.value); return }
   if (workorderDraft.value.length === 0) return
   try {
     await javaUpsertProjectProgress(props.project.id, {
@@ -410,6 +438,7 @@ async function submitWorkorder() {
 }
 
 async function submitTest() {
+  if (isClosed.value) { alert(closedReason.value); return }
   if (testDraft.value.length === 0 && !testAnswer.value.trim()) return
   try {
     await javaUpsertProjectProgress(props.project.id, {

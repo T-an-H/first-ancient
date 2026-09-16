@@ -72,6 +72,22 @@ export async function javaDeleteProject(id: string) {
   return javaRequest(`/projects/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
+/** PATCH /projects/{id}/lock 锁定/解锁任务（锁定后不可再修改） */
+export async function javaSetProjectLocked(id: string, locked: boolean) {
+  return javaRequest(`/projects/${encodeURIComponent(id)}/lock`, {
+    method: 'PATCH',
+    body: JSON.stringify({ locked }),
+  })
+}
+
+/** PATCH /projects/{id}/close-at 设置任务关闭时间（空字符串=清除，不自动关闭） */
+export async function javaSetProjectCloseAt(id: string, closeAt: string) {
+  return javaRequest(`/projects/${encodeURIComponent(id)}/close-at`, {
+    method: 'PATCH',
+    body: JSON.stringify({ closeAt }),
+  })
+}
+
 /** GET /projects/{projectId}/files?fileType= 项目文件列表 */
 export async function javaListProjectFiles(projectId: string, fileType?: string) {
   const q = fileType ? `?fileType=${encodeURIComponent(fileType)}` : ''

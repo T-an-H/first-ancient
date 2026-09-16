@@ -25,6 +25,8 @@ function mapProject(row) {
     orderNo: Number(row.order_no),
     weekNo: row.week_no || '',
     visibleTiers: parseJson(row.visible_tiers, ['basic', 'advanced', 'excellent']),
+    locked: Boolean(Number(row.locked || 0)),
+    closeAt: row.close_at ? new Date(row.close_at).toISOString() : '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -141,12 +143,54 @@ router.post('/projects/bulk', async (req, res) => {
 router.put('/projects/:id', async (req, res) => {
   try {
     const p = req.body || {};
+    // 锁定后禁止任何修改（服务端兜底，不只依赖前端隐藏入口）
+    const [current] = await pool.execute('SELECT locked FROM course_projects WHERE id = ?', [req.params.id]);
+    if (current[0] && Number(current[0].locked || 0) === 1) {
+      return res.status(409).json({ code: 409, msg: '该任务已锁定，不能再修改。如需修改请先解锁。' });
+    }
     await pool.execute(
       `UPDATE course_projects SET course_id=?, name=?, hours=?, content=?, key_points=?, knowledge_points=?, order_no=COALESCE(?, order_no), week_no=?, visible_tiers=? WHERE id=?`,
       [p.courseId || '', p.name || '', p.hours || 2, p.content || '', p.keyPoints || p.key_points || '', p.knowledgePoints || p.knowledge_points || '', p.orderNo ?? null, p.weekNo || p.week_no || '', JSON.stringify(p.visibleTiers || ['basic', 'advanced', 'excellent']), req.params.id]
     );
     const [rows] = await pool.execute('SELECT * FROM course_projects WHERE id = ?', [req.params.id]);
     return ok(res, rows[0] ? mapProject(rows[0]) : null);
+  } catch (error) { return fail(res, error); }
+});
+
+/**
+ * PATCH /projects/:id/lock — 锁定/解锁任务
+ * body: { locked: boolean }
+ * 锁定后该任务不可再修改（含内容、可见层级、关闭时间等）。
+ */
+router.patch('/projects/:id/lock', async (req, res) => {
+  try {
+    const locked = req.body?.locked ? 1 : 0;
+    await pool.execute('UPDATE course_projects SET locked = ? WHERE id = ?', [locked, req.params.id]);
+    const [rows] = await pool.execute('SELECT * FROM course_projects WHERE id = ?', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ code: 404, msg: '任务不存在' });
+    return ok(res, mapProject(rows[0]));
+  } catch (error) { return fail(res, error); }
+});
+
+/**
+ * PATCH /projects/:id/close-at — 设置任务关闭时间
+ * body: { closeAt: string }（ISO 字符串，空字符串表示清除，即不自动关闭）
+ */
+router.patch('/projects/:id/close-at', async (req, res) => {
+  try {
+    const [current] = await pool.execute('SELECT locked FROM course_projects WHERE id = ?', [req.params.id]);
+    if (!current[0]) return res.status(404).json({ code: 404, msg: '任务不存在' });
+    if (Number(current[0].locked || 0) === 1) {
+      return res.status(409).json({ code: 409, msg: '该任务已锁定，不能再修改关闭时间。' });
+    }
+    const raw = String(req.body?.closeAt ?? '').trim();
+    const closeAt = raw ? new Date(raw) : null;
+    if (raw && Number.isNaN(closeAt.getTime())) {
+      return res.status(400).json({ code: 400, msg: '关闭时间格式不正确' });
+    }
+    await pool.execute('UPDATE course_projects SET close_at = ? WHERE id = ?', [closeAt, req.params.id]);
+    const [rows] = await pool.execute('SELECT * FROM course_projects WHERE id = ?', [req.params.id]);
+    return ok(res, mapProject(rows[0]));
   } catch (error) { return fail(res, error); }
 });
 

@@ -33,6 +33,28 @@ export default function ensureProjectSchema() {
       if (Number(projectColumns[0]?.total || 0) === 0) {
         await connection.query(`ALTER TABLE course_projects ADD COLUMN visible_tiers LONGTEXT NULL AFTER week_no`);
       }
+
+      // 任务锁定：教师点「锁定」后该任务不可再修改（补列，重复启动安全）
+      const [lockedCol] = await connection.query(
+        `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'course_projects' AND COLUMN_NAME = 'locked'`
+      );
+      if (Number(lockedCol[0]?.total || 0) === 0) {
+        await connection.query(
+          `ALTER TABLE course_projects ADD COLUMN locked TINYINT(1) NOT NULL DEFAULT 0 COMMENT '教师锁定后不可修改'`
+        );
+      }
+
+      // 任务关闭时间：由教师自行设置（补列，重复启动安全）
+      const [closeCol] = await connection.query(
+        `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'course_projects' AND COLUMN_NAME = 'close_at'`
+      );
+      if (Number(closeCol[0]?.total || 0) === 0) {
+        await connection.query(
+          `ALTER TABLE course_projects ADD COLUMN close_at DATETIME NULL COMMENT '教师设置的关闭时间，空=不自动关闭'`
+        );
+      }
       await connection.query(`
         CREATE TABLE IF NOT EXISTS course_project_files (
           id VARCHAR(64) NOT NULL,

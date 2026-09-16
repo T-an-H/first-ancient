@@ -16,9 +16,35 @@
             </p>
           </div>
         </div>
-        <button @click="$emit('close')" class="p-1 text-gray-400 hover:text-gray-600 flex-shrink-0">
-          <X class="w-5 h-5" />
-        </button>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <!-- 锁定状态徽标 -->
+          <span
+            v-if="isLocked"
+            class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200"
+            title="任务已锁定，内容、可见层级与关闭时间均不可修改"
+          >
+            <Lock class="w-3.5 h-3.5" /> 已锁定
+          </span>
+          <!-- 锁定 / 解锁按钮（有管理权限才显示；用 canManage 而非 canEdit，
+               否则锁定后按钮消失、无法再解锁） -->
+          <button
+            v-if="canManage"
+            type="button"
+            :disabled="lockBusy"
+            @click="toggleLock"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            :class="isLocked
+              ? 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+              : 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'"
+            :title="isLocked ? '解锁后可再次修改该任务' : '锁定后该任务不可再修改'"
+          >
+            <component :is="isLocked ? Unlock : Lock" class="w-3.5 h-3.5" />
+            {{ isLocked ? '解锁' : '锁定' }}
+          </button>
+          <button @click="$emit('close')" class="p-1 text-gray-400 hover:text-gray-600">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       <!-- 项目信息摘要 -->
@@ -34,6 +60,40 @@
         <div class="bg-indigo-50 rounded-lg p-3">
           <p class="text-[10px] text-indigo-500 mb-1">知识点</p>
           <p class="text-xs text-indigo-700">{{ project.knowledgePoints || '—' }}</p>
+        </div>
+      </div>
+
+      <!-- 任务关闭时间（由教师自行设置） -->
+      <div class="px-6 pt-3">
+        <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 flex flex-wrap items-center gap-3">
+          <span class="text-[11px] font-medium text-gray-600 flex-shrink-0">任务关闭时间</span>
+          <input
+            v-model="closeAtDraft"
+            type="datetime-local"
+            :disabled="!canEdit"
+            class="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-indigo-400 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+          />
+          <button
+            v-if="canEdit"
+            type="button"
+            :disabled="closeAtSaving"
+            @click="saveCloseAt"
+            class="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white transition-colors disabled:opacity-50"
+          >
+            {{ closeAtSaving ? '保存中…' : '保存关闭时间' }}
+          </button>
+          <button
+            v-if="canEdit && closeAtDraft"
+            type="button"
+            :disabled="closeAtSaving"
+            @click="closeAtDraft = ''; saveCloseAt()"
+            class="text-xs text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+          >
+            清除
+          </button>
+          <span class="text-[11px] text-gray-400">
+            {{ closeAtDraft ? '到该时间后任务自动关闭' : '留空表示不自动关闭' }}
+          </span>
         </div>
       </div>
 
@@ -54,7 +114,7 @@
               <h4 class="font-semibold text-gray-900">预习资料</h4>
               <p class="text-xs text-gray-400 mt-0.5">教师上传预习资料，学生查看后计入预习进度</p>
             </div>
-            <div v-if="canManage" class="flex items-center gap-2">
+            <div v-if="canEdit" class="flex items-center gap-2">
               <input ref="previewFileInput" type="file" class="hidden" multiple @change="onFileChange('preview', $event)" />
               <button @click="previewFileInput?.click()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
                 <Upload class="w-3.5 h-3.5" /> 上传预习资料
@@ -68,7 +128,7 @@
               <span v-if="f.dataUrl" @click="openFileDetail(f.dataUrl)" class="flex-1 min-w-0 truncate text-blue-600 hover:underline cursor-pointer">{{ f.name }}</span>
               <span v-else class="flex-1 min-w-0 truncate">{{ f.name }}</span>
               <span class="text-gray-400 flex-shrink-0">{{ formatFileSize(f.size) }}</span>
-              <button v-if="canManage" @click="deleteFile('preview', f)" class="text-gray-400 hover:text-red-500 flex-shrink-0"><X class="w-3.5 h-3.5" /></button>
+              <button v-if="canEdit" @click="deleteFile('preview', f)" class="text-gray-400 hover:text-red-500 flex-shrink-0"><X class="w-3.5 h-3.5" /></button>
             </li>
           </ul>
           <!-- 学生预习进度 -->
@@ -93,7 +153,7 @@
               <h4 class="font-semibold text-gray-900">本节课测试</h4>
               <p class="text-xs text-gray-400 mt-0.5">教师上传测试，学生下载完成后提交，教师批改打分</p>
             </div>
-            <div v-if="canManage" class="flex items-center gap-2">
+            <div v-if="canEdit" class="flex items-center gap-2">
               <input ref="workorderFileInput" type="file" class="hidden" multiple @change="onFileChange('workorder', $event)" />
               <button @click="workorderFileInput?.click()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
                 <Upload class="w-3.5 h-3.5" /> 上传测试
@@ -107,7 +167,7 @@
               <span v-if="f.dataUrl" @click="openFileDetail(f.dataUrl)" class="flex-1 min-w-0 truncate text-blue-600 hover:underline cursor-pointer">{{ f.name }}</span>
               <span v-else class="flex-1 min-w-0 truncate">{{ f.name }}</span>
               <span class="text-gray-400 flex-shrink-0">{{ formatFileSize(f.size) }}</span>
-              <button v-if="canManage" @click="deleteFile('workorder', f)" class="text-gray-400 hover:text-red-500 flex-shrink-0"><X class="w-3.5 h-3.5" /></button>
+              <button v-if="canEdit" @click="deleteFile('workorder', f)" class="text-gray-400 hover:text-red-500 flex-shrink-0"><X class="w-3.5 h-3.5" /></button>
             </li>
           </ul>
           <!-- 学生提交与批改 -->
@@ -122,7 +182,7 @@
                     <p class="text-sm font-medium text-gray-900 truncate">{{ s.name }}</p>
                     <p class="text-xs text-gray-400">{{ s.studentId }}<template v-if="s.className"> · {{ s.className }}</template></p>
                   </div>
-                  <template v-if="canManage">
+                  <template v-if="canEdit">
                     <input v-model.number="workorderScores[s.id]" type="number" min="0" max="100" placeholder="评分"
                       class="w-20 px-2 py-1.5 text-sm border border-gray-200 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
                     <button @click="saveWorkorderScore(s.id)" :disabled="workorderScores[s.id] === undefined || workorderScores[s.id] === null || workorderScores[s.id] === ''"
@@ -157,7 +217,7 @@
               <h4 class="font-semibold text-gray-900">本节课资料</h4>
               <p class="text-xs text-gray-400 mt-0.5">教师上传本节课课件/文档，学生查看后计入查看情况</p>
             </div>
-            <div v-if="canManage" class="flex items-center gap-2">
+            <div v-if="canEdit" class="flex items-center gap-2">
               <input ref="materialFileInput" type="file" class="hidden" multiple @change="onFileChange('material', $event)" />
               <button @click="materialFileInput?.click()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
                 <Upload class="w-3.5 h-3.5" /> 上传资料
@@ -171,7 +231,7 @@
               <span v-if="f.dataUrl" @click="openFileDetail(f.dataUrl)" class="flex-1 min-w-0 truncate text-blue-600 hover:underline cursor-pointer">{{ f.name }}</span>
               <span v-else class="flex-1 min-w-0 truncate">{{ f.name }}</span>
               <span class="text-gray-400 flex-shrink-0">{{ formatFileSize(f.size) }}</span>
-              <button v-if="canManage" @click="deleteFile('material', f)" class="text-gray-400 hover:text-red-500 flex-shrink-0"><X class="w-3.5 h-3.5" /></button>
+              <button v-if="canEdit" @click="deleteFile('material', f)" class="text-gray-400 hover:text-red-500 flex-shrink-0"><X class="w-3.5 h-3.5" /></button>
             </li>
           </ul>
           <div class="border-t border-gray-100 pt-4">
@@ -195,7 +255,7 @@
               <h4 class="font-semibold text-gray-900">工单</h4>
               <p class="text-xs text-gray-400 mt-0.5">教师上传工单，学生完成后批改评分（评价体系与任务管理一致）</p>
             </div>
-            <div v-if="canManage" class="flex items-center gap-2">
+            <div v-if="canEdit" class="flex items-center gap-2">
               <input ref="testFileInput" type="file" class="hidden" multiple @change="onFileChange('test', $event)" />
               <button @click="testFileInput?.click()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
                 <Upload class="w-3.5 h-3.5" /> 上传工单
@@ -212,13 +272,13 @@
               <span v-if="f.dataUrl" @click="openFileDetail(f.dataUrl)" class="flex-1 min-w-0 truncate text-blue-600 hover:underline cursor-pointer">{{ f.name }}</span>
               <span v-else class="flex-1 min-w-0 truncate">{{ f.name }}</span>
               <span class="text-gray-400 flex-shrink-0">{{ formatFileSize(f.size) }}</span>
-              <button v-if="canManage" @click="deleteFile('test', f)" class="text-gray-400 hover:text-red-500 flex-shrink-0"><X class="w-3.5 h-3.5" /></button>
+              <button v-if="canEdit" @click="deleteFile('test', f)" class="text-gray-400 hover:text-red-500 flex-shrink-0"><X class="w-3.5 h-3.5" /></button>
             </li>
           </ul>
           <!-- 学生完成情况与评价（复用任务评价模型） -->
           <div class="border-t border-gray-100 pt-4">
             <h5 class="text-xs font-semibold text-gray-500 mb-2">学生完成与评价（{{ testSubmittedCount }}/{{ students.length }}）</h5>
-            <div v-if="canManage" class="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 p-2.5">
+            <div v-if="canEdit" class="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 p-2.5">
               <span class="text-xs font-medium text-gray-500">批量{{ activeEvalType === 'mentor' ? '企业导师' : '教师' }}评价：</span>
               <button v-for="level in TASK_BATCH_LEVELS" :key="level.label" @click="handleTaskBatchEval(level.range)" class="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs text-indigo-700 hover:bg-indigo-100">
                 {{ level.label }}（{{ level.range[0] }}-{{ level.range[1] }}）
@@ -236,7 +296,7 @@
                     <p class="text-sm font-medium text-gray-900 truncate">{{ s.name }}</p>
                     <p class="text-xs text-gray-400">{{ s.studentId }}<template v-if="s.className"> · {{ s.className }}</template></p>
                   </div>
-                  <template v-if="canManage">
+                  <template v-if="canEdit">
                     <button
                       @click="openTestEval(s)"
                       class="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-100"
@@ -421,8 +481,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import * as echarts from 'echarts'
-import { X, FileText, Upload, CheckCircle, Clock, Plus, Pencil, GitBranch, BookOpen, ClipboardCheck, ListChecks, FileQuestion, Star, Wrench, Download } from 'lucide-vue-next'
-import { javaListProjectFiles, javaAddProjectFile, javaDeleteProjectFile, javaListProjectProgress, javaUpsertProjectProgress, javaGradeProjectProgress, javaGetQuestionnaire, javaSaveQuestionnaire, javaListEvalResponses, javaSubmitEvalResponse } from '@/api/knowledgeGraph'
+import { X, FileText, Upload, CheckCircle, Clock, Plus, Pencil, GitBranch, BookOpen, ClipboardCheck, ListChecks, FileQuestion, Star, Wrench, Download, Lock, Unlock } from 'lucide-vue-next'
+import { javaListProjectFiles, javaAddProjectFile, javaDeleteProjectFile, javaListProjectProgress, javaUpsertProjectProgress, javaGradeProjectProgress, javaGetQuestionnaire, javaSaveQuestionnaire, javaListEvalResponses, javaSubmitEvalResponse, javaSetProjectLocked, javaSetProjectCloseAt } from '@/api/knowledgeGraph'
 import { useAppStore } from '@/stores/app'
 import { getNow } from '@/lib/date'
 import type { EvalType, Evaluation } from '@/types'
@@ -446,6 +506,65 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 const store = useAppStore()
+
+// ===== 任务锁定 =====
+/** 锁定态以父组件传入的 project 为准；本地先乐观更新，失败回滚 */
+const localLocked = ref<boolean | null>(null)
+const isLocked = computed(() =>
+  localLocked.value !== null ? localLocked.value : Boolean(props.project?.locked),
+)
+const lockBusy = ref(false)
+/** 锁定后禁止一切修改操作（新增/上传/评分/删除/设置关闭时间） */
+const canEdit = computed(() => Boolean(props.canManage) && !isLocked.value)
+
+async function toggleLock() {
+  const next = !isLocked.value
+  if (next && !confirm('锁定后该任务将不可再修改（内容、可见层级、关闭时间等）。确定锁定吗？')) return
+  lockBusy.value = true
+  try {
+    await javaSetProjectLocked(props.project.id, next)
+    localLocked.value = next
+    // 同步回父组件列表，避免重开弹窗又变回旧状态
+    if (props.project) props.project.locked = next
+  } catch (err: any) {
+    alert('操作失败：' + (err.message || err))
+  } finally {
+    lockBusy.value = false
+  }
+}
+
+// ===== 任务关闭时间（由教师自行设置） =====
+const closeAtDraft = ref('')
+const closeAtSaving = ref(false)
+
+/** ISO → datetime-local 输入框需要的格式（YYYY-MM-DDTHH:mm） */
+function toLocalInput(iso: string) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+watch(
+  () => props.project?.closeAt,
+  (v) => { closeAtDraft.value = toLocalInput(String(v || '')) },
+  { immediate: true },
+)
+
+async function saveCloseAt() {
+  closeAtSaving.value = true
+  try {
+    const iso = closeAtDraft.value ? new Date(closeAtDraft.value).toISOString() : ''
+    const updated: any = await javaSetProjectCloseAt(props.project.id, iso)
+    if (props.project) props.project.closeAt = updated?.closeAt || iso
+    alert(iso ? '关闭时间已保存' : '已清除关闭时间（该任务不会自动关闭）')
+  } catch (err: any) {
+    alert('保存失败：' + (err.message || err))
+  } finally {
+    closeAtSaving.value = false
+  }
+}
 
 const activeEvalType = computed<EvalType>(() => (props.evalType === 'mentor' ? 'mentor' : 'teacher'))
 const projectEvalSession = computed(() => Number(props.project?.orderNo ?? 0) + 1)
