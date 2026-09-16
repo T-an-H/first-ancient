@@ -72,7 +72,8 @@ const pendingEvalReminders = computed(() => {
     )
   }
   if (store.currentRole === 'student') {
-    const student = store.students.find((s) => s.name === store.currentUser)
+    // 用 store 的统一解析（学号优先）而非按姓名匹配，避免同名学生取错人
+    const student = store.getCurrentStudent()
     if (!student) return []
     return store.evalReminders.filter(
       (r) => r.studentId === student.id && r.status !== 'completed'
@@ -84,7 +85,7 @@ const pendingEvalReminders = computed(() => {
 /** 当前学生待完成的 AI 分层测试 */
 const pendingAITierTests = computed(() => {
   if (store.currentRole !== 'student' || !store.currentUser) return []
-  const student = store.students.find((s) => s.name === store.currentUser)
+  const student = store.getCurrentStudent()
   if (!student) return []
   return store.getPendingAITierTests(student.id)
 })
@@ -124,8 +125,8 @@ interface TodoTrace {
 function getTodoTrace(t: { id: string; title: string }): TodoTrace | null {
   const roleBase = store.currentRole === 'mentor' ? '/mentor' : '/teacher'
   // 当前登录学生 id（用于从自动待办 id 中剥离后缀，课程 id 与学生 id 均可能含连字符）
-  const currentStudentId = store.currentRole === 'student' && store.currentUser
-    ? (store.students.find((s) => s.name === store.currentUser)?.id ?? null)
+  const currentStudentId = store.currentRole === 'student'
+    ? (store.getCurrentStudent()?.id ?? null)
     : null
   // [评价] auto-eval-{courseId}-{session}
   if (t.id.startsWith('auto-eval-')) {
