@@ -8,3 +8,10 @@ dist/
 .DS_Store
 *.log
 deploy.tar.gz
+
+# 构建快照 / 临时产物（历史包袱，勿再入库）
+.codex-build/
+.codex-logs/
+.codex-pull-backup/
+dist-voice-check/
+dist-homework-voice-check/
