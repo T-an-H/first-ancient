@@ -518,7 +518,7 @@ router.get('/export-students', async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT s.student_id AS 学号, s.name AS 姓名, s.phone AS 手机号,
-              s.department AS 学院, s.class_name AS 班级, s.status AS 状态,
+              s.department AS 学院, s.status AS 状态,
               u.id_card_enc, u.need_change_password AS 需改密
        FROM students s
        LEFT JOIN users u ON u.ref_id = s.id AND u.ref_type = 'student'
