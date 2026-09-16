@@ -121,8 +121,8 @@ router.put('/:id', async (req, res) => {
     await connection.query(
       `UPDATE students
        SET department = ?
-       WHERE class_id IN (SELECT id FROM classes WHERE department_id = ?)`,
-      [name, req.params.id]
+       WHERE class_id IN (?)`,
+      [name, inClause(await getDepartmentClassIds(connection, req.params.id))]
     );
 
     const updated = await getDepartmentById(connection, req.params.id);
@@ -147,20 +147,69 @@ router.put('/:id', async (req, res) => {
 });
 
 /**
+ * 把列表塞进 IN (?)：mysql2 会把数组展开成占位符，空数组展开成 (NULL)（恒不匹配）。
+ *
+ * 为什么不用 `course_id IN (SELECT id FROM courses WHERE ...)` 这种跨表列比较：
+ * 老库的字符集五花八门（utf8mb4_unicode_ci 与 utf8mb4_0900_ai_ci 混用），
+ * 两个不同排序规则的字符列直接比较会抛
+ * ER_CANT_AGGREGATE_2COLLATIONS，导致「删学院」这类操作 100% 失败。
+ * 先把 id 取出来再作为**参数**传回，比较发生在参数与单表列之间，不触发该错误。
+ */
+function inClause(values) {
+  return values.length > 0 ? values : [null];
+}
+
+/**
+ * 取本学院下的课程 id 列表（一次查询，后续所有子表清理都复用它）
+ */
+async function getDepartmentCourseIds(connection, departmentId) {
+  const [rows] = await connection.query(
+    'SELECT id FROM courses WHERE department_id = ?',
+    [departmentId]
+  );
+  return rows.map((row) => String(row.id)).filter(Boolean);
+}
+
+/**
+ * 取本学院下的班级 id 列表（students.class_id 的取值域）
+ */
+async function getDepartmentClassIds(connection, departmentId) {
+  const [rows] = await connection.query(
+    'SELECT id FROM classes WHERE department_id = ?',
+    [departmentId]
+  );
+  return rows.map((row) => String(row.id)).filter(Boolean);
+}
+
+/**
+ * 取本学院下**某个课程子表**里出现的 id 列表，供二层表（按 project_id /
+ * task_id / questionnaire_id 关联的表）清理用。
+ *
+ * 表名/列名由调用方以字面量传入（非用户输入），故可安全拼接进 SQL。
+ */
+async function getIdsWithinCourseScope(connection, table, idColumn, courseIds) {
+  const [rows] = await connection.query(
+    `SELECT \`${idColumn}\` AS id FROM \`${table}\` WHERE course_id IN (?)`,
+    [inClause(courseIds)]
+  );
+  return rows.map((row) => String(row.id)).filter(Boolean);
+}
+
+/**
  * 删除学院前的影响面（供界面展示具体数量）
  *
  * 汇总「本学院 → 课程 → 各相关表」的条数，让教师在确认前看到究竟会删掉什么。
  */
-async function getDepartmentUsage(connection, departmentId) {
+async function getDepartmentUsage(connection, departmentId, courseIds = null) {
   const counts = await countDepartmentRelations(connection, departmentId);
-  const courseScope = 'course_id IN (SELECT id FROM courses WHERE department_id = ?)';
+  const ids = inClause(courseIds ?? (await getDepartmentCourseIds(connection, departmentId)));
   return {
     ...counts,
-    scheduleCount: await safeCount(connection, `SELECT COUNT(*) AS total FROM schedules WHERE ${courseScope}`, [departmentId]),
-    enrollmentCount: await safeCount(connection, `SELECT COUNT(*) AS total FROM enrollments WHERE ${courseScope}`, [departmentId]),
-    evaluationCount: await safeCount(connection, `SELECT COUNT(*) AS total FROM evaluations WHERE ${courseScope}`, [departmentId]),
-    detailedGradeCount: await safeCount(connection, `SELECT COUNT(*) AS total FROM detailed_grade WHERE ${courseScope}`, [departmentId]),
-    examScoreCount: await safeCount(connection, `SELECT COUNT(*) AS total FROM exam_scores WHERE ${courseScope}`, [departmentId]),
+    scheduleCount: await safeCount(connection, 'SELECT COUNT(*) AS total FROM schedules WHERE course_id IN (?)', [ids]),
+    enrollmentCount: await safeCount(connection, 'SELECT COUNT(*) AS total FROM enrollments WHERE course_id IN (?)', [ids]),
+    evaluationCount: await safeCount(connection, 'SELECT COUNT(*) AS total FROM evaluations WHERE course_id IN (?)', [ids]),
+    detailedGradeCount: await safeCount(connection, 'SELECT COUNT(*) AS total FROM detailed_grade WHERE course_id IN (?)', [ids]),
+    examScoreCount: await safeCount(connection, 'SELECT COUNT(*) AS total FROM exam_scores WHERE course_id IN (?)', [ids]),
   };
 }
 
@@ -195,22 +244,26 @@ async function safeCount(connection, sql, params) {
  *
  * ⚠️ 会连带删除：本学院下的课程及其排课/选课/评价/成绩/作业/任务/项目/
  * AI 分层结果，以及挂在本学院班级下的学生、班级、专业分类、教师。
+ *
+ * ⚠️ 为什么先把 id 查出来再传参，而不是写 `... WHERE course_id IN
+ * (SELECT id FROM courses WHERE department_id = ?)`：见 inClause 注释 ——
+ * 老库排序规则混用，跨表列比较会直接抛 ER_CANT_AGGREGATE_2COLLATIONS。
  */
 async function cascadeDeleteDepartment(connection, departmentId) {
-  const [[{ courseCount }]] = await connection.query(
-    'SELECT COUNT(*) AS courseCount FROM courses WHERE department_id = ?',
-    [departmentId]
-  );
+  const courseIds = await getDepartmentCourseIds(connection, departmentId);
+  const courseCount = courseIds.length;
+  const courseScope = inClause(courseIds);
+  const classNameScope = inClause(await getDepartmentClassIds(connection, departmentId));
 
   // 课程子表（依赖 project_id / task_id / questionnaire_id 的再包一层）
   const byCourse = [
     'course_eval_responses',   // 经 questionnaire_id 间接关联
     'course_eval_questionnaires',
-    'course_project_files',
-    'course_project_progress',
+    'course_project_files',    // 经 project_id 间接关联
+    'course_project_progress', // 经 project_id 间接关联
     'course_projects',
     'course_standards',
-    'course_task_submission',
+    'course_task_submission',  // 经 task_id 间接关联
     'course_task',
     'quality_eval_submissions',
     'quality_evaluations',
@@ -232,39 +285,42 @@ async function cascadeDeleteDepartment(connection, departmentId) {
 
   await connection.beginTransaction();
   try {
-    // 间接关联的表先删（其父 id 来自本学院的课程/项目/任务/问卷）
-    await safeDelete(connection,
-      `DELETE FROM course_eval_responses WHERE questionnaire_id IN (
-         SELECT id FROM course_eval_questionnaires
-         WHERE course_id IN (SELECT id FROM courses WHERE department_id = ?))`, [departmentId]);
-    await safeDelete(connection,
-      `DELETE FROM course_project_files WHERE project_id IN (
-         SELECT id FROM course_projects
-         WHERE course_id IN (SELECT id FROM courses WHERE department_id = ?))`, [departmentId]);
-    await safeDelete(connection,
-      `DELETE FROM course_project_progress WHERE project_id IN (
-         SELECT id FROM course_projects
-         WHERE course_id IN (SELECT id FROM courses WHERE department_id = ?))`, [departmentId]);
-    await safeDelete(connection,
-      `DELETE FROM course_task_submission WHERE task_id IN (
-         SELECT id FROM course_task
-         WHERE course_id IN (SELECT id FROM courses WHERE department_id = ?))`, [departmentId]);
+    // 依赖「本学院的课程」的二层表：先取父 id，再按参数删
+    await safeDelete(connection, 'DELETE FROM course_eval_responses WHERE questionnaire_id IN (?)', [
+      inClause(await getIdsWithinCourseScope(connection, 'course_eval_questionnaires', 'id', courseIds)),
+    ]);
+
+    const projectScope = inClause(
+      await getIdsWithinCourseScope(connection, 'course_projects', 'id', courseIds)
+    );
+    await safeDelete(connection, 'DELETE FROM course_project_files WHERE project_id IN (?)', [projectScope]);
+    await safeDelete(connection, 'DELETE FROM course_project_progress WHERE project_id IN (?)', [projectScope]);
+
+    await safeDelete(connection, 'DELETE FROM course_task_submission WHERE task_id IN (?)', [
+      inClause(await getIdsWithinCourseScope(connection, 'course_task', 'id', courseIds)),
+    ]);
 
     // 直接按 course_id 关联的表
+    const handledIndirectly = new Set([
+      'course_eval_responses',
+      'course_project_files',
+      'course_project_progress',
+      'course_task_submission',
+    ]);
     for (const table of byCourse) {
-      if (['course_eval_responses', 'course_project_files', 'course_project_progress', 'course_task_submission'].includes(table)) continue;
-      await safeDelete(connection,
-        `DELETE FROM \`${table}\` WHERE course_id IN (SELECT id FROM courses WHERE department_id = ?)`,
-        [departmentId]);
+      if (handledIndirectly.has(table)) continue;
+      await safeDelete(
+        connection,
+        `DELETE FROM \`${table}\` WHERE course_id IN (?)`,
+        [courseScope]
+      );
     }
 
     // 课程本体
     await safeDelete(connection, 'DELETE FROM courses WHERE department_id = ?', [departmentId]);
 
     // 本学院班级下的学生（与 countDepartmentRelations 的统计口径一致）
-    await safeDelete(connection,
-      `DELETE FROM students WHERE class_id IN (SELECT id FROM classes WHERE department_id = ?)`,
-      [departmentId]);
+    await safeDelete(connection, 'DELETE FROM students WHERE class_id IN (?)', [classNameScope]);
 
     // 班级、专业分类、教师、学院本体
     await safeDelete(connection, 'DELETE FROM classes WHERE department_id = ?', [departmentId]);
@@ -278,7 +334,7 @@ async function cascadeDeleteDepartment(connection, departmentId) {
     throw error;
   }
 
-  return { courseCount: Number(courseCount || 0) };
+  return { courseCount };
 }
 
 /**

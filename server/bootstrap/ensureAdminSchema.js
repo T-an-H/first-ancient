@@ -7,7 +7,22 @@ import {
   pickColor,
 } from '../lib/admin.js';
 
-const TEXT_COLLATION = 'utf8mb4_unicode_ci';
+/**
+ * 探测既有表的实际 collation（取 courses.id 为准），找不到则回退 unicode_ci。
+ *
+ * 本模块的建表语句此前写死 utf8mb4_unicode_ci，在 MySQL 8 默认
+ * utf8mb4_0900_ai_ci 的库上会新建出「与老表排序规则不同」的表，
+ * 之后任何跨表比较都会抛 ER_CANT_AGGREGATE_2COLLATIONS。
+ */
+async function detectCollation(connection) {
+  const [rows] = await connection.query(
+    `SELECT COLLATION_NAME AS collation
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'courses' AND COLUMN_NAME = 'id'
+     LIMIT 1`
+  );
+  return String(rows[0]?.collation || '') || 'utf8mb4_unicode_ci';
+}
 
 async function columnExists(connection, tableName, columnName) {
   const [rows] = await connection.query(
@@ -73,7 +88,7 @@ async function dropIndexIfExists(connection, tableName, indexName) {
   await connection.query(`ALTER TABLE ${tableName} DROP INDEX ${indexName}`);
 }
 
-async function ensureTables(connection) {
+async function ensureTables(connection, COLLATION) {
   await connection.query(
     `CREATE TABLE IF NOT EXISTS departments (
       id INT NOT NULL AUTO_INCREMENT,
@@ -82,7 +97,7 @@ async function ensureTables(connection) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       UNIQUE KEY uniq_departments_name (name)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION}`
   );
 
   await connection.query(
@@ -94,7 +109,7 @@ async function ensureTables(connection) {
       PRIMARY KEY (id),
       UNIQUE KEY uniq_classes_department_name (department_id, name),
       KEY idx_classes_department (department_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION}`
   );
 
   await connection.query(
@@ -108,7 +123,7 @@ async function ensureTables(connection) {
       PRIMARY KEY (id),
       UNIQUE KEY uniq_teachers_name (name),
       KEY idx_teachers_department (department_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION}`
   );
 
   await connection.query(
@@ -122,7 +137,7 @@ async function ensureTables(connection) {
       UNIQUE KEY uniq_quality_evaluations_course_student (course_id, student_id),
       KEY idx_quality_evaluations_course (course_id),
       KEY idx_quality_evaluations_student (student_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION}`
   );
 
   await connection.query(
@@ -134,7 +149,7 @@ async function ensureTables(connection) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       KEY idx_student_groups_course (course_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION}`
   );
 
   await connection.query(
@@ -153,7 +168,7 @@ async function ensureTables(connection) {
       KEY idx_quality_submissions_evaluation (evaluation_id),
       KEY idx_quality_submissions_course_student (course_id, student_id),
       KEY idx_quality_submissions_score (course_id, score)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION}`
   );
 
   await connection.query(
@@ -162,7 +177,7 @@ async function ensureTables(connection) {
       year INT NOT NULL,
       last_no INT NOT NULL DEFAULT 0,
       PRIMARY KEY (type, year)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学号/工号派号序列'`
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION} COMMENT='学号/工号派号序列'`
   );
 
   await connection.query(
@@ -176,7 +191,7 @@ async function ensureTables(connection) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       KEY idx_account_logs_target (target_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账号操作审计日志'`
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION} COMMENT='账号操作审计日志'`
   );
 }
 
@@ -578,7 +593,8 @@ export async function ensureAdminSchema() {
   schemaReadyPromise = (async () => {
     const connection = await pool.getConnection();
     try {
-      await ensureTables(connection);
+      const COLLATION = await detectCollation(connection);
+      await ensureTables(connection, COLLATION);
       await ensureColumnsAndIndexes(connection);
       await ensureEvaluationItemsColumn(connection);
 

@@ -21,14 +21,35 @@ function buildTeacherListQuery(whereClause = '') {
     teacher.email,
     teacher.department_id,
     dept.name AS department_name,
-    usr.account AS user_phone,
-    usr.department AS user_department,
     teacher.created_at
   FROM teachers AS teacher
   LEFT JOIN departments AS dept ON dept.id = teacher.department_id
-  LEFT JOIN users AS usr ON usr.ref_id = CONCAT(teacher.id) AND usr.ref_type = 'teacher'
   ${whereClause}
   ORDER BY dept.name, teacher.name`;
+}
+
+/**
+ * 补 teachers 缺失的 phone/department：从 users 表按 ref_id 关联取。
+ *
+ * 原来是在 SQL 里 `LEFT JOIN users ON usr.ref_id = CONCAT(teacher.id)` ——
+ * 数字列 CONCAT 成字符串后与 users.ref_id 比较，两表排序规则不一致时会抛
+ * ER_CANT_AGGREGATE_2COLLATIONS，把整个教师列表接口打挂。
+ * 改为单表查 users 后在 JS 里按 ref_id 建映射，比较只发生在 JS 字符串上。
+ */
+async function attachUserFallbacks(connection, rows) {
+  const [userRows] = await connection.query(
+    "SELECT ref_id, account, department FROM users WHERE ref_type = 'teacher' AND ref_id IS NOT NULL AND ref_id <> ''"
+  );
+  const byRefId = new Map(userRows.map((row) => [String(row.ref_id), row]));
+
+  return rows.map((row) => {
+    const linked = byRefId.get(String(row.id));
+    return {
+      ...row,
+      phone: row.phone || linked?.account || '',
+      department_name: row.department_name || linked?.department || '',
+    };
+  });
 }
 
 router.get('/', async (req, res) => {
@@ -62,11 +83,7 @@ router.get('/', async (req, res) => {
     const [rows] = await pool.query(buildTeacherListQuery(whereClause), params);
 
     // JS 层兜底：teachers 表没 phone/department 时从 users 表取
-    const fixedRows = rows.map((row) => ({
-      ...row,
-      phone: row.phone || row.user_phone || '',
-      department_name: row.department_name || row.user_department || '',
-    }));
+    const fixedRows = await attachUserFallbacks(pool, rows);
 
     const teachers = await attachTeacherStats(pool, fixedRows);
 

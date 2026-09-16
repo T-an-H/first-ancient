@@ -2,12 +2,31 @@ import pool from '../db.js';
 
 let schemaReadyPromise;
 
+/**
+ * 探测既有表的实际 collation（取 courses.id 为准），找不到则回退 unicode_ci。
+ *
+ * 本模块建的表全是「按 course_id/project_id 与既有表关联」的，若沿用写死的
+ * unicode_ci 而 courses 实际是别的排序规则，JOIN/IN 会抛
+ * ER_CANT_AGGREGATE_2COLLATIONS（新建表与老表混用是最常见的踩法）。
+ */
+async function detectCollation(connection) {
+  const [rows] = await connection.query(
+    `SELECT COLLATION_NAME AS collation
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'courses' AND COLUMN_NAME = 'id'
+     LIMIT 1`
+  );
+  return String(rows[0]?.collation || '') || 'utf8mb4_unicode_ci';
+}
+
 export default function ensureProjectSchema() {
   if (schemaReadyPromise) return schemaReadyPromise;
 
   schemaReadyPromise = (async () => {
     const connection = await pool.getConnection();
     try {
+      const COLLATION = await detectCollation(connection);
+
       await connection.query(`
         CREATE TABLE IF NOT EXISTS course_projects (
           id VARCHAR(64) NOT NULL,
@@ -24,7 +43,7 @@ export default function ensureProjectSchema() {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (id),
           KEY idx_course_projects_course (course_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION}
       `);
       const [projectColumns] = await connection.query(
         `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
@@ -66,7 +85,7 @@ export default function ensureProjectSchema() {
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (id),
           KEY idx_course_project_files_project (project_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION}
       `);
       await connection.query(`
         CREATE TABLE IF NOT EXISTS course_project_progress (
@@ -83,7 +102,7 @@ export default function ensureProjectSchema() {
           PRIMARY KEY (id),
           UNIQUE KEY uk_project_progress_student_type (project_id, student_id, progress_type),
           KEY idx_course_project_progress_project (project_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION}
       `);
       await connection.query(`
         CREATE TABLE IF NOT EXISTS course_standards (
@@ -96,7 +115,7 @@ export default function ensureProjectSchema() {
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (id),
           KEY idx_course_standards_course (course_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION}
       `);
       await connection.query(`
         CREATE TABLE IF NOT EXISTS course_eval_questionnaires (
@@ -108,7 +127,7 @@ export default function ensureProjectSchema() {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (id),
           UNIQUE KEY uk_course_eval_questionnaires_course (course_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION}
       `);
       await connection.query(`
         CREATE TABLE IF NOT EXISTS course_eval_responses (
@@ -119,7 +138,7 @@ export default function ensureProjectSchema() {
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (id),
           UNIQUE KEY uk_course_eval_responses_student (questionnaire_id, student_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${COLLATION}
       `);
       console.log('[project-schema] ready');
     } finally {

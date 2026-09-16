@@ -262,6 +262,14 @@ export async function listTeachers(connection) {
   return attachTeacherStats(connection, rows);
 }
 
+/**
+ * 取单个教师。
+ *
+ * ⚠️ 原先用 `LEFT JOIN users ON usr.ref_id = CONCAT(teacher.id)` 兜底
+ * phone/department —— 数字列 CONCAT 成字符串后与 users.ref_id 比较，
+ * 两表排序规则不一致时抛 ER_CANT_AGGREGATE_2COLLATIONS（建/改/删教师全挂）。
+ * 改为两次单表查询后在 JS 里按 ref_id 建映射，比较只发生在 JS 字符串上。
+ */
 export async function getTeacherById(connection, teacherId) {
   const normalizedId = normalizeText(teacherId);
   if (!normalizedId) return null;
@@ -274,12 +282,9 @@ export async function getTeacherById(connection, teacherId) {
        teacher.email,
        teacher.department_id,
        teacher.created_at,
-       dept.name AS department_name,
-       usr.account AS user_phone,
-       usr.department AS user_department
+       dept.name AS department_name
      FROM teachers AS teacher
      LEFT JOIN departments AS dept ON dept.id = teacher.department_id
-     LEFT JOIN users AS usr ON usr.ref_id = CONCAT(teacher.id) AND usr.ref_type = 'teacher'
      WHERE teacher.id = ?
      LIMIT 1`,
     [normalizedId]
@@ -287,8 +292,12 @@ export async function getTeacherById(connection, teacherId) {
 
   const [fixedRow] = rows;
   if (fixedRow) {
-    fixedRow.phone = fixedRow.phone || fixedRow.user_phone || '';
-    fixedRow.department_name = fixedRow.department_name || fixedRow.user_department || '';
+    const [userRows] = await connection.query(
+      "SELECT account, department FROM users WHERE ref_type = 'teacher' AND ref_id = ? LIMIT 1",
+      [String(fixedRow.id)]
+    );
+    fixedRow.phone = fixedRow.phone || userRows[0]?.account || '';
+    fixedRow.department_name = fixedRow.department_name || userRows[0]?.department || '';
   }
 
   const [teacher] = await attachTeacherStats(connection, rows);

@@ -396,13 +396,25 @@ router.post('/sync', async (req, res) => {
          schedule.class_name,
          course.department_id,
          course.department,
-         course.category_name AS course_category_name,
-         class_table.department_id AS class_department_id
+         course.category_name AS course_category_name
        FROM schedules AS schedule
        LEFT JOIN courses AS course ON course.id = schedule.course_id
-       LEFT JOIN classes AS class_table ON class_table.name = schedule.class_name
        WHERE schedule.title IS NOT NULL AND TRIM(schedule.title) <> ''`
     );
+
+    // 排课班级 → 学院：单独查 classes 再用 JS 关联。
+    // 原先是 `LEFT JOIN classes ON class_table.name = schedule.class_name` 的
+    // 跨表列比较，两表排序规则不一致时会抛 ER_CANT_AGGREGATE_2COLLATIONS。
+    const [classRows] = await connection.query(
+      'SELECT name, department_id FROM classes'
+    );
+    const classDepartmentByName = new Map(
+      classRows.map((row) => [normalizeText(row.name), row.department_id])
+    );
+    for (const row of scheduleRows) {
+      const departmentId = classDepartmentByName.get(normalizeText(row.class_name));
+      row.class_department_id = departmentId ?? null;
+    }
 
     const departments = await listDepartments(connection);
     const singleDepartment = departments.length === 1 ? departments[0] : null;

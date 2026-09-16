@@ -100,20 +100,33 @@ export default function ensureGradeSchema() {
  * 回填历史成绩明细：找出「有评价但 detailed_grade 一条都没有」的课程，逐门聚合。
  *
  * 逐门（而非全库全量）是为了启动开销可控，且只补真正缺的课。
+ *
+ * ⚠️ 这里刻意用「两次单表查询 + JS 求差」，而不是
+ * `course_id NOT IN (SELECT course_id FROM detailed_grade)`：
+ * 后者是跨表列比较，两表排序规则不一致时会抛 ER_CANT_AGGREGATE_2COLLATIONS，
+ * 而这句又在 try/catch 里 —— 结果就是**静默不回填**，成绩明细永远为空
+ * （能力雷达/职业推荐跟着一直没数据），且日志只有一行 warning，极难定位。
  */
 async function backfillDetailedGrades(connection) {
   try {
-    const [courses] = await connection.query(
+    const [evalCourses] = await connection.query(
       `SELECT DISTINCT course_id
        FROM evaluations
-       WHERE course_id IS NOT NULL AND TRIM(course_id) <> ''
-         AND course_id NOT IN (SELECT DISTINCT course_id FROM detailed_grade)`
+       WHERE course_id IS NOT NULL AND TRIM(course_id) <> ''`
     );
+    const [detailedCourses] = await connection.query(
+      'SELECT DISTINCT course_id FROM detailed_grade'
+    );
+    const alreadyDone = new Set(detailedCourses.map((row) => String(row.course_id)));
+
+    const courses = evalCourses
+      .map((row) => String(row.course_id))
+      .filter((courseId) => courseId && !alreadyDone.has(courseId));
     if (courses.length === 0) return;
 
     let written = 0;
-    for (const row of courses) {
-      written += await syncDetailedGradesFromEvaluations(connection, row.course_id);
+    for (const courseId of courses) {
+      written += await syncDetailedGradesFromEvaluations(connection, courseId);
     }
     console.log(`[grade-schema] 回填历史成绩明细：${courses.length} 门课，${written} 条`);
   } catch (e) {

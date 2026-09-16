@@ -25,6 +25,7 @@ import ensureAdminSchema from './bootstrap/ensureAdminSchema.js';
 import ensureProjectSchema from './bootstrap/ensureProjectSchema.js';
 import ensureGradeSchema from './bootstrap/ensureGradeSchema.js';
 import ensureTierSchema from './bootstrap/ensureTierSchema.js';
+import ensureCollation from './bootstrap/ensureCollation.js';
 import projectRoutes from './routes/projects.js';
 import gradeRoutes from './routes/grades.js';
 import accountRoutes from './routes/accounts.js';
@@ -113,6 +114,10 @@ app.use('/api/accounts', requireAdmin, accountRoutes);
 
 // ====== 启动服务器 ======
 async function start() {
+  // 先把全库字符集统合，再让各域补齐结构 —— 否则新建的表会沿用各自的
+  // 默认 collation，与既有表混用后跨表比较抛 ER_CANT_AGGREGATE_2COLLATIONS
+  // （症状：删学院恒失败、部分统计恒为 0）。
+  await ensureCollation();
   await ensureAdminSchema();
   await ensureProjectSchema();
   await ensureGradeSchema();

@@ -104,6 +104,11 @@ async function getStudentRowById(connection, studentId) {
 /**
  * 学生查询专用的宽松解析：入参可能是主键、学号、手机号或 users.user_no。
  * 仅用于「读」场景（如查课程）——不要用在写场景，避免解析到非预期学生。
+ *
+ * ⚠️ 「account/user_no → ref_id」这一步刻意分成两次单表查询：
+ * 写成 `student.id IN (SELECT u.ref_id FROM users u WHERE ...)` 是跨表列比较，
+ * students.id 与 users.ref_id 排序规则不一致时会抛 ER_CANT_AGGREGATE_2COLLATIONS，
+ * 调用方通常 catch 后走「查不到学生」分支 —— 表现为按学号/手机号找不到人。
  */
 async function resolveStudentRow(connection, studentId) {
   const direct = await getStudentRowById(connection, studentId);
@@ -127,12 +132,22 @@ async function resolveStudentRow(connection, studentId) {
      LEFT JOIN departments AS dept ON dept.id = cls.department_id
      WHERE student.student_id = ?
         OR student.phone = ?
-        OR student.id IN (SELECT u.ref_id FROM users u WHERE u.account = ? OR u.user_no = ?)
      LIMIT 1`,
-    [studentId, studentId, studentId, studentId]
+    [studentId, studentId]
   );
+  if (rows[0]) return rows[0];
 
-  return rows[0] || null;
+  const [linked] = await connection.query(
+    'SELECT ref_id FROM users WHERE account = ? OR user_no = ? LIMIT 1',
+    [studentId, studentId]
+  );
+  const refId = linked[0]?.ref_id;
+  if (refId) {
+    const byRef = await getStudentRowById(connection, refId);
+    if (byRef) return byRef;
+  }
+
+  return null;
 }
 
 function parseDateValue(value) {

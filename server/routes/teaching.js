@@ -18,6 +18,35 @@ function looksLikePhone(value) {
 }
 
 /**
+ * 经 users 表反查学生。
+ *
+ * users.ref_id / users.user_no 分别对应 students.id / students.student_id。
+ * 原实现写成 `JOIN students s ON s.id = u.ref_id OR s.student_id = u.user_no OR s.id = u.user_no`
+ * —— users 与 students 的字符列直接比较，两表排序规则不一致时抛
+ * ER_CANT_AGGREGATE_2COLLATIONS，表现为「按学号/手机号/身份证找不到学生」。
+ * 改为两次单表查询后在 JS 里关联：比较只发生在参数与单表列之间。
+ *
+ * 命中数不为 1（0 条或多条）一律视为未找到，与原 LIMIT 2 + length===1 语义一致。
+ */
+async function findStudentViaUser(connection, userCondition, userParams, matchedBy) {
+  const [users] = await connection.query(
+    `SELECT ref_id, user_no FROM users WHERE ${userCondition} LIMIT 2`,
+    userParams
+  );
+  if (users.length !== 1) return null;
+
+  const refId = String(users[0].ref_id ?? '');
+  const userNo = String(users[0].user_no ?? '');
+  const [students] = await connection.query(
+    `SELECT id, student_id, name, class_name, phone FROM students
+     WHERE id = ? OR student_id = ? OR id = ?
+     LIMIT 2`,
+    [refId, userNo, userNo]
+  );
+  return students.length === 1 ? { student: students[0], matchedBy } : null;
+}
+
+/**
  * 按「唯一标识」解析学生：只认 学号/工号、手机号、身份证号 —— **姓名不作判定依据**（会重名）。
  * 返回 { student, matchedBy } 或 { student: null, reason }。
  */
@@ -40,28 +69,14 @@ async function resolveStudentByIdentities(connection, { studentNo, phone, idCard
       '学号'
     );
     if (hit) return hit;
-    const viaUsers = await tryFind(
-      `SELECT s.id, s.student_id, s.name, s.class_name, s.phone
-       FROM users u JOIN students s
-         ON s.id = u.ref_id OR s.student_id = u.user_no OR s.id = u.user_no
-       WHERE u.user_no = ? LIMIT 2`,
-      [studentNo],
-      '学号'
-    );
+    const viaUsers = await findStudentViaUser(connection, 'user_no = ?', [studentNo], '学号');
     if (viaUsers) return viaUsers;
   }
 
   // 2) 手机号：users.account（登录账号即手机号）或 students.phone
   if (phone) {
-    const hit = await tryFind(
-      `SELECT s.id, s.student_id, s.name, s.class_name, s.phone
-       FROM users u JOIN students s
-         ON s.id = u.ref_id OR s.student_id = u.user_no OR s.id = u.user_no
-       WHERE u.account = ? LIMIT 2`,
-      [phone],
-      '手机号'
-    );
-    if (hit) return hit;
+    const viaUsers = await findStudentViaUser(connection, 'account = ?', [phone], '手机号');
+    if (viaUsers) return viaUsers;
     const byPhone = await tryFind(
       `SELECT id, student_id, name, class_name, phone FROM students WHERE phone = ? LIMIT 2`,
       [phone],
@@ -73,15 +88,8 @@ async function resolveStudentByIdentities(connection, { studentNo, phone, idCard
   // 3) 身份证号：users.id_card_hash（SHA-256）
   if (idCard) {
     const hash = hashIdCard(idCard);
-    const hit = await tryFind(
-      `SELECT s.id, s.student_id, s.name, s.class_name, s.phone
-       FROM users u JOIN students s
-         ON s.id = u.ref_id OR s.student_id = u.user_no OR s.id = u.user_no
-       WHERE u.id_card_hash = ? LIMIT 2`,
-      [hash],
-      '身份证号'
-    );
-    if (hit) return hit;
+    const viaUsers = await findStudentViaUser(connection, 'id_card_hash = ?', [hash], '身份证号');
+    if (viaUsers) return viaUsers;
   }
 
   return {
@@ -433,13 +441,31 @@ router.get('/students-resolve', async (req, res) => {
 
 // ==================== 课程班级 (Course Classes) ====================
 
-const COURSE_CLASSES_DDL = `CREATE TABLE IF NOT EXISTS course_classes (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  course_id VARCHAR(64) NOT NULL,
-  class_name VARCHAR(100) NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_course_class (course_id, class_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`;
+/**
+ * course_classes 的建表语句。
+ *
+ * collation 跟随 courses.id —— 本表按 course_id 与 courses 关联，
+ * 若排序规则不同，`WHERE course_id = ?` 之外的任何跨表比较都会抛
+ * ER_CANT_AGGREGATE_2COLLATIONS（用 ? 传参比较不到这条路径，但为一致性仍统一）。
+ */
+async function ensureCourseClassesTable() {
+  const [rows] = await pool.query(
+    `SELECT COLLATION_NAME AS collation
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'courses' AND COLUMN_NAME = 'id'
+     LIMIT 1`
+  );
+  const collation = String(rows[0]?.collation || '') || 'utf8mb4_unicode_ci';
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS course_classes (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      course_id VARCHAR(64) NOT NULL,
+      class_name VARCHAR(100) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_course_class (course_id, class_name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=${collation}`
+  );
+}
 
 /** GET /api/teaching/enrollments/class-map?courseId=xxx — 本课程全部学生的分班映射 */
 router.get('/enrollments/class-map', async (req, res) => {
@@ -468,7 +494,7 @@ router.get('/course-classes', async (req, res) => {
   try {
     const courseId = String(req.query.courseId || '').trim();
     if (!courseId) return res.json({ success: true, classes: [] });
-    await pool.execute(COURSE_CLASSES_DDL);
+    await ensureCourseClassesTable();
     const [rows] = await pool.execute(
       'SELECT class_name FROM course_classes WHERE course_id = ? ORDER BY class_name',
       [courseId]
@@ -483,7 +509,7 @@ router.post('/course-classes', async (req, res) => {
     const courseId = String(req.body?.courseId || '').trim();
     const className = String(req.body?.className || '').trim();
     if (!courseId || !className) return res.status(400).json({ success: false, message: 'courseId 和 className 必填' });
-    await pool.execute(COURSE_CLASSES_DDL);
+    await ensureCourseClassesTable();
     const [exist] = await pool.execute(
       'SELECT id FROM course_classes WHERE course_id = ? AND class_name = ?',
       [courseId, className]
