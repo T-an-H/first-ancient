@@ -1,4 +1,5 @@
 import type { AssistantAgentRequest, AssistantAgentResponse } from '@/lib/assistantAgent'
+import { BULK_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from '@/lib/uploadLimits'
 
 const API_PROTOCOL = window.location.protocol === 'https:' ? 'https:' : 'http:'
 const API_HOST = window.location.hostname || '127.0.0.1'
@@ -63,6 +64,13 @@ async function request(url: string, options: RequestOptions = {}) {
     }
 
     return data
+  } catch (error: any) {
+    // fetch 在超时/断网时抛 AbortError，原生文案是英文 "The user aborted a request."，
+    // 直接冒到界面上无法判断是网络问题还是文件太大，这里统一翻译。
+    if (error?.name === 'AbortError') {
+      throw new Error(`请求超时（超过 ${Math.round(timeoutMs / 1000)} 秒），请检查网络后重试`)
+    }
+    throw error
   } finally {
     window.clearTimeout(timeoutId)
   }
@@ -244,6 +252,7 @@ export async function bulkImportSchedules(schedules: any) {
   return request('/schedules/bulk', {
     method: 'POST',
     body: JSON.stringify({ schedules }),
+    timeoutMs: BULK_TIMEOUT_MS,
   })
 }
 
@@ -260,6 +269,7 @@ export async function bulkImportEnrollments(enrollments: any) {
   return request('/teaching/enrollments/bulk', {
     method: 'POST',
     body: JSON.stringify({ enrollments }),
+    timeoutMs: BULK_TIMEOUT_MS,
   })
 }
 
@@ -298,6 +308,7 @@ export async function bulkImportScores(scores: any) {
   return request('/teaching/scores/bulk', {
     method: 'POST',
     body: JSON.stringify({ scores }),
+    timeoutMs: BULK_TIMEOUT_MS,
   })
 }
 
@@ -305,6 +316,7 @@ export async function bulkImportGroups(groups: any) {
   return request('/teaching/groups/bulk', {
     method: 'POST',
     body: JSON.stringify({ groups }),
+    timeoutMs: BULK_TIMEOUT_MS,
   })
 }
 
@@ -346,6 +358,7 @@ export async function batchSaveEvaluations(evaluations: any) {
   return request('/eval/batch', {
     method: 'POST',
     body: JSON.stringify({ evaluations }),
+    timeoutMs: BULK_TIMEOUT_MS,
   })
 }
 
@@ -401,7 +414,8 @@ export async function submitQualityEvaluation(data: any) {
   return request('/quality-evaluations/submit', {
     method: 'POST',
     body: JSON.stringify(data),
-    timeoutMs: 30000,
+    // 文件以 base64 存在 files 数组里，走上传超时；弹窗关闭后提交会弹 toast 提示
+    timeoutMs: UPLOAD_TIMEOUT_MS,
   })
 }
 

@@ -138,7 +138,7 @@
           <h3 class="text-lg font-semibold text-gray-900">上传课程标准</h3>
           <button @click="showUploadModal = false" class="p-1 text-gray-400 hover:text-gray-600"><X class="w-5 h-5" /></button>
         </div>
-        <p class="text-xs text-gray-500 mb-3">支持 PDF / Word / Excel / PPT / 图片等常见格式，单个文件不超过 8MB。上传后将同步到学生端「课程标准」板块。</p>
+        <p class="text-xs text-gray-500 mb-3">支持 PDF / Word / Excel / PPT / 图片等常见格式，单个文件不超过 {{ formatLimit(MAX_UPLOAD_FILE_SIZE) }}，单次上传不超过 {{ formatLimit(MAX_UPLOAD_TOTAL_SIZE) }}。上传后将同步到学生端「课程标准」板块。</p>
         <div class="border border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-indigo-400/60 hover:bg-indigo-400/5 transition-colors"
           @click="planFileInput?.click()" @dragover.prevent @drop.prevent="onPlanDrop">
           <Upload class="w-6 h-6 mx-auto text-gray-400 mb-1.5" />
@@ -225,6 +225,7 @@ import { javaListProjects, javaAddProjectsBulk, javaAddProject, javaUpdateProjec
 import { useAppStore } from '@/stores/app'
 import { TierLabels } from '@/types'
 import type { LearningTier } from '@/types'
+import { MAX_UPLOAD_FILE_SIZE, MAX_UPLOAD_TOTAL_SIZE, formatLimit } from '@/lib/uploadLimits'
 
 const props = defineProps<{
   courseId: string
@@ -290,9 +291,9 @@ const planFileInput = ref<any>(null)
 const planFile = ref<File | null>(null)
 const uploadError = ref('')
 const importing = ref(false)
+// 文件上限统一与后端、网关对齐（见 src/lib/uploadLimits.ts）：
+// 5MB 文件转 base64 后约 6.7MB，仍在 nginx 与 Express 的放行范围内。
 const standards = ref<any[]>([])
-/** 与后端 express.json({ limit: '12mb' ) 对齐：base64 约膨胀 4/3，文件限制 8MB */
-const MAX_FILE_SIZE = 8 * 1024 * 1024
 
 async function loadStandards() {
   try {
@@ -328,8 +329,8 @@ function readAsDataUrl(file: File) {
 
 async function confirmUpload() {
   if (!planFile.value) return
-  if (planFile.value.size > MAX_FILE_SIZE) {
-    uploadError.value = '文件超过 8MB，请压缩后再上传'
+  if (planFile.value.size > MAX_UPLOAD_FILE_SIZE) {
+    uploadError.value = `「${planFile.value.name}」超过单文件上限 ${formatLimit(MAX_UPLOAD_FILE_SIZE)}，请压缩后再上传`
     return
   }
   importing.value = true
@@ -347,6 +348,7 @@ async function confirmUpload() {
     importMsg.value = { success: true, text: `课程标准「${planFile.value.name}」上传成功，已同步到学生端` }
     setTimeout(() => (importMsg.value = null), 4000)
   } catch (err: any) {
+    // 带「上传失败：」前缀，便于和上面的本地校验文案区分开
     uploadError.value = '上传失败：' + (err.message || err)
   } finally {
     importing.value = false

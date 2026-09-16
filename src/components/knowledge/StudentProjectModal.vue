@@ -290,6 +290,7 @@ import { useAppStore } from '@/stores/app'
 import { EvalTypeLabels } from '@/types'
 import { computeRadarData } from '@/lib/evalRadar'
 import { createBuiltinEvalQuestionnaire } from '@/lib/evalQuestionnaire'
+import { checkUploadSize } from '@/lib/uploadLimits'
 
 const props = defineProps<{
   project: any
@@ -412,7 +413,18 @@ function onSubmitFile(type: string, e: Event) {
   const fileList = input.files
   if (!fileList || fileList.length === 0) return
   const target = type === 'workorder' ? workorderDraft.value : testDraft.value
-  Array.from(fileList).forEach((file) => {
+
+  // 附件会以 base64 塞进 progress 的 attachments 数组，连同已选文件一起算总量，
+  // 超过上限就别读了 —— 否则要等到提交时才由服务端拒收，用户已经填完表单了。
+  const picked = Array.from(fileList)
+  const tooLarge = checkUploadSize([...target, ...picked])
+  if (tooLarge) {
+    alert(tooLarge)
+    input.value = ''
+    return
+  }
+
+  picked.forEach((file) => {
     const reader = new FileReader()
     reader.onload = () => {
       target.push({ name: file.name, size: file.size, dataUrl: String(reader.result) })

@@ -1809,7 +1809,11 @@ async function handleQualityFileSelect(e: Event) {
   const files = input.files
   if (!files || files.length === 0) return
   qualitySubmitError.value = ''
-  // 总大小限制（base64 存储于 localStorage，避免撑爆配额）
+  // 总大小限制（base64 存储于 localStorage，避免撑爆配额）。
+  // 这里的 2MB/4MB 比其它上传入口更严是**故意的**：素质评价的待提交文件会随
+  // store 落进 localStorage，而 localStorage 通常只有 5MB 左右配额，不能按
+  // 服务端上限来放。其余入口（课程标准/项目资料）不落 localStorage，用的是
+  // src/lib/uploadLimits.ts 里的共享上限。
   const totalSize = qualityPendingFiles.value.reduce((s, f) => s + f.fileSize, 0)
   for (const file of Array.from(files)) {
     if (file.size > 2 * 1024 * 1024) {

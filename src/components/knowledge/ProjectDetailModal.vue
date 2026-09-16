@@ -512,6 +512,7 @@ import {
 } from '@/lib/evalStandards'
 import { computeRadarData } from '@/lib/evalRadar'
 import { createBuiltinEvalQuestionnaire } from '@/lib/evalQuestionnaire'
+import { checkUploadSize, formatLimit, MAX_UPLOAD_FILE_SIZE } from '@/lib/uploadLimits'
 
 const props = defineProps<{
   project: any
@@ -616,8 +617,19 @@ async function loadFiles() {
 async function onFileChange(type: string, e: Event) {
   const input = e.target as HTMLInputElement
   if (!input.files?.length) return
+
+  // 这个入口原先没有任何体积校验，选中大文件后会一路走到 base64 编码、
+  // 被网关或 Express 拒收，用户只看到「上传失败」。这里提前拦下来。
+  const picked = Array.from(input.files)
+  const tooLarge = checkUploadSize(picked)
+  if (tooLarge) {
+    alert(tooLarge)
+    input.value = ''
+    return
+  }
+
   const arr = await Promise.all(
-    Array.from(input.files).map(
+    picked.map(
       (file) =>
         new Promise<{ name: string; size: number; dataUrl: string }>((resolve, reject) => {
           const reader = new FileReader()
