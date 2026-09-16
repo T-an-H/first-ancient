@@ -984,88 +984,8 @@ const tierBadgeClass = computed(() => {
 })
 
 // ===== 增值评价 =====
-const valueAddedData = computed(() => {
-  if (!myStudent.value) return []
-  const studentId = myStudent.value.id
-  
-  const evals = store.evaluations
-    .filter(ev => ev.courseId === courseId && ev.studentId === studentId && ev.score > 0)
-    .sort((a, b) => a.sessionNumber - b.sessionNumber)
-  
-  if (evals.length === 0) return []
-  
-  return evals.map(ev => ({
-    session: ev.sessionNumber,
-    score: ev.score,
-    label: `第${ev.sessionNumber}次`
-  }))
-})
-
-const valueAddedStats = computed(() => {
-  const data = valueAddedData.value
-  if (data.length < 2) return null
-  
-  const currentScore = data[data.length - 1].score
-  const previousScore = data[data.length - 2].score
-  const change = currentScore - previousScore
-  
-  return {
-    currentScore,
-    previousScore,
-    change,
-    hasTrend: true
-  }
-})
-
-const valueAddedImprovement = computed(() => {
-  const data = valueAddedData.value
-  if (data.length < 2) return null
-  
-  // 计算整体提升/退步趋势
-  let totalChange = 0
-  for (let i = 1; i < data.length; i++) {
-    totalChange += data[i].score - data[i-1].score
-  }
-  
-  return {
-    totalChange,
-    avgChangePerSession: totalChange / (data.length - 1)
-  }
-})
-
-// ===== 增值评价图表计算 =====
-const chartWidth = 500
-const chartHeight = 200
-const padding = { top: 20, right: 20, bottom: 35, left: 45 }
-const innerWidth = chartWidth - padding.left - padding.right
-const innerHeight = chartHeight - padding.top - padding.bottom
-
-const xStep = computed(() => {
-  if (valueAddedData.value.length <= 1) return 0
-  return innerWidth / (valueAddedData.value.length - 1)
-})
-
-const linePoints = computed(() => {
-  return valueAddedData.value.map((point, i) => {
-    const x = padding.left + (valueAddedData.value.length > 1 ? i * xStep.value : innerWidth / 2)
-    const y = padding.top + innerHeight * (1 - point.score / 100)
-    return `${x},${y}`
-  }).join(' ')
-})
-
-const areaPoints = computed(() => {
-  if (valueAddedData.value.length === 0) return ''
-  const points = valueAddedData.value.map((point, i) => {
-    const x = padding.left + (valueAddedData.value.length > 1 ? i * xStep.value : innerWidth / 2)
-    const y = padding.top + innerHeight * (1 - point.score / 100)
-    return `${x},${y}`
-  })
-  // 添加底部两个点形成封闭区域
-  const firstX = padding.left + (valueAddedData.value.length > 1 ? 0 * xStep.value : innerWidth / 2)
-  const lastX = padding.left + (valueAddedData.value.length > 1 ? (valueAddedData.value.length - 1) * xStep.value : innerWidth / 2)
-  const bottomY = padding.top + innerHeight
-  return `${firstX},${bottomY} ${points.join(' ')} ${lastX},${bottomY}`
-})
+// 增值评价的数据与图表计算均依赖 sessionComprehensiveScores，
+// 统一定义在下方「综合评价」段落之后（见 valueAddedData 及其图表 computed）。
 
 // ===== AI 分层测试弹窗 =====
 const aiTestOpen = ref(false)
@@ -1682,6 +1602,92 @@ const sessionComprehensiveScores = computed(() => {
     session: sn,
     score: calcSessionComprehensiveScore(sn),
   }))
+})
+
+/**
+ * 增值评价的数据点 = 每一次任务的「综合评价分」（按评价类型加权得出），
+ * 而不是某一次里的某一个分项得分。
+ *
+ * 此前这里把该学生名下的每条评价记录都当成一个点，导致同一轮次的自评 /
+ * 组内互评 / 组间互评 / 教师评价 / 导师评价各自成为一个点，曲线反映的是
+ * 「某一项分」而非「该次的综合评价」。现复用 sessionComprehensiveScores，
+ * 与「综合评价」页保持同一口径，每一轮只出一个点。
+ */
+const valueAddedData = computed(() => {
+  if (!myStudent.value) return []
+  return sessionComprehensiveScores.value
+    .filter((s) => s.score !== null)
+    .map((s) => ({
+      session: s.session,
+      score: s.score as number,
+      label: `第${s.session}次`,
+    }))
+})
+
+/** 最近两次综合评价分的变化 */
+const valueAddedStats = computed(() => {
+  const data = valueAddedData.value
+  if (data.length < 2) return null
+
+  const currentScore = data[data.length - 1].score
+  const previousScore = data[data.length - 2].score
+
+  return {
+    currentScore,
+    previousScore,
+    change: currentScore - previousScore,
+    hasTrend: true,
+  }
+})
+
+/** 整体提升/退步趋势 */
+const valueAddedImprovement = computed(() => {
+  const data = valueAddedData.value
+  if (data.length < 2) return null
+
+  let totalChange = 0
+  for (let i = 1; i < data.length; i++) {
+    totalChange += data[i].score - data[i - 1].score
+  }
+
+  return {
+    totalChange,
+    avgChangePerSession: totalChange / (data.length - 1),
+  }
+})
+
+// ===== 增值评价图表计算 =====
+const chartWidth = 500
+const chartHeight = 200
+const padding = { top: 20, right: 20, bottom: 35, left: 45 }
+const innerWidth = chartWidth - padding.left - padding.right
+const innerHeight = chartHeight - padding.top - padding.bottom
+
+const xStep = computed(() => {
+  if (valueAddedData.value.length <= 1) return 0
+  return innerWidth / (valueAddedData.value.length - 1)
+})
+
+const linePoints = computed(() => {
+  return valueAddedData.value.map((point, i) => {
+    const x = padding.left + (valueAddedData.value.length > 1 ? i * xStep.value : innerWidth / 2)
+    const y = padding.top + innerHeight * (1 - point.score / 100)
+    return `${x},${y}`
+  }).join(' ')
+})
+
+const areaPoints = computed(() => {
+  if (valueAddedData.value.length === 0) return ''
+  const points = valueAddedData.value.map((point, i) => {
+    const x = padding.left + (valueAddedData.value.length > 1 ? i * xStep.value : innerWidth / 2)
+    const y = padding.top + innerHeight * (1 - point.score / 100)
+    return `${x},${y}`
+  })
+  // 添加底部两个点形成封闭区域
+  const firstX = padding.left + (valueAddedData.value.length > 1 ? 0 * xStep.value : innerWidth / 2)
+  const lastX = padding.left + (valueAddedData.value.length > 1 ? (valueAddedData.value.length - 1) * xStep.value : innerWidth / 2)
+  const bottomY = padding.top + innerHeight
+  return `${firstX},${bottomY} ${points.join(' ')} ${lastX},${bottomY}`
 })
 
 const finalComprehensiveScore = computed(() => {
