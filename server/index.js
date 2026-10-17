@@ -18,6 +18,7 @@ import courseRoutes from './routes/courses.js';
 import teachingRoutes from './routes/teaching.js';
 import evalRoutes from './routes/eval.js';
 import tierTestRoutes from './routes/tierTest.js';
+import todoRoutes from './routes/todos.js';
 import assistantRoutes from './routes/assistant.js';
 import { warmAssistantModel } from './assistant-agent.js';
 import qualityEvaluationRoutes from './routes/qualityEvaluations.js';
@@ -25,6 +26,7 @@ import ensureAdminSchema from './bootstrap/ensureAdminSchema.js';
 import ensureProjectSchema from './bootstrap/ensureProjectSchema.js';
 import ensureGradeSchema from './bootstrap/ensureGradeSchema.js';
 import ensureTierSchema from './bootstrap/ensureTierSchema.js';
+import ensureExtraSchema from './bootstrap/ensureExtraSchema.js';
 import ensureCollation from './bootstrap/ensureCollation.js';
 import projectRoutes from './routes/projects.js';
 import gradeRoutes from './routes/grades.js';
@@ -108,6 +110,10 @@ app.use('/api/quality-evaluations', qualityEvaluationRoutes);
 
 // AI 分层测试路由
 app.use('/api/tier-test', tierTestRoutes);
+
+// 待办路由（用户私有数据，每个接口自行按 token 解析 created_by）
+app.use('/api/todos', todoRoutes);
+
 app.use('/api/assistant', assistantRoutes);
 app.use('/api', projectRoutes);
 
@@ -195,6 +201,7 @@ async function start() {
   await ensureProjectSchema();
   await ensureGradeSchema();
   await ensureTierSchema();
+  await ensureExtraSchema();
   await checkMaxAllowedPacket();
 
   app.listen(PORT, () => {

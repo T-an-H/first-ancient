@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../db.js';
+import { requireAdmin } from '../middleware/auth.js';
 import {
   createCourseId,
   ensureDepartment,
@@ -194,7 +195,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const name = normalizeText(req.body?.name);
@@ -241,7 +242,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const category = await getCategoryById(connection, req.params.id);
@@ -307,7 +308,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const category = await getCategoryById(connection, req.params.id);
@@ -385,7 +386,7 @@ router.get('/courses', async (req, res) => {
   }
 });
 
-router.post('/sync', async (req, res) => {
+router.post('/sync', requireAdmin, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const [scheduleRows] = await connection.query(

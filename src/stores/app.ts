@@ -22,6 +22,8 @@ import {
   submitTierTest,
   setEnrollmentClass,
   fetchEnrollmentClassMap,
+  fetchTodos as apiFetchTodos,
+  syncTodos as apiSyncTodos,
 } from '@/api'
 import type {
   Course, Category, Student, Schedule, Enrollment, Teacher, Grade,
@@ -398,8 +400,11 @@ export const useAppStore = defineStore('app', () => {
       })
     }
 
-    // 登录后立即生成自动待办
-    generateAutoTodos()
+    // 登录后立即生成自动待办。
+    // 先从后端拉回上次的待办快照（含用户勾选的完成态），再派生——
+    // 顺序不能反：generateAutoTodos 会依据当前 todos 判断哪些派生项已存在。
+    // login 是同步函数，调用方依赖其立即返回，故 fire-and-forget。
+    void loadTodosFromBackend().then(() => generateAutoTodos())
   }
 
   function logout() {
@@ -428,7 +433,8 @@ export const useAppStore = defineStore('app', () => {
     currentUser.value = target.name
     currentRole.value = role
     secondaryRoles.value = target.secondaryRoles
-    generateAutoTodos()
+    // 与 login 同理：先拉回该账号的待办快照，再派生
+    void loadTodosFromBackend().then(() => generateAutoTodos())
     return target.portal ?? '/'
   }
 
@@ -731,20 +737,52 @@ export const useAppStore = defineStore('app', () => {
     saveToStorage('cloudFiles', cloudFiles.value)
   }
 
+  /**
+   * 待办的唯一写入收口点：本地即时存一份（离线可用），再 fire-and-forget 同步到后端。
+   *
+   * 后端按 created_by 全量覆盖式对账，失败静默——待办不是关键路径，
+   * 不该因为网络问题弹错或阻塞 UI（沿用 updateEvalReminder 的既有模式）。
+   */
+  function persistTodos(list: TodoItem[]) {
+    saveToStorage('todos', list)
+    void apiSyncTodos(list).catch(() => {})
+  }
+
+  /**
+   * 登录/切号时从后端拉回该用户的待办
+   *
+   * 必须在 generateAutoTodos() **之前**调用：后端存的是上次的完整快照
+   * （含用户勾选的完成态与删除），先落地再由 generateAutoTodos 补齐/清理派生项。
+   * 失败静默，退回本地 localStorage 的那份。
+   */
+  async function loadTodosFromBackend() {
+    try {
+      const res = await apiFetchTodos()
+      const remote = (res?.todos ?? []) as TodoItem[]
+      // 后端为空时不覆盖本地：可能是老用户首次上线，本地那份更有价值
+      if (remote.length > 0) {
+        todos.value = remote
+        saveToStorage('todos', todos.value)
+      }
+    } catch {
+      /* 静默：保留本地待办 */
+    }
+  }
+
   function addTodo(todo: TodoItem) {
     todos.value = [...todos.value, { ...todo, createdBy: currentUser.value || '未知' }]
-    saveToStorage('todos', todos.value)
+    persistTodos(todos.value)
   }
 
   function updateTodo(id: string, data: Partial<TodoItem>) {
     todos.value = todos.value.map((t) => (t.id === id ? { ...t, ...data } : t))
-    saveToStorage('todos', todos.value)
+    persistTodos(todos.value)
     generateAutoTodos()
   }
 
   function deleteTodo(id: string) {
     todos.value = todos.value.filter((t) => t.id !== id)
-    saveToStorage('todos', todos.value)
+    persistTodos(todos.value)
   }
 
   function addOnlineDoc(doc: OnlineDoc) {
@@ -1939,7 +1977,7 @@ export const useAppStore = defineStore('app', () => {
     }
 
     if (newCount > 0) {
-      saveToStorage('todos', todos.value)
+      persistTodos(todos.value)
       todos.value = [...todos.value]
     }
   }
@@ -2769,7 +2807,7 @@ export const useAppStore = defineStore('app', () => {
       changed = true
     }
     if (changed) {
-      saveToStorage('todos', todos.value)
+      persistTodos(todos.value)
     }
   }
 
@@ -2799,7 +2837,7 @@ export const useAppStore = defineStore('app', () => {
     addEnrollment, updateEnrollment, updateEnrollmentClassName, applyEnrollmentClassMap, deleteEnrollment,
     addGrade, updateGrade, deleteGrade,
     addCloudFile, updateCloudFile, deleteCloudFile,
-    addTodo, updateTodo, deleteTodo,
+    addTodo, updateTodo, deleteTodo, persistTodos, loadTodosFromBackend,
     addOnlineDoc, updateOnlineDoc, deleteOnlineDoc,
     addNote, updateNote, deleteNote,
     getCourseCloudFiles,

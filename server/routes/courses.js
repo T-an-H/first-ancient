@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../db.js';
 import { buildEnrollmentProgress } from '../lib/scheduleProgress.js';
+import { requireAdmin } from '../middleware/auth.js';
 import {
   createCourseId,
   ensureDepartment,
@@ -159,7 +160,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const title = normalizeText(req.body?.title);
@@ -432,7 +433,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const existingCourse = await getCourseRowById(connection, req.params.id);
@@ -516,7 +517,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const existingCourse = await getCourseRowById(connection, req.params.id);

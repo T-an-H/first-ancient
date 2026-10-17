@@ -5,6 +5,10 @@
  */
 import { Router } from 'express';
 import pool from '../db.js';
+// 排课写接口放行教职工：教师端「新建课程内班级」会自动补写一条排课
+// （teacher/CourseDetail.vue → POST /api/schedules/bulk），收紧为仅管理员
+// 会让该调用静默失败（外层 try/catch 吞错），班级建了但课表不出现。
+import { requireStaff } from '../middleware/auth.js';
 import { ensureTeacher, normalizeText } from '../lib/admin.js';
 
 /** 格式化 MySQL 日期，避免 toISOString 时区偏移 */
@@ -107,7 +111,7 @@ router.get('/', async (req, res) => {
  * POST /api/schedules/bulk - 批量导入排课
  * 接收: { schedules: [ { courseId, title, startDate, endDate, timeSlot, room, teacher }, ... ] }
  */
-router.post('/bulk', async (req, res) => {
+router.post('/bulk', requireStaff, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const { schedules } = req.body;
@@ -254,7 +258,7 @@ router.post('/bulk', async (req, res) => {
  * NULL，而班级语义是「空 = 全班级」——管理端编辑弹窗本就不含班级字段，
  * 于是「只想改个教室」会把班级专属排课静默升级为对全校生效。
  */
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireStaff, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const { id } = req.params;
@@ -337,7 +341,7 @@ router.put('/:id', async (req, res) => {
 /**
  * DELETE /api/schedules/:id - 删除一条排课
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireStaff, async (req, res) => {
   try {
     const { id } = req.params;
     await pool.execute('DELETE FROM schedules WHERE id = ?', [id]);

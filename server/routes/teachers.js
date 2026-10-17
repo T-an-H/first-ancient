@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../db.js';
+import { requireAdmin } from '../middleware/auth.js';
 import {
   attachTeacherStats,
   ensureDepartment,
@@ -115,7 +116,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const existing = await getTeacherById(connection, req.params.id);
@@ -183,7 +184,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const existing = await getTeacherById(connection, req.params.id);

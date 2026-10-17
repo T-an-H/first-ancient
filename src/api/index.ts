@@ -655,6 +655,33 @@ export async function exportTeachers() {
   })
 }
 
+// ==================== 待办（用户私有，跨设备持久化） ====================
+
+/**
+ * 拉取当前登录用户的全部待办
+ *
+ * created_by 由后端从 JWT 解析，不接受前端传参（防越权读他人待办）。
+ */
+export async function fetchTodos() {
+  return request('/todos', { timeoutMs: BULK_TIMEOUT_MS })
+}
+
+/**
+ * 全量同步当前用户的待办（后端按 created_by 覆盖式对账）
+ *
+ * 调用方是 fire-and-forget（见 stores/app.ts 的 persistTodos），失败静默：
+ * 本地 localStorage 仍是即时可用的一份，不影响界面。keepalive 让切换
+ * 页面/账号时未完成的请求仍能送达。
+ */
+export async function syncTodos(todos: any[]) {
+  return request('/todos/sync', {
+    method: 'POST',
+    body: JSON.stringify({ todos }),
+    timeoutMs: BULK_TIMEOUT_MS,
+    keepalive: true,
+  })
+}
+
 // ==================== AI 分层测试 ====================
 
 /** 后端返回的分层题目（不含正确答案） */

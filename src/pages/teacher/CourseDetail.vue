@@ -2609,6 +2609,13 @@ async function saveAddClass() {
   let createdCount = 0
   const notInRepoList: string[] = []
   const noIdentityList: string[] = []
+  // 后端写入失败**不再静默吞掉**：此前这四处是裸 catch {}，
+  // 接口挂掉时界面照样弹「已创建班级」，而库里什么都没有——
+  // 教师以为建好了，学生端和课表里却看不到，且毫无线索。
+  let classCreateFailed = false
+  let enrollFailCount = 0
+  let classSyncFailCount = 0
+  let scheduleFailed = false
   const course = store.courses.find((c: any) => c.id === courseId.value)
 
   // 持久化班级记录（无论有无成员）
@@ -2617,7 +2624,7 @@ async function saveAddClass() {
     if (!courseClassNames.value.includes(className)) {
       courseClassNames.value.push(className)
     }
-  } catch {}
+  } catch { classCreateFailed = true }
 
   for (const m of addClassMembers.value) {
     // 判定同一人只依据 学号/工号、手机号、身份证号 —— **姓名不参与**（会重名）。
@@ -2688,14 +2695,14 @@ async function saveAddClass() {
       })
       try {
         await bulkImportEnrollments([{ id: enrId, studentId: student.id, courseId: courseId.value }])
-      } catch {}
+      } catch { enrollFailCount++ }
     } else {
       // 已选课但可能未分班到本班级 → 更新 enrollment.className
       store.updateEnrollmentClassName(courseId.value, student.id, className)
     }
     try {
       await syncStudent(student.id, { className })
-    } catch {}
+    } catch { classSyncFailCount++ }
   }
 
   // 同步到课程管理：为该班级创建排课记录
@@ -2710,8 +2717,9 @@ async function saveAddClass() {
         startDate: new Date().toISOString().split('T')[0],
         timeSlot: '09:00-11:00',
       }])
-    } catch {}
+    } catch { scheduleFailed = true }
   }
+
   const total = addClassMembers.value.length
   const baseMsg = total > 0
     ? `已创建班级"${className}"，共处理 ${total} 名成员（匹配已有 ${assignedCount} 人，新建 ${createdCount} 人）`
@@ -2722,6 +2730,19 @@ async function saveAddClass() {
   }
   if (notInRepoList.length > 0) {
     warnings.push(`以下 ${notInRepoList.length} 人在总库中找不到，未加入（请先在管理员端-学生管理 入库）：\n${notInRepoList.join('\n')}`)
+  }
+  // 把「后端写入失败」如实报出来，不再让用户以为一切正常
+  if (classCreateFailed) {
+    warnings.push('⚠️ 班级记录未能保存到服务器（本地已创建）。请检查网络或后端服务，否则学生端看不到该班级。')
+  }
+  if (scheduleFailed) {
+    warnings.push('⚠️ 该班级对应的排课记录未能写入（课表中不会出现这节课）。若班级建好后课表为空，请到管理员端「课程管理」手动补录排课。')
+  }
+  if (enrollFailCount > 0) {
+    warnings.push(`⚠️ 有 ${enrollFailCount} 名学生的选课未能保存到服务器，请稍后重试或联系管理员。`)
+  }
+  if (classSyncFailCount > 0) {
+    warnings.push(`⚠️ 有 ${classSyncFailCount} 名学生的班级归属未能同步到服务器，请稍后重试。`)
   }
   const msg = warnings.length > 0 ? `${baseMsg}\n\n${warnings.join('\n\n')}` : baseMsg
   addClassForm.value = { className: '', studentIds: [] }

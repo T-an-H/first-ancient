@@ -15,3 +15,7 @@ deploy.tar.gz
 .codex-pull-backup/
 dist-voice-check/
 dist-homework-voice-check/
+
+# 接口联调临时产物（含 JWT / 账号密码，切勿入库）
+.apitest/
+__pycache__/
