@@ -52,7 +52,13 @@
                   "  pm.response.to.have.status(200);",
                   "  pm.expect(pm.response.json().token).to.be.a(\"string\");",
                   "});",
-                  "pm.collectionVariables.set(\"adminToken\", pm.response.json().token);",
+                  "(function () {",
+                  "  var __v = pm.response.json().token;",
+                  "  try { pm.collectionVariables.set(\"adminToken\", __v); } catch (e) {}",
+                  "  try { pm.environment.set(\"adminToken\", __v); } catch (e) {}",
+                  "  try { pm.globals.set(\"adminToken\", __v); } catch (e) {}",
+                  "  console.log(\"[写入变量] adminToken =\", __v);",
+                  "})();",
                   "console.log(\"已保存 adminToken\");"
                 ]
               }
@@ -102,7 +108,13 @@
                   "  pm.response.to.have.status(200);",
                   "  pm.expect(pm.response.json().token).to.be.a(\"string\");",
                   "});",
-                  "pm.collectionVariables.set(\"teacherToken\", pm.response.json().token);",
+                  "(function () {",
+                  "  var __v = pm.response.json().token;",
+                  "  try { pm.collectionVariables.set(\"teacherToken\", __v); } catch (e) {}",
+                  "  try { pm.environment.set(\"teacherToken\", __v); } catch (e) {}",
+                  "  try { pm.globals.set(\"teacherToken\", __v); } catch (e) {}",
+                  "  console.log(\"[写入变量] teacherToken =\", __v);",
+                  "})();",
                   "console.log(\"已保存 teacherToken\");"
                 ]
               }
@@ -152,7 +164,13 @@
                   "  pm.response.to.have.status(200);",
                   "  pm.expect(pm.response.json().token).to.be.a(\"string\");",
                   "});",
-                  "pm.collectionVariables.set(\"mentorToken\", pm.response.json().token);",
+                  "(function () {",
+                  "  var __v = pm.response.json().token;",
+                  "  try { pm.collectionVariables.set(\"mentorToken\", __v); } catch (e) {}",
+                  "  try { pm.environment.set(\"mentorToken\", __v); } catch (e) {}",
+                  "  try { pm.globals.set(\"mentorToken\", __v); } catch (e) {}",
+                  "  console.log(\"[写入变量] mentorToken =\", __v);",
+                  "})();",
                   "console.log(\"已保存 mentorToken\");"
                 ]
               }
@@ -202,7 +220,13 @@
                   "  pm.response.to.have.status(200);",
                   "  pm.expect(pm.response.json().token).to.be.a(\"string\");",
                   "});",
-                  "pm.collectionVariables.set(\"leaderToken\", pm.response.json().token);",
+                  "(function () {",
+                  "  var __v = pm.response.json().token;",
+                  "  try { pm.collectionVariables.set(\"leaderToken\", __v); } catch (e) {}",
+                  "  try { pm.environment.set(\"leaderToken\", __v); } catch (e) {}",
+                  "  try { pm.globals.set(\"leaderToken\", __v); } catch (e) {}",
+                  "  console.log(\"[写入变量] leaderToken =\", __v);",
+                  "})();",
                   "console.log(\"已保存 leaderToken\");"
                 ]
               }
@@ -252,7 +276,13 @@
                   "  pm.response.to.have.status(200);",
                   "  pm.expect(pm.response.json().token).to.be.a(\"string\");",
                   "});",
-                  "pm.collectionVariables.set(\"studentToken\", pm.response.json().token);",
+                  "(function () {",
+                  "  var __v = pm.response.json().token;",
+                  "  try { pm.collectionVariables.set(\"studentToken\", __v); } catch (e) {}",
+                  "  try { pm.environment.set(\"studentToken\", __v); } catch (e) {}",
+                  "  try { pm.globals.set(\"studentToken\", __v); } catch (e) {}",
+                  "  console.log(\"[写入变量] studentToken =\", __v);",
+                  "})();",
                   "console.log(\"已保存 studentToken\");"
                 ]
               }
@@ -8983,7 +9013,13 @@
                   "pm.test(\"code=200 且返回 data.id\", () => {",
                   "  const d = pm.response.json();",
                   "  pm.expect(d.code).to.eql(200);",
-                  "  pm.collectionVariables.set(\"projectId\", d.data.id);",
+                  "(function () {",
+                  "  var __v = d.data.id;",
+                  "  try { pm.collectionVariables.set(\"projectId\", __v); } catch (e) {}",
+                  "  try { pm.environment.set(\"projectId\", __v); } catch (e) {}",
+                  "  try { pm.globals.set(\"projectId\", __v); } catch (e) {}",
+                  "  console.log(\"[写入变量] projectId =\", __v);",
+                  "})();",
                   "});"
                 ]
               }
@@ -10936,6 +10972,21 @@
     {
       "key": "testCourseId",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "targetUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "className",
+      "value": "APITEST班",
+      "type": "string"
+    },
+    {
+      "key": "teacherName",
+      "value": "APITEST教师",
       "type": "string"
     },
     {

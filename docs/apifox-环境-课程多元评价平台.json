@@ -1,0 +1,192 @@
+{
+  "name": "课程多元评价平台（线上）",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "http://47.114.42.189",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "teacherToken",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "mentorToken",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "leaderToken",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "studentToken",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "courseId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "deptId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "deptName",
+      "value": "吉林省医药中等职业学校",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "categoryId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "studentId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "fakeId",
+      "value": "999999",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "runId",
+      "value": "{{$timestamp}}",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testDeptId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testCategoryId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testCourseId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "targetUserId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "className",
+      "value": "APITEST班",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "teacherName",
+      "value": "APITEST教师",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "adminAccount",
+      "value": "admin",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "adminPassword",
+      "value": "666666",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "teacherAccount",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "teacherPassword",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "mentorAccount",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "mentorPassword",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "leaderAccount",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "leaderPassword",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "studentAccount",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "studentPassword",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "studentPhone",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "bigBase64",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}
